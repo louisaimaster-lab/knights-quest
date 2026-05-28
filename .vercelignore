@@ -1,0 +1,7 @@
+.antigravity/
+.git/
+.vscode/
+node_modules/
+dist/
+*.log
+.env*
