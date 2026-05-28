@@ -289,7 +289,7 @@ export default function Game() {
       )}
 
       <div className="absolute bottom-0 left-0 w-full flex justify-between text-[10px] opacity-60 px-4 pb-2 border-t border-white/10 pt-2 bg-[#0a0a12] z-20 font-bold tracking-widest pointer-events-none">
-        <span>FPS: {fps} // LAT: 42.122 // SECURE CONNECTION</span>
+        <span>FPS: {fps} // HZ: {fps} // LAT: 42.122 // SECURE CONNECTION</span>
         <span>VER: 0.9.1-CAVE</span>
       </div>
 
