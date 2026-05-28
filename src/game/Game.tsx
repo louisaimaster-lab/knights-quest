@@ -255,7 +255,7 @@ export default function Game() {
       />
 
       {appState === "playing" && showInfo && (
-        <div className="absolute top-6 right-6 bg-black/40 border-l-4 border-cyan-500 p-4 w-56 backdrop-blur-sm z-20">
+        <div className="absolute top-20 right-6 bg-black/40 border-l-4 border-cyan-500 p-4 w-56 backdrop-blur-sm z-20">
           <button
             className="absolute top-2 right-2 text-white/50 hover:text-white"
             onClick={(e) => {
@@ -278,7 +278,7 @@ export default function Game() {
 
       {appState === "playing" && !showInfo && (
         <button
-          className="absolute top-6 right-6 bg-black/40 border border-cyan-500/50 text-cyan-400 p-2 text-xs backdrop-blur-sm z-20 hover:bg-cyan-500/20"
+          className="absolute top-20 right-6 bg-black/40 border border-cyan-500/50 text-cyan-400 p-2 text-xs backdrop-blur-sm z-20 hover:bg-cyan-500/20"
           onClick={(e) => {
             e.stopPropagation();
             setShowInfo(true);
@@ -289,8 +289,8 @@ export default function Game() {
       )}
 
       <div className="absolute bottom-0 left-0 w-full flex justify-between text-[10px] opacity-60 px-4 pb-2 border-t border-white/10 pt-2 bg-[#0a0a12] z-20 font-bold tracking-widest pointer-events-none">
-        <span>LAT: 42.122 // SECURE CONNECTION</span>
-        <span>{fps} HZ // VER: 0.9.1-CAVE</span>
+        <span>FPS: {fps} // LAT: 42.122 // SECURE CONNECTION</span>
+        <span>VER: 0.9.1-CAVE</span>
       </div>
 
       {appState === "menu" && (
