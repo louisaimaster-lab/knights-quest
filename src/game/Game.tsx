@@ -171,14 +171,36 @@ export default function Game() {
     canvas.addEventListener("touchstart", handleTouchStart);
     window.addEventListener("touchend", handleTouchEnd);
 
-    // Game loop
+    // Game loop with a Fixed Timestep to ensure consistent speed across different monitor refresh rates (60Hz vs 144Hz/240Hz)
     let animationFrameId: number;
-    const loop = () => {
-      engine.update();
+    let lastTime = performance.now();
+    let accumulator = 0;
+    const dt = 1000 / 60; // 60 updates per second (16.67ms per physics tick)
+
+    const loop = (currentTime: number = performance.now()) => {
+      let deltaTime = currentTime - lastTime;
+      
+      // Cap deltaTime to avoid "spiral of death" during major lag spikes or tab suspensions
+      if (deltaTime > 100) {
+        deltaTime = 100;
+      }
+      
+      lastTime = currentTime;
+      accumulator += deltaTime;
+
+      // Run as many fixed 16.67ms physics steps as have accumulated
+      while (accumulator >= dt) {
+        engine.update();
+        accumulator -= dt;
+      }
+
+      // Draw once per frame (smooth rendering matched to the native refresh rate)
       engine.draw();
+
       animationFrameId = window.requestAnimationFrame(loop);
     };
     loop();
+
 
     return () => {
       window.removeEventListener("resize", updateSize);
