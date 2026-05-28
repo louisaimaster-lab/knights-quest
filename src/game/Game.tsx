@@ -14,6 +14,7 @@ export default function Game() {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const [showInfo, setShowInfo] = useState(true);
+  const [fps, setFps] = useState<number>(60);
 
   const [appState, setAppState] = useState<"menu" | "selectSave" | "playing">(
     "menu",
@@ -177,6 +178,10 @@ export default function Game() {
     let accumulator = 0;
     const dt = 1000 / 60; // 60 updates per second (16.67ms per physics tick)
 
+    // Live refresh-rate (FPS) tracker variables
+    let frameCount = 0;
+    let lastFpsUpdateTime = performance.now();
+
     const loop = (currentTime: number = performance.now()) => {
       let deltaTime = currentTime - lastTime;
       
@@ -196,6 +201,16 @@ export default function Game() {
 
       // Draw once per frame (smooth rendering matched to the native refresh rate)
       engine.draw();
+
+      // Track the actual running refresh rate / FPS
+      frameCount++;
+      const elapsed = currentTime - lastFpsUpdateTime;
+      if (elapsed >= 500) { // Update FPS counter every 500ms
+        const calculatedFps = Math.round((frameCount * 1000) / elapsed);
+        setFps(calculatedFps);
+        frameCount = 0;
+        lastFpsUpdateTime = currentTime;
+      }
 
       animationFrameId = window.requestAnimationFrame(loop);
     };
@@ -275,7 +290,7 @@ export default function Game() {
 
       <div className="absolute bottom-0 left-0 w-full flex justify-between text-[10px] opacity-60 px-4 pb-2 border-t border-white/10 pt-2 bg-[#0a0a12] z-20 font-bold tracking-widest pointer-events-none">
         <span>LAT: 42.122 // SECURE CONNECTION</span>
-        <span>VER: 0.9.1-CAVE</span>
+        <span>{fps} HZ // VER: 0.9.1-CAVE</span>
       </div>
 
       {appState === "menu" && (
