@@ -119,6 +119,7 @@ export function generateCave(floor: number, maxFloor: number) {
   }
 
   // 7. Structures (small rooms)
+  let chests: { x: number, y: number }[] = [];
   let numStructures = Math.floor(floor * 0.75) + 1;
   for(let i=0; i<numStructures; i++) {
       let sx = Math.floor(2 + Math.random() * (width - 15));
@@ -168,6 +169,17 @@ export function generateCave(floor: number, maxFloor: number) {
       
       // Add a torch
       map[sy+1][sx+Math.floor(sw/2)] = 10;
+
+      // 20% chance to spawn chest inside the structure
+      if (Math.random() < 0.20) {
+          let cx = sx + Math.floor(sw / 2);
+          const cy = sy + sh - 2; // Bottom inside row
+          // Avoid platforms
+          if (cx === doorX || cx === doorX + 1) {
+              cx = sx + 1;
+          }
+          chests.push({ x: cx, y: cy });
+      }
   }
 
   // 7.5 Fill in disconnected areas
@@ -655,6 +667,6 @@ export function generateCave(floor: number, maxFloor: number) {
   if (isSolid(startPos.x, startPos.y)) map[startPos.y][startPos.x] = 0;
   if (isSolid(startPos.x, startPos.y - 1)) map[startPos.y - 1][startPos.x] = 0;
 
-  return { width, height, map, bgMap, openSpaces, startPos, endPos, biome };
+  return { width, height, map, bgMap, openSpaces, startPos, endPos, biome, chests };
 }
 

@@ -22,6 +22,8 @@ export interface Entity extends Rect {
   onLadder: boolean;
 }
 
+export type WeaponType = 'sword' | 'bow' | 'colossal_sword' | 'dual_daggers';
+
 export interface Player extends Entity {
   attackTimer: number;
   attackCooldown: number;
@@ -39,6 +41,7 @@ export interface Player extends Entity {
   speedMulti: number;
   jumpMulti: number;
   playerColor?: string;
+  weapon?: WeaponType;
 }
 
 export interface UpgradeChoice {
@@ -89,6 +92,21 @@ export interface FallingIcicle {
   damage: number;
 }
 
+export interface Chest extends Rect {
+  id: string;
+  isOpen: boolean;
+  weapon: WeaponType;
+}
+
+export interface Projectile extends Rect {
+  id: string;
+  vx: number;
+  vy: number;
+  type: 'arrow';
+  damage: number;
+  facingRight: boolean;
+}
+
 export interface GameState {
   floor: number;
   maxFloor: number;
@@ -103,6 +121,8 @@ export interface GameState {
   particles: Particle[];
   texts: InteractionText[];
   fallingIcicles: FallingIcicle[];
+  chests: Chest[];
+  projectiles: Projectile[];
   camera: { x: number; y: number; zoom: number };
   keys: { [key: string]: boolean };
   prevKeys: { [key: string]: boolean };
