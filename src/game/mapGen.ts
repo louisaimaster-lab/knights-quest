@@ -144,12 +144,12 @@ export function generateCave(floor: number, maxFloor: number) {
       // Carve out inside and add walls
       for(let y=sy; y<sy+sh; y++) {
           for(let x=sx; x<sx+sw; x++) {
-              if (y === sy || y === sy+sh-1 || x === sx || x === sx+sw-1) {
-                   map[y][x] = 11; // Structure solid block
-              } else {
-                   bgMap[y][x] = 9; // Structure background
-                    map[y][x] = 0;
-              }
+               bgMap[y][x] = 9; // Structure background everywhere
+               if (y === sy || y === sy+sh-1 || x === sx || x === sx+sw-1) {
+                    map[y][x] = 11; // Structure solid block
+               } else {
+                     map[y][x] = 0;
+               }
           }
       }
       

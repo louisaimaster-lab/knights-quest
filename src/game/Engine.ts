@@ -2959,11 +2959,33 @@ export class GameEngine {
     if (lctx) {
       const centerTx = Math.floor((p.x + p.w / 2) / TILE_SIZE);
       const centerTy = Math.floor((p.y + p.h / 2) / TILE_SIZE);
-      const isInsideStructure = this.state.bgMap[centerTy] && this.state.bgMap[centerTy][centerTx] === 9;
+      
+      // Check if entire knight is touching the background walls (bgMap[y][x] === 9)
+      // We use a 1 pixel inset to avoid float precision edge issues
+      const pLeft = p.x + 1;
+      const pRight = p.x + p.w - 1;
+      const pTop = p.y + 1;
+      const pBottom = p.y + p.h - 1;
+
+      const txStart = Math.floor(pLeft / TILE_SIZE);
+      const txEnd = Math.floor(pRight / TILE_SIZE);
+      const tyStart = Math.floor(pTop / TILE_SIZE);
+      const tyEnd = Math.floor(pBottom / TILE_SIZE);
+
+      let isInsideStructure = true;
+      for (let ty = tyStart; ty <= tyEnd; ty++) {
+        for (let tx = txStart; tx <= txEnd; tx++) {
+          if (!this.state.bgMap[ty] || this.state.bgMap[ty][tx] !== 9) {
+            isInsideStructure = false;
+            break;
+          }
+        }
+        if (!isInsideStructure) break;
+      }
 
       if (isInsideStructure) {
-        // Outside is completely dark
-        lctx.fillStyle = "rgba(5, 2, 0, 1.0)";
+        // Outside is 85% dark
+        lctx.fillStyle = "rgba(5, 2, 0, 0.85)";
         lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
         // Only structure inside is clearly visible (we clear bounds of the current structure)
