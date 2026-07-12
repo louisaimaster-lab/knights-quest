@@ -79,7 +79,6 @@ export interface InteractionText {
   text: string;
   life: number;
   maxLife: number;
-  followPlayer?: boolean;
 }
 
 export interface FallingIcicle {

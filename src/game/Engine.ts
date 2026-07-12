@@ -387,7 +387,6 @@ export class GameEngine {
             text: `Floor ${this.state.floor}`,
             life: 100,
             maxLife: 100,
-            followPlayer: true,
           });
         }
       }
@@ -1398,12 +1397,7 @@ export class GameEngine {
     }
     for (let i = this.state.texts.length - 1; i >= 0; i--) {
       let t = this.state.texts[i];
-      if (t.followPlayer) {
-        t.x = this.state.player.x + this.state.player.w / 2;
-        t.y = this.state.player.y - 40 - (t.maxLife - t.life) * 0.5; // ponytail: floats up 50px relative to player center
-      } else {
-        t.y -= 0.5;
-      }
+      t.y -= 0.5;
       t.life--;
       if (t.life <= 0) this.state.texts.splice(i, 1);
     }
