@@ -10,6 +10,22 @@ export function rectIntersect(r1: Rect, r2: Rect): boolean {
   );
 }
 
+function isTileSolid(tx: number, ty: number, map: number[][]): boolean {
+  const mapHeight = map.length;
+  const mapWidth = map[0] ? map[0].length : 0;
+
+  // ponytail: out-of-bounds (except below bottom) is solid
+  if (tx < 0 || tx >= mapWidth || ty < 0) {
+    return true;
+  }
+  if (ty >= mapHeight) {
+    return false;
+  }
+
+  const tile = map[ty][tx];
+  return tile === 1 || tile === 7 || tile === 8 || tile === 11 || tile === 15 || tile === 16 || tile === 17 || tile === 18;
+}
+
 export function AABBMapCollision(
   entity: Rect,
   vx: number,
@@ -39,10 +55,48 @@ export function AABBMapCollision(
     result.hitX = true;
     if (vx > 0) {
       result.hitXRight = true;
-      result.x = Math.floor((testX + entity.w) / TILE_SIZE) * TILE_SIZE - entity.w - 0.01;
+      // ponytail: scan and snap to leftmost solid tile boundary
+      const leftTile = Math.floor(entity.x / TILE_SIZE);
+      const rightTile = Math.floor((testX + entity.w) / TILE_SIZE);
+      const topTile = Math.floor(entity.y / TILE_SIZE);
+      const bottomTile = Math.floor((entity.y + entity.h) / TILE_SIZE);
+      
+      let snapX = testX;
+      let found = false;
+      for (let tx = leftTile; tx <= rightTile; tx++) {
+        for (let ty = topTile; ty <= bottomTile; ty++) {
+          if (isTileSolid(tx, ty, map)) {
+            const limit = tx * TILE_SIZE - entity.w - 0.01;
+            if (!found || limit < snapX) {
+              snapX = limit;
+              found = true;
+            }
+          }
+        }
+      }
+      result.x = found ? snapX : Math.floor((testX + entity.w) / TILE_SIZE) * TILE_SIZE - entity.w - 0.01;
     } else if (vx < 0) {
       result.hitXLeft = true;
-      result.x = Math.floor(testX / TILE_SIZE) * TILE_SIZE + TILE_SIZE + 0.01;
+      // ponytail: scan and snap to rightmost solid tile boundary
+      const leftTile = Math.floor(testX / TILE_SIZE);
+      const rightTile = Math.floor((entity.x + entity.w) / TILE_SIZE);
+      const topTile = Math.floor(entity.y / TILE_SIZE);
+      const bottomTile = Math.floor((entity.y + entity.h) / TILE_SIZE);
+      
+      let snapX = testX;
+      let found = false;
+      for (let tx = leftTile; tx <= rightTile; tx++) {
+        for (let ty = topTile; ty <= bottomTile; ty++) {
+          if (isTileSolid(tx, ty, map)) {
+            const limit = (tx + 1) * TILE_SIZE + 0.01;
+            if (!found || limit > snapX) {
+              snapX = limit;
+              found = true;
+            }
+          }
+        }
+      }
+      result.x = found ? snapX : Math.floor(testX / TILE_SIZE) * TILE_SIZE + TILE_SIZE + 0.01;
     }
   } else {
     result.x = testX;
@@ -56,9 +110,59 @@ export function AABBMapCollision(
     result.hitY = true;
     if (vy > 0) {
        result.grounded = true;
-       result.y = Math.floor((testY + entity.h) / TILE_SIZE) * TILE_SIZE - entity.h - 0.01;
+       // ponytail: scan and snap to topmost solid/platform boundary
+       const leftTile = Math.floor(result.x / TILE_SIZE);
+       const rightTile = Math.floor((result.x + entity.w) / TILE_SIZE);
+       const topTile = Math.floor(entity.y / TILE_SIZE);
+       const bottomTile = Math.floor((testY + entity.h) / TILE_SIZE);
+       
+       let snapY = testY;
+       let found = false;
+       for (let ty = topTile; ty <= bottomTile; ty++) {
+         for (let tx = leftTile; tx <= rightTile; tx++) {
+           let isPlatformColliding = false;
+           const mapHeight = map.length;
+           const mapWidth = map[0] ? map[0].length : 0;
+           const isTilePlatform = tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight && map[ty][tx] === 5;
+           
+           if (isTilePlatform && !isDropping) {
+             const platformTop = ty * TILE_SIZE;
+             if (entity.y + entity.h <= platformTop + 0.1) {
+               isPlatformColliding = true;
+             }
+           }
+           
+           if (isTileSolid(tx, ty, map) || isPlatformColliding) {
+             const limit = ty * TILE_SIZE - entity.h - 0.01;
+             if (!found || limit < snapY) {
+               snapY = limit;
+               found = true;
+             }
+           }
+         }
+       }
+       result.y = found ? snapY : Math.floor((testY + entity.h) / TILE_SIZE) * TILE_SIZE - entity.h - 0.01;
     } else if (vy < 0) {
-       result.y = Math.floor(testY / TILE_SIZE) * TILE_SIZE + TILE_SIZE + 0.01;
+       // ponytail: scan and snap to bottommost solid boundary
+       const leftTile = Math.floor(result.x / TILE_SIZE);
+       const rightTile = Math.floor((result.x + entity.w) / TILE_SIZE);
+       const topTile = Math.floor(testY / TILE_SIZE);
+       const bottomTile = Math.floor((entity.y + entity.h) / TILE_SIZE);
+       
+       let snapY = testY;
+       let found = false;
+       for (let ty = topTile; ty <= bottomTile; ty++) {
+         for (let tx = leftTile; tx <= rightTile; tx++) {
+           if (isTileSolid(tx, ty, map)) {
+             const limit = (ty + 1) * TILE_SIZE + 0.01;
+             if (!found || limit > snapY) {
+               snapY = limit;
+               found = true;
+             }
+           }
+         }
+       }
+       result.y = found ? snapY : Math.floor(testY / TILE_SIZE) * TILE_SIZE + TILE_SIZE + 0.01;
     }
   } else {
     result.y = testY;
@@ -75,16 +179,20 @@ function checkMapCollision(x: number, y: number, w: number, h: number, map: numb
 
   for (let ty = topTile; ty <= bottomTile; ty++) {
     for (let tx = leftTile; tx <= rightTile; tx++) {
-      const tile = map[ty] && map[ty][tx];
-      if (tile === 1 || tile === 7 || tile === 8 || tile === 11 || tile === 15 || tile === 16 || tile === 17 || tile === 18) { // 1=dirt, 7=grass, 8=stone, 11=structure, 15=mossgrass, 16=snow, 17=ice, 18=thin ice
+      if (isTileSolid(tx, ty, map)) {
         return true;
       }
-      if (tile === 5) { // 5 is platform
-        if (vy > 0 && !isDropping) { // Only collide if falling and not dropping
-           const platformTop = ty * TILE_SIZE;
-           if (oldBottom <= platformTop + 0.1) {
-              return true;
-           }
+      const mapHeight = map.length;
+      const mapWidth = map[0] ? map[0].length : 0;
+      if (tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight) {
+        const tile = map[ty][tx];
+        if (tile === 5) { // 5 is platform
+          if (vy > 0 && !isDropping) { // Only collide if falling and not dropping
+             const platformTop = ty * TILE_SIZE;
+             if (oldBottom <= platformTop + 0.1) {
+                return true;
+             }
+          }
         }
       }
     }

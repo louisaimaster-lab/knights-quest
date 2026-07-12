@@ -382,11 +382,12 @@ export class GameEngine {
           
           // Spawn "Floor (number)" floating text right after floor title screen is fully gone
           this.state.texts.push({
-            x: this.state.player.x,
+            x: this.state.player.x + this.state.player.w / 2,
             y: this.state.player.y - 40,
             text: `Floor ${this.state.floor}`,
             life: 100,
             maxLife: 100,
+            followPlayer: true,
           });
         }
       }
@@ -880,7 +881,7 @@ export class GameEngine {
         };
         const name = weaponNames[nearestChest.weapon] || nearestChest.weapon;
         this.state.texts.push({
-          x: nearestChest.x - 10,
+          x: nearestChest.x + nearestChest.w / 2,
           y: nearestChest.y - 15,
           text: `Got ${name}!`,
           life: 80,
@@ -1397,7 +1398,12 @@ export class GameEngine {
     }
     for (let i = this.state.texts.length - 1; i >= 0; i--) {
       let t = this.state.texts[i];
-      t.y -= 0.5;
+      if (t.followPlayer) {
+        t.x = this.state.player.x + this.state.player.w / 2;
+        t.y = this.state.player.y - 40 - (t.maxLife - t.life) * 0.5; // ponytail: floats up 50px relative to player center
+      } else {
+        t.y -= 0.5;
+      }
       t.life--;
       if (t.life <= 0) this.state.texts.splice(i, 1);
     }
@@ -1508,6 +1514,9 @@ export class GameEngine {
       targetZoom = 2.5; // Zoom in dramatically upon stepping on the exit gate
     }
     this.state.camera.zoom += (targetZoom - this.state.camera.zoom) * 0.08;
+    if (Math.abs(this.state.camera.zoom - targetZoom) < 0.01) {
+      this.state.camera.zoom = targetZoom;
+    }
 
     // Update mouse world pos
     this.state.mouse.worldX =
@@ -1537,12 +1546,16 @@ export class GameEngine {
       shakeY = (Math.random() - 0.5) * 10;
     }
 
+    const zoom = this.state.camera.zoom;
+    const scaledCamX = Math.round(this.state.camera.x * zoom);
+    const scaledCamY = Math.round(this.state.camera.y * zoom);
+
     ctx.translate(
-      this.canvasWidth / 2 + shakeX,
-      this.canvasHeight / 2 + shakeY,
+      Math.round(this.canvasWidth / 2 + shakeX),
+      Math.round(this.canvasHeight / 2 + shakeY),
     );
-    ctx.scale(this.state.camera.zoom, this.state.camera.zoom);
-    ctx.translate(-this.state.camera.x, -this.state.camera.y);
+    ctx.translate(-scaledCamX, -scaledCamY);
+    ctx.scale(zoom, zoom);
 
     // Draw Map
     const startCol = Math.max(
@@ -1580,17 +1593,17 @@ export class GameEngine {
         if (this.state.bgMap[y] && this.state.bgMap[y][x] === 9) {
           // Rustic Wooden Planks Background
           ctx.fillStyle = "#3b2518"; // dark wood background
-          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1); // ponytail: overlap to prevent gaps
           ctx.fillStyle = "#26170e"; // darker plank gaps
           // Draw horizontal plank lines
-          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 7, TILE_SIZE, 2);
-          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 15, TILE_SIZE, 2);
-          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 23, TILE_SIZE, 2);
-          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 31, TILE_SIZE, 2);
+          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 7, TILE_SIZE + 1, 2);
+          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 15, TILE_SIZE + 1, 2);
+          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 23, TILE_SIZE + 1, 2);
+          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 31, TILE_SIZE + 1, 2);
           // Draw vertical nails or plank ends occasionally
           ctx.fillStyle = "#1c100a";
           if ((x + y) % 3 === 0) {
-            ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE, 2, TILE_SIZE);
+            ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE, 2, TILE_SIZE + 1);
           }
         } else {
           const isIceBg = this.state.biome === "ice";
@@ -1663,7 +1676,7 @@ export class GameEngine {
               }
 
               ctx.fillStyle = color;
-              ctx.fillRect(px, py, 8, 8);
+              ctx.fillRect(px, py, 9, 9); // ponytail: overlap to prevent gaps
 
               if (isIceBg) {
                 const detailHash = Math.sin(px * 1.3 + py * 1.7);
@@ -1765,7 +1778,7 @@ export class GameEngine {
 
             // Fill block interior
             ctx.fillStyle = darkColor;
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1); // ponytail: overlap to prevent gaps
 
             // Base texture for interior
             ctx.fillStyle = baseColor;
@@ -1856,7 +1869,7 @@ export class GameEngine {
                     : baseColor;
 
               ctx.fillStyle = topHighlight;
-              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, 4);
+              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, 4); // ponytail: overlap to prevent gaps
               ctx.fillStyle = topBase;
               ctx.fillRect(
                 x * TILE_SIZE + 4,
@@ -1898,7 +1911,7 @@ export class GameEngine {
               ctx.fillRect(
                 x * TILE_SIZE,
                 y * TILE_SIZE + TILE_SIZE - 4,
-                TILE_SIZE,
+                TILE_SIZE + 1, // ponytail: overlap to prevent gaps
                 4,
               );
               ctx.fillStyle = darkColor;
@@ -1918,7 +1931,7 @@ export class GameEngine {
                   : highlightColor;
               if (top && (isGrass || isMossy || isSnow))
                 ctx.fillStyle = strokeColor; // Top layer doesn't go all the way down sides if it's connected
-              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, 4, TILE_SIZE);
+              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, 4, TILE_SIZE + 1); // ponytail: overlap to prevent gaps
               ctx.fillStyle = baseColor;
               ctx.fillRect(
                 x * TILE_SIZE + 4,
@@ -1933,7 +1946,7 @@ export class GameEngine {
                 x * TILE_SIZE + TILE_SIZE - 4,
                 y * TILE_SIZE,
                 4,
-                TILE_SIZE,
+                TILE_SIZE + 1, // ponytail: overlap to prevent gaps
               );
               ctx.fillStyle = darkColor;
               ctx.fillRect(
@@ -1960,13 +1973,13 @@ export class GameEngine {
               x * TILE_SIZE + 6,
               y * TILE_SIZE + startY,
               2,
-              TILE_SIZE - startY,
+              TILE_SIZE - startY + 1, // ponytail: overlap to prevent gaps
             );
             ctx.fillRect(
               x * TILE_SIZE + 24,
               y * TILE_SIZE + startY,
               2,
-              TILE_SIZE - startY,
+              TILE_SIZE - startY + 1, // ponytail: overlap to prevent gaps
             );
 
             // If there's a platform above, draw the knots attaching to the platform
@@ -1986,17 +1999,17 @@ export class GameEngine {
             for (let i = 4; i < TILE_SIZE; i += 10) {
               if (i < startY) continue;
               ctx.fillStyle = rungColor;
-              ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE + i, 16, 3);
+              ctx.fillRect(x * TILE_SIZE + 7, y * TILE_SIZE + i, 18, 3); // ponytail: overlap to prevent gaps
               ctx.fillStyle = shadowColor;
-              ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE + i + 3, 16, 2);
+              ctx.fillRect(x * TILE_SIZE + 7, y * TILE_SIZE + i + 3, 18, 2); // ponytail: overlap to prevent gaps
             }
           } else if (tile === 5) {
             // Platform (Rope Bridge / Scaffold)
             // Top Logs
             ctx.fillStyle = "#6b4c3a"; // lighter brown
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 2, TILE_SIZE, 6);
+            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 2, TILE_SIZE + 1, 6); // ponytail: overlap to prevent gaps
             ctx.fillStyle = "#4a3325"; // dark brown bottom
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 8, TILE_SIZE, 2);
+            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 8, TILE_SIZE + 1, 2); // ponytail: overlap to prevent gaps
 
             // Planks / Gaps
             ctx.fillStyle = "#222";
@@ -2005,22 +2018,22 @@ export class GameEngine {
 
             // Rope Binding
             ctx.fillStyle = "#d2b48c"; // tan (rope)
-            ctx.fillRect(x * TILE_SIZE + 2, y * TILE_SIZE + 2, 4, 8);
-            ctx.fillRect(x * TILE_SIZE + 26, y * TILE_SIZE + 2, 4, 8);
+            ctx.fillRect(x * TILE_SIZE + 2, y * TILE_SIZE + 2, 4, 9);
+            ctx.fillRect(x * TILE_SIZE + 26, y * TILE_SIZE + 2, 4, 9);
 
             // Hanging rope/strands
             ctx.fillStyle = "#a68c69"; // dark tan
             ctx.fillRect(
               x * TILE_SIZE + 4,
-              y * TILE_SIZE + 10,
+              y * TILE_SIZE + 9, // ponytail: overlap to prevent gaps
               2,
-              4 + Math.random() * 2,
+              5 + Math.random() * 2,
             );
             ctx.fillRect(
               x * TILE_SIZE + 28,
-              y * TILE_SIZE + 10,
+              y * TILE_SIZE + 9, // ponytail: overlap to prevent gaps
               2,
-              2 + Math.random() * 4,
+              5 + Math.random() * 2,
             );
           } else if (tile === 6) {
             // Water
@@ -2035,13 +2048,13 @@ export class GameEngine {
               ? "rgba(100, 200, 255, 0.6)"
               : "rgba(0, 180, 150, 0.5)"; // Icy water or jungle water
             if (waterAbove) {
-              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1); // ponytail: overlap to prevent gaps
             } else {
               ctx.fillRect(
                 x * TILE_SIZE,
                 y * TILE_SIZE + 4,
-                TILE_SIZE,
-                TILE_SIZE - 4,
+                TILE_SIZE + 1, // ponytail: overlap to prevent gaps
+                TILE_SIZE - 4 + 1,
               );
               // Little waves
               ctx.fillStyle = isIce
@@ -2062,19 +2075,19 @@ export class GameEngine {
               ctx.fillStyle = isIce
                 ? "rgba(200, 230, 255, 0.3)"
                 : "rgba(0, 255, 200, 0.2)";
-              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 6, TILE_SIZE, 8);
+              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 6, TILE_SIZE + 1, 8); // ponytail: overlap to prevent gaps
             }
           } else if (tile === 18) {
             // Thin ice covering water
             // First draw water
             ctx.fillStyle = "rgba(100, 200, 255, 0.6)";
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1); // ponytail: overlap to prevent gaps
 
             // Then draw the thin ice crust
             ctx.fillStyle = "rgba(180, 230, 255, 0.8)";
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, 8);
+            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, 8); // ponytail: overlap to prevent gaps
             ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, 2);
+            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, 2); // ponytail: overlap to prevent gaps
             ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
             if (Math.sin(x * 1.3) > 0)
               ctx.fillRect(x * TILE_SIZE + 4, y * TILE_SIZE + 2, 4, 4);
@@ -2092,9 +2105,9 @@ export class GameEngine {
 
             // Pole Core
             ctx.fillStyle = "#6b4c3a"; // lighter wood
-            ctx.fillRect(x * TILE_SIZE + 13, y * TILE_SIZE + 10, 6, 12);
+            ctx.fillRect(x * TILE_SIZE + 13, y * TILE_SIZE + 10, 6, 13); // ponytail: overlap to prevent gaps
             ctx.fillStyle = "#4a3325"; // dark wood shadow
-            ctx.fillRect(x * TILE_SIZE + 17, y * TILE_SIZE + 10, 2, 12);
+            ctx.fillRect(x * TILE_SIZE + 17, y * TILE_SIZE + 10, 2, 13); // ponytail: overlap to prevent gaps
             ctx.fillStyle = "#222";
             ctx.fillRect(x * TILE_SIZE + 12, y * TILE_SIZE + 10, 8, 3); // iron band
 
@@ -2144,7 +2157,7 @@ export class GameEngine {
               ctx.fillStyle = "#b0e0e6"; // light icy blue
 
               if (!hasVineAbove) {
-                ctx.fillRect(px, py, TILE_SIZE, 4); // frost base that connects them
+                ctx.fillRect(px, py, TILE_SIZE + 1, 4); // ponytail: overlap to prevent gaps
               }
 
               const drawPixelIcicle = (
@@ -2161,7 +2174,7 @@ export class GameEngine {
                     px + vx + Math.floor((baseThick - curThick) / 2),
                     py + 4 + currentY,
                     curThick,
-                    4,
+                    5, // ponytail: overlap to prevent gaps
                   );
                   currentY += 4;
                   curThick -= 2; // Fixed taper
@@ -2203,7 +2216,7 @@ export class GameEngine {
                   const wave = Math.round(
                     Math.sin(px * 0.1 + py * 0.1 + step * 0.3 + waveOffset) * 2,
                   );
-                  ctx.fillRect(px + vx + wave, py + step, thick, 4);
+                  ctx.fillRect(px + vx + wave, py + step, thick, 5); // ponytail: overlap to prevent gaps
 
                   // Occasional leaf based on position hash
                   const leafHash = Math.cos(
@@ -2251,10 +2264,10 @@ export class GameEngine {
 
       // Ladder inside the hole
       ctx.fillStyle = "#1c1917"; // hole background
-      ctx.fillRect(px, py + TILE_SIZE - 8, 32, 8);
+      ctx.fillRect(px, py + TILE_SIZE - 8, 32, 9); // ponytail: overlap to prevent gaps
       ctx.fillStyle = "#78350f"; // ladder rails inside hole
-      ctx.fillRect(px + 8, py + TILE_SIZE - 8, 2, 8);
-      ctx.fillRect(px + 22, py + TILE_SIZE - 8, 2, 8);
+      ctx.fillRect(px + 8, py + TILE_SIZE - 8, 2, 9); // ponytail: overlap to prevent gaps
+      ctx.fillRect(px + 22, py + TILE_SIZE - 8, 2, 9); // ponytail: overlap to prevent gaps
       ctx.fillStyle = "#b45309"; // ladder rung
       ctx.fillRect(px + 10, py + TILE_SIZE - 4, 12, 2);
 
@@ -2292,6 +2305,11 @@ export class GameEngine {
 
     // Draw Enemies
     for (let e of this.state.enemies) {
+      ctx.save();
+      ctx.translate(
+        Math.round(e.x * zoom) / zoom - e.x,
+        Math.round(e.y * zoom) / zoom - e.y,
+      ); // ponytail: align enemy model to integer pixel grid in screen space
       ctx.fillStyle =
         e.invulnerableTimer > 0
           ? "#fff"
@@ -2440,12 +2458,18 @@ export class GameEngine {
         ctx.fillStyle = "#33cc33";
         ctx.fillRect(e.x, e.y - 15, e.w * (e.health / e.maxHealth), 4);
       }
+      ctx.restore();
     }
 
     // Draw Player Miner Model
     const p = this.state.player;
+    ctx.save();
+    ctx.translate(
+      Math.round(p.x * zoom) / zoom - p.x,
+      Math.round(p.y * zoom) / zoom - p.y,
+    ); // ponytail: align player model to integer pixel grid in screen space
     const isMoving = Math.abs(p.vx) > 0.5 && p.isGrounded;
-    const bob = isMoving ? Math.sin(Date.now() / 50) * 2 : 0;
+    const bob = isMoving ? Math.round(Math.sin(Date.now() / 50) * 2) : 0;
 
     const isHit =
       p.invulnerableTimer > 0 && Math.floor(Date.now() / 100) % 2 === 0;
@@ -2603,6 +2627,7 @@ export class GameEngine {
       if (p.facingRight) ctx.fillRect(p.x + p.w - 4, p.y + 10 + bob, 8, 4);
       else ctx.fillRect(p.x - 4, p.y + 10 + bob, 8, 4);
     }
+    ctx.restore();
 
     // Draw pixel slash animation if attacking
     if (p.isAttacking && p.weapon !== "bow") {
@@ -2616,6 +2641,9 @@ export class GameEngine {
         ox = p.x + p.w / 2;
         oy = p.y + p.h / 2;
       }
+
+      ox = Math.round(ox * zoom) / zoom; // ponytail: align slash origin to screen pixel grid
+      oy = Math.round(oy * zoom) / zoom;
 
       ctx.save();
       ctx.translate(ox, oy);
@@ -2779,8 +2807,8 @@ export class GameEngine {
     // Draw Chests
     if (this.state.chests) {
       for (const chest of this.state.chests) {
-        const px = chest.x;
-        const py = chest.y;
+        const px = Math.round(chest.x * zoom) / zoom; // ponytail: round coordinates in screen space
+        const py = Math.round(chest.y * zoom) / zoom;
         
         if (!chest.isOpen) {
           // Closed Chest Model: brown box, dark iron bands, gold lock
@@ -2855,8 +2883,8 @@ export class GameEngine {
     if (this.state.projectiles) {
       for (const proj of this.state.projectiles) {
         if (proj.type === 'arrow') {
-          const px = proj.x;
-          const py = proj.y;
+          const px = Math.round(proj.x * zoom) / zoom; // ponytail: round coordinates in screen space
+          const py = Math.round(proj.y * zoom) / zoom;
           const pw = proj.w;
           const ph = proj.h;
           
@@ -2901,15 +2929,25 @@ export class GameEngine {
     for (let pt of this.state.particles) {
       ctx.fillStyle = pt.color;
       ctx.globalAlpha = pt.life / pt.maxLife;
-      ctx.fillRect(pt.x, pt.y, pt.size, pt.size);
+      ctx.fillRect(
+        Math.round(pt.x * zoom) / zoom,
+        Math.round(pt.y * zoom) / zoom,
+        pt.size,
+        pt.size,
+      ); // ponytail: round coordinates in screen space
     }
     ctx.globalAlpha = 1.0;
 
     // Texts
+    ctx.textAlign = "center";
     ctx.font = "bold 14px 'Courier New', Courier, monospace";
     for (let t of this.state.texts) {
       ctx.fillStyle = `rgba(255,255,255,${t.life / t.maxLife})`;
-      ctx.fillText(t.text, t.x, t.y);
+      ctx.fillText(
+        t.text,
+        Math.round(t.x * zoom) / zoom,
+        Math.round(t.y * zoom) / zoom,
+      ); // ponytail: round coordinates in screen space
     }
 
     // Darkness overlay (using offscreen canvas)
@@ -2936,9 +2974,9 @@ export class GameEngine {
 
         // Only structure inside is clearly visible (we clear bounds of the current structure)
         lctx.save();
-        lctx.translate(this.canvasWidth / 2, this.canvasHeight / 2);
-        lctx.scale(this.state.camera.zoom, this.state.camera.zoom);
-        lctx.translate(-this.state.camera.x, -this.state.camera.y);
+        lctx.translate(Math.round(this.canvasWidth / 2), Math.round(this.canvasHeight / 2));
+        lctx.translate(-scaledCamX, -scaledCamY);
+        lctx.scale(zoom, zoom);
 
         lctx.globalCompositeOperation = "destination-out";
         lctx.fillStyle = "rgba(255, 255, 255, 1.0)";
@@ -2975,9 +3013,9 @@ export class GameEngine {
 
         lctx.save();
         // Transform back to world space for lights
-        lctx.translate(this.canvasWidth / 2, this.canvasHeight / 2);
-        lctx.scale(this.state.camera.zoom, this.state.camera.zoom);
-        lctx.translate(-this.state.camera.x, -this.state.camera.y);
+        lctx.translate(Math.round(this.canvasWidth / 2), Math.round(this.canvasHeight / 2));
+        lctx.translate(-scaledCamX, -scaledCamY);
+        lctx.scale(zoom, zoom); // ponytail: round camera coordinates in screen space
 
         const drawLight = (x: number, y: number, radius: number) => {
           const grad = lctx.createRadialGradient(
@@ -3135,7 +3173,7 @@ export class GameEngine {
         for (let y = startY; y < endY; y++) {
           for (let x = startX; x < endX; x++) {
             if (this.state.bgMap[y] && this.state.bgMap[y][x] === 9) {
-              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1); // ponytail: overlap to prevent gaps
             }
           }
         }
