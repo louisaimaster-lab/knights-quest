@@ -76,6 +76,7 @@ export class GameEngine {
       fallingIcicles: [],
       chests: [],
       projectiles: [],
+      droppedWeapons: [],
       camera: { x: 0, y: 0, zoom: 1 },
       keys: {},
       prevKeys: {},
@@ -144,6 +145,7 @@ export class GameEngine {
     this.state.enemies = [];
     this.state.particles = [];
     this.state.projectiles = [];
+    this.state.droppedWeapons = [];
     this.state.chests = gen.chests ? gen.chests.map((c, idx) => {
       const weapons: ('bow' | 'colossal_sword' | 'dual_daggers')[] = ['bow', 'colossal_sword', 'dual_daggers'];
       const randomWeapon = weapons[Math.floor(Math.random() * weapons.length)];
@@ -672,7 +674,6 @@ export class GameEngine {
       this.state.mouse.down &&
       p.attackTimer <= 0 &&
       p.attackCooldown <= 0 &&
-      p.isGrounded &&
       this.state.floorTitleState === "none" &&
       this.state.transitionState === "none"
     ) {
@@ -697,43 +698,13 @@ export class GameEngine {
       if (!isBow) {
         this.checkAttackHits();
       }
-    } else if (
-      this.state.mouse.down &&
-      p.attackTimer <= 0 &&
-      (p.airAttackCooldown || 0) <= 0 &&
-      !p.isGrounded &&
-      this.state.floorTitleState === "none" &&
-      this.state.transitionState === "none"
-    ) {
-      const isBow = p.weapon === 'bow';
-      const isColossal = p.weapon === 'colossal_sword';
-      const isDaggers = p.weapon === 'dual_daggers';
-
-      p.isAttacking = true;
-      p.isAirAttacking = true;
-      p.attackTimer = isBow ? 15 : (isColossal ? 20 : (isDaggers ? 6 : 10));
-      p.slashFlipped = false;
-      p.comboResetTimer = 120;
-      
-      if (isBow) {
-        // Ranged doesn't fall drop fast, but spawns arrow
-      } else {
-        p.vy = 8; // Drop fast when air spinning/slashing
-        this.checkAttackHits();
-      }
     }
 
     if (p.attackTimer > 0) {
       if (!p.wallSliding && !isClimbing && !p.onLadder && !inWater) {
-        if (!p.isAirAttacking) {
-          if (p.weapon !== 'bow') {
-            const lungeSpeed = p.weapon === 'colossal_sword' ? 4 : (p.weapon === 'dual_daggers' ? 3 : 6);
-            p.vx = p.facingRight ? lungeSpeed : -lungeSpeed;
-          }
-        } else {
-          if (p.weapon !== 'bow') {
-            p.vy = 8;
-          }
+        if (p.weapon !== 'bow') {
+          const lungeSpeed = p.weapon === 'colossal_sword' ? 4 : (p.weapon === 'dual_daggers' ? 3 : 6);
+          p.vx = p.facingRight ? lungeSpeed : -lungeSpeed;
         }
       }
 
@@ -744,12 +715,7 @@ export class GameEngine {
       p.attackTimer--;
       if (p.attackTimer === 0) {
         p.isAttacking = false;
-        if (p.isAirAttacking) {
-          p.isAirAttacking = false;
-          p.airAttackCooldown = p.weapon === 'bow' ? 40 : 450;
-        } else {
-          p.attackCooldown = p.weapon === 'colossal_sword' ? 50 : (p.weapon === 'dual_daggers' ? 5 : 12);
-        }
+        p.attackCooldown = p.weapon === 'colossal_sword' ? 50 : (p.weapon === 'dual_daggers' ? 5 : 12);
       }
     }
 
@@ -869,8 +835,17 @@ export class GameEngine {
 
       if (nearestChest) {
         nearestChest.isOpen = true;
-        p.weapon = nearestChest.weapon;
         
+        // Drop the weapon at the chest's location
+        this.state.droppedWeapons.push({
+          id: `dropped_weapon_${this.state.floor}_${Date.now()}_${Math.random()}`,
+          x: nearestChest.x,
+          y: nearestChest.y,
+          w: 24,
+          h: 24,
+          type: nearestChest.weapon
+        });
+
         // Consume the key press so it doesn't trigger repeatedly or interfere
         keys["e"] = false;
         keys["E"] = false;
@@ -880,16 +855,10 @@ export class GameEngine {
         }
 
         // Spawn pop up text
-        const weaponNames: Record<string, string> = {
-          'bow': 'Bow',
-          'colossal_sword': 'Colossal Sword',
-          'dual_daggers': 'Dual Daggers'
-        };
-        const name = weaponNames[nearestChest.weapon] || nearestChest.weapon;
         this.state.texts.push({
           x: nearestChest.x + nearestChest.w / 2,
           y: nearestChest.y - 15,
-          text: `Got ${name}!`,
+          text: "Loot Dropped!",
           life: 80,
           maxLife: 80
         });
@@ -907,6 +876,55 @@ export class GameEngine {
             size: 3
           });
         }
+      }
+    }
+
+    // Pick up / Swap Dropped Weapon Check (Press F)
+    const justPressedSwap = keys["f"] || keys["F"];
+    let nearestDropped = null;
+    let minDropDist = 32; // interact range in pixels
+
+    for (const dw of this.state.droppedWeapons) {
+      const px = p.x + p.w / 2;
+      const py = p.y + p.h / 2;
+      const wx = dw.x + dw.w / 2;
+      const wy = dw.y + dw.h / 2;
+      const dist = Math.hypot(px - wx, py - wy);
+      if (dist < minDropDist) {
+        minDropDist = dist;
+        nearestDropped = dw;
+      }
+    }
+
+    if (nearestDropped) {
+      if (justPressedSwap) {
+        // Swap active weapon with dropped weapon
+        const oldWeapon = p.weapon || 'sword';
+        p.weapon = nearestDropped.type;
+        nearestDropped.type = oldWeapon; // Swap in place
+
+        // Consume key
+        keys["f"] = false;
+        keys["F"] = false;
+        if (this.state.keys) {
+          this.state.keys["f"] = false;
+          this.state.keys["F"] = false;
+        }
+
+        // Spawn pop up text
+        const weaponNames: Record<string, string> = {
+          'sword': 'Sword',
+          'bow': 'Bow',
+          'colossal_sword': 'Colossal Sword',
+          'dual_daggers': 'Dual Daggers'
+        };
+        this.state.texts.push({
+          x: p.x + p.w / 2,
+          y: p.y - 15,
+          text: `Equipped ${weaponNames[p.weapon] || p.weapon}!`,
+          life: 80,
+          maxLife: 80
+        });
       }
     }
 
@@ -2638,33 +2656,22 @@ export class GameEngine {
       let ox = p.facingRight ? p.x + p.w : p.x;
       let oy = p.y + p.h / 2 - 10;
 
-      if (p.isAirAttacking) {
-        ox = p.x + p.w / 2;
-        oy = p.y + p.h / 2;
-      }
-
       ox = Math.round(ox * zoom) / zoom; // ponytail: align slash origin to screen pixel grid
       oy = Math.round(oy * zoom) / zoom;
 
       ctx.save();
       ctx.translate(ox, oy);
 
-      if (p.isAirAttacking) {
-        ctx.rotate(Math.PI * 0.5); // rotate to aim downwards
-        const scale = p.weapon === "colossal_sword" ? 2.5 : (p.weapon === "dual_daggers" ? 0.9 : 1.5);
-        ctx.scale(scale, 1.0);
-      } else {
-        if (dir === -1) {
-          ctx.scale(-1, 1);
-        }
-        if (p.slashFlipped) {
-          ctx.scale(1, -1);
-        }
-        const scaleX = p.weapon === "colossal_sword" ? 2.2 : (p.weapon === "dual_daggers" ? 0.7 : 1.2);
-        const scaleY = p.weapon === "colossal_sword" ? 1.2 : (p.weapon === "dual_daggers" ? 0.4 : 0.7);
-        ctx.scale(scaleX, scaleY);
-        ctx.rotate(Math.PI * 0.1); // tilt the whole oval a bit
+      if (dir === -1) {
+        ctx.scale(-1, 1);
       }
+      if (p.slashFlipped) {
+        ctx.scale(1, -1);
+      }
+      const scaleX = p.weapon === "colossal_sword" ? 2.2 : (p.weapon === "dual_daggers" ? 0.7 : 1.2);
+      const scaleY = p.weapon === "colossal_sword" ? 1.2 : (p.weapon === "dual_daggers" ? 0.4 : 0.7);
+      ctx.scale(scaleX, scaleY);
+      ctx.rotate(Math.PI * 0.1); // tilt the whole oval a bit
 
       const PIX = 3; // 3x3 pixel grid for rendering
       const drawPixelCrescent = (
@@ -2680,10 +2687,13 @@ export class GameEngine {
         for (let i = 0; i <= steps; i++) {
           const t = i / steps; // 0 to 1
           const angle = startAngle + (endAngle - startAngle) * t;
-          const thickness = maxThick; // flat, no taper
+          
+          // Pointy ends: Taper thickness from 0 at the ends to maxThick in the middle
+          const thickness = Math.sin(t * Math.PI) * maxThick;
           const curR = rBase + spread * t;
 
-          for (let r = 0; r <= thickness; r += PIX) {
+          // Draw centered around curR to keep curve smooth and symmetrical
+          for (let r = -thickness / 2; r <= thickness / 2; r += PIX) {
             let px = Math.round((Math.cos(angle) * (curR + r)) / PIX) * PIX;
             let py = Math.round((Math.sin(angle) * (curR + r)) / PIX) * PIX;
             ctx.fillRect(px, py, PIX, PIX);
@@ -2720,11 +2730,18 @@ export class GameEngine {
       const trailLength = Math.max(0.1, trailProgress * Math.PI * 0.6);
       const tailAngle = headAngle - trailLength;
 
-      // Draw crescent
-      const rBase = p.weapon === "colossal_sword" ? 28 : (p.weapon === "dual_daggers" ? 12 : 18);
-      const spread = p.weapon === "colossal_sword" ? 8 : (p.weapon === "dual_daggers" ? 2 : 4);
-      const maxThick = p.weapon === "colossal_sword" ? 18 : (p.weapon === "dual_daggers" ? 6 : 12);
-      drawPixelCrescent(rBase, spread, maxThick, tailAngle, headAngle, white);
+      // Draw crescent: Pointy ends and wider middle design
+      const rBase = p.weapon === "colossal_sword" ? 30 : (p.weapon === "dual_daggers" ? 14 : 20);
+      const spread = p.weapon === "colossal_sword" ? 10 : (p.weapon === "dual_daggers" ? 2 : 5);
+      const maxThick = p.weapon === "colossal_sword" ? 28 : (p.weapon === "dual_daggers" ? 10 : 18);
+      
+      // Draw 3 layers for beautiful neon glow and pointy edges
+      // Outer purple glow
+      drawPixelCrescent(rBase, spread, maxThick + 4, tailAngle - 0.04, headAngle + 0.04, purple);
+      // Middle pink glow
+      drawPixelCrescent(rBase, spread, maxThick, tailAngle - 0.02, headAngle + 0.02, pink);
+      // Inner white core
+      drawPixelCrescent(rBase, spread, Math.max(2, maxThick - 6), tailAngle, headAngle, white);
 
       // Sparks in front of the blade
       if (progress > 0.1 && progress < 0.9) {
@@ -2873,6 +2890,114 @@ export class GameEngine {
           ctx.fillStyle = "#4b5563";
           ctx.fillRect(px + 4, py - 4, 3, 6);
           ctx.fillRect(px + chest.w - 7, py - 4, 3, 6);
+        }
+      }
+    }
+
+    // Draw Dropped Weapons
+    if (this.state.droppedWeapons) {
+      for (const dw of this.state.droppedWeapons) {
+        const wx = Math.round(dw.x * zoom) / zoom;
+        const wy = Math.round(dw.y * zoom) / zoom;
+        
+        ctx.save();
+        ctx.translate(wx + dw.w / 2, wy + dw.h / 2);
+        
+        // Float effect (gentle bobbing up and down)
+        const bob = Math.sin(this.state.frameCounter * 0.05) * 3;
+        ctx.translate(0, bob);
+        
+        // Draw a light golden pedestal glow underneath
+        ctx.fillStyle = "rgba(251, 191, 36, 0.25)";
+        ctx.beginPath();
+        ctx.ellipse(0, dw.h / 2 - 2, 12, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        const type = dw.type;
+        if (type === 'sword') {
+          // Grey blade
+          ctx.strokeStyle = "#9ca3af";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(-6, 6);
+          ctx.lineTo(6, -6);
+          ctx.stroke();
+          // Gold hilt
+          ctx.fillStyle = "#fbbf24";
+          ctx.fillRect(-8, 4, 3, 3);
+          ctx.fillRect(-6, 6, 2, 2);
+        } else if (type === 'bow') {
+          // Curved wooden bow
+          ctx.strokeStyle = "#b45309";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, 8, -Math.PI * 0.4, Math.PI * 0.4);
+          ctx.stroke();
+          // Bowstring
+          ctx.strokeStyle = "#cbd5e1";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(3, -7);
+          ctx.lineTo(3, 7);
+          ctx.stroke();
+        } else if (type === 'colossal_sword') {
+          // Big heavy blade
+          ctx.strokeStyle = "#6b7280";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(-8, 8);
+          ctx.lineTo(8, -8);
+          ctx.stroke();
+          // Guard
+          ctx.strokeStyle = "#d1d5db";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(-7, 3);
+          ctx.lineTo(-3, 7);
+          ctx.stroke();
+          // Brown handle
+          ctx.fillStyle = "#78350f";
+          ctx.fillRect(-10, 8, 3, 3);
+        } else if (type === 'dual_daggers') {
+          // Crossed daggers
+          // Dagger 1 (slash right)
+          ctx.strokeStyle = "#9ca3af";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(-5, 5);
+          ctx.lineTo(3, -3);
+          ctx.stroke();
+          ctx.fillStyle = "#fbbf24";
+          ctx.fillRect(-7, 5, 2, 2);
+          
+          // Dagger 2 (slash left)
+          ctx.strokeStyle = "#9ca3af";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(5, 5);
+          ctx.lineTo(-3, -3);
+          ctx.stroke();
+          ctx.fillStyle = "#fbbf24";
+          ctx.fillRect(5, 5, 2, 2);
+        }
+        
+        ctx.restore();
+
+        // If player is close, draw swap prompt "[F] Swap to [Weapon]"
+        const px = this.state.player.x + this.state.player.w / 2;
+        const py = this.state.player.y + this.state.player.h / 2;
+        const dist = Math.hypot(px - (dw.x + dw.w / 2), py - (dw.y + dw.h / 2));
+        if (dist < 32) {
+          const weaponNames: Record<string, string> = {
+            'sword': 'Sword',
+            'bow': 'Bow',
+            'colossal_sword': 'Colossal Sword',
+            'dual_daggers': 'Dual Daggers'
+          };
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 9px 'Courier New', Courier, monospace";
+          ctx.textAlign = "center";
+          ctx.fillText(`[F] SWAP TO ${weaponNames[dw.type].toUpperCase()}`, dw.x + dw.w / 2, dw.y - 12);
         }
       }
     }
@@ -3465,48 +3590,6 @@ export class GameEngine {
     ctx.font = "bold 12px 'Courier New', Courier, monospace";
     const weaponName = this.state.player.weapon ? this.state.player.weapon.toUpperCase().replace('_', ' ') : 'SWORD';
     ctx.fillText(`WEAPON: ${weaponName}`, 30, 105);
-
-    // Air Slash Cooldown (Right Side)
-    const cdRatio = Math.max(
-      0,
-      (this.state.player.airAttackCooldown || 0) / 450,
-    );
-    if (cdRatio > 0) {
-      const cdWidth = 150;
-      const cdHeight = 15;
-      const cdX = this.canvasWidth - 20 - cdWidth;
-      const cdY = 60;
-
-      ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.fillRect(cdX - 10, cdY - 20, cdWidth + 20, 45);
-
-      ctx.fillStyle = "#fff";
-      ctx.font = "bold 12px 'Courier New', Courier, monospace";
-      ctx.textAlign = "right";
-      ctx.fillText("AIR SLASH CD", cdX + cdWidth, cdY - 5);
-
-      ctx.fillStyle = "#4b5563"; // gray-600
-      ctx.fillRect(cdX, cdY, cdWidth, cdHeight);
-
-      ctx.fillStyle = "#60a5fa"; // blue-400
-      ctx.fillRect(cdX, cdY, Math.max(0, cdWidth * (1 - cdRatio)), cdHeight); // Fill up as cooldown goes down
-
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(cdX, cdY, cdWidth, cdHeight);
-    } else {
-      const cdWidth = 150;
-      const cdHeight = 15;
-      const cdX = this.canvasWidth - 20 - cdWidth;
-      const cdY = 60;
-      ctx.fillStyle = "#fff";
-      ctx.font = "bold 12px 'Courier New', Courier, monospace";
-      ctx.textAlign = "right";
-      ctx.shadowColor = "#60a5fa";
-      ctx.shadowBlur = 10;
-      ctx.fillText("AIR SLASH READY", cdX + cdWidth, cdY - 5);
-      ctx.shadowBlur = 0;
-    }
 
     // Diamond status
     if (this.state.player.hasDiamond) {

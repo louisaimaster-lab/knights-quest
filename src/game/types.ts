@@ -107,6 +107,11 @@ export interface Projectile extends Rect {
   facingRight: boolean;
 }
 
+export interface DroppedWeapon extends Rect {
+  id: string;
+  type: WeaponType;
+}
+
 export interface GameState {
   floor: number;
   maxFloor: number;
@@ -123,6 +128,7 @@ export interface GameState {
   fallingIcicles: FallingIcicle[];
   chests: Chest[];
   projectiles: Projectile[];
+  droppedWeapons: DroppedWeapon[];
   camera: { x: number; y: number; zoom: number };
   keys: { [key: string]: boolean };
   prevKeys: { [key: string]: boolean };
