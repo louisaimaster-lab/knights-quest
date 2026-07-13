@@ -850,12 +850,12 @@ export class GameEngine {
     }
 
     // Chest Interaction Check
-    const justPressedInteract = (keys["e"] && !prevKeys["e"]) || (keys["E"] && !prevKeys["E"]);
+    const justPressedInteract = keys["e"] || keys["E"];
     if (justPressedInteract) {
       const px = p.x + p.w / 2;
       const py = p.y + p.h / 2;
       let nearestChest = null;
-      let minDist = 48; // Max interaction distance in pixels
+      let minDist = 64; // Increased interaction distance in pixels for better usability
 
       for (const chest of this.state.chests) {
         if (chest.isOpen) continue;
@@ -872,6 +872,14 @@ export class GameEngine {
         nearestChest.isOpen = true;
         p.weapon = nearestChest.weapon;
         
+        // Consume the key press so it doesn't trigger repeatedly or interfere
+        keys["e"] = false;
+        keys["E"] = false;
+        if (this.state.keys) {
+          this.state.keys["e"] = false;
+          this.state.keys["E"] = false;
+        }
+
         // Spawn pop up text
         const weaponNames: Record<string, string> = {
           'bow': 'Bow',
@@ -2835,7 +2843,7 @@ export class GameEngine {
             y: chest.y + chest.h / 2
           };
           const dist = Math.hypot(playerCenter.x - chestCenter.x, playerCenter.y - chestCenter.y);
-          if (dist < 48) {
+          if (dist < 64) {
             ctx.fillStyle = "#ffffff";
             ctx.font = "bold 10px 'Courier New', Courier, monospace";
             ctx.textAlign = "center";
