@@ -852,19 +852,18 @@ export class GameEngine {
     // Chest Interaction Check
     const justPressedInteract = keys["e"] || keys["E"];
     if (justPressedInteract) {
-      const px = p.x + p.w / 2;
-      const py = p.y + p.h / 2;
       let nearestChest = null;
-      let minDist = 64; // Increased interaction distance in pixels for better usability
+      const playerTx = Math.floor((p.x + p.w / 2) / TILE_SIZE);
+      const playerTy = Math.floor((p.y + p.h / 2) / TILE_SIZE);
 
       for (const chest of this.state.chests) {
         if (chest.isOpen) continue;
-        const cx = chest.x + chest.w / 2;
-        const cy = chest.y + chest.h / 2;
-        const dist = Math.hypot(px - cx, py - cy);
-        if (dist < minDist) {
-          minDist = dist;
+        const chestTx = Math.floor((chest.x + chest.w / 2) / TILE_SIZE);
+        const chestTy = Math.floor((chest.y + chest.h / 2) / TILE_SIZE);
+        const manhattanDist = Math.abs(playerTx - chestTx) + Math.abs(playerTy - chestTy);
+        if (manhattanDist <= 2) {
           nearestChest = chest;
+          break;
         }
       }
 
@@ -2834,20 +2833,17 @@ export class GameEngine {
           ctx.fillRect(px + chest.w / 2 - 1, py + 6, 2, 2);
 
           // If player is close, draw interaction prompt "[E] Open"
-          const playerCenter = {
-            x: this.state.player.x + this.state.player.w / 2,
-            y: this.state.player.y + this.state.player.h / 2
-          };
-          const chestCenter = {
-            x: chest.x + chest.w / 2,
-            y: chest.y + chest.h / 2
-          };
-          const dist = Math.hypot(playerCenter.x - chestCenter.x, playerCenter.y - chestCenter.y);
-          if (dist < 64) {
+          const chestTx = Math.floor((chest.x + chest.w / 2) / TILE_SIZE);
+          const chestTy = Math.floor((chest.y + chest.h / 2) / TILE_SIZE);
+          const playerTx = Math.floor((this.state.player.x + this.state.player.w / 2) / TILE_SIZE);
+          const playerTy = Math.floor((this.state.player.y + this.state.player.h / 2) / TILE_SIZE);
+          
+          const manhattanDist = Math.abs(playerTx - chestTx) + Math.abs(playerTy - chestTy);
+          if (manhattanDist <= 2) {
             ctx.fillStyle = "#ffffff";
             ctx.font = "bold 10px 'Courier New', Courier, monospace";
             ctx.textAlign = "center";
-            ctx.fillText("[E] OPEN", chestCenter.x, py - 6);
+            ctx.fillText("[E] OPEN", chest.x + chest.w / 2, py - 6);
           }
         } else {
           // Chest - open model: bottom box, open lid propped up/back, gold treasure glowing
