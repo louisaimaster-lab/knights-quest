@@ -23,6 +23,7 @@ export interface Entity extends Rect {
 }
 
 export type WeaponType = 'sword' | 'bow' | 'colossal_sword' | 'dual_daggers';
+export type SuperAbilityType = 'malevolence' | 'impenetrable' | 'supersonic';
 
 export interface Player extends Entity {
   attackTimer: number;
@@ -42,13 +43,28 @@ export interface Player extends Entity {
   jumpMulti: number;
   playerColor?: string;
   weapon?: WeaponType;
+  weaponEquipped: boolean;
+  superAbility?: SuperAbilityType;
+  superAbilityCooldown: number;
+  superAbilityActive: boolean;
+  superAbilityTimer: number;
+  clawsActive?: boolean;
+  shieldActive?: boolean;
+  shieldTimer?: number;
+  timeSlowActive?: boolean;
+  poisonTimer: number;
+  baseDamageMulti: number;
+  baseSpeedMulti: number;
+  baseJumpMulti: number;
+  baseMaxHealth: number;
 }
 
 export interface UpgradeChoice {
   id: string;
   title: string;
   desc: string;
-  cost: number;
+  isSuper?: boolean;
+  abilityId?: SuperAbilityType;
   effect: (p: Player) => void;
 }
 
@@ -58,6 +74,7 @@ export interface Enemy extends Entity {
   type: EnemyType;
   stateTimer: number;
   aiState: string;
+  trackTimer?: number;
 }
 
 export interface Particle {
@@ -149,4 +166,7 @@ export interface GameState {
   gateEntered?: boolean;
   gateTimer?: number;
   transitionDelayTimer?: number;
+  structureOverlayAlpha: number;
+  timeScale: number;
+  timeAccumulator?: number;
 }

@@ -69,6 +69,15 @@ export class GameEngine {
         speedMulti: 1,
         jumpMulti: 1,
         weapon: "sword",
+        weaponEquipped: true,
+        superAbilityCooldown: 0,
+        superAbilityActive: false,
+        superAbilityTimer: 0,
+        poisonTimer: 0,
+        baseDamageMulti: 1,
+        baseSpeedMulti: 1,
+        baseJumpMulti: 1,
+        baseMaxHealth: 100,
       },
       enemies: [],
       particles: [],
@@ -98,6 +107,9 @@ export class GameEngine {
       gateEntered: false,
       gateTimer: 0,
       transitionDelayTimer: 0,
+      structureOverlayAlpha: 0,
+      timeScale: 1,
+      timeAccumulator: 0,
     };
   }
 
@@ -223,8 +235,8 @@ export class GameEngine {
         h: isBig ? 32 : 20,
         vx: 0,
         vy: 0,
-        health: isBig ? 60 : isTank ? 25 : isFlying ? 10 : 15,
-        maxHealth: isBig ? 60 : isTank ? 25 : isFlying ? 10 : 15,
+        health: isBig ? 100 : isTank ? 45 : isFlying ? 20 : 30,
+        maxHealth: isBig ? 100 : isTank ? 45 : isFlying ? 20 : 30,
         facingRight: Math.random() > 0.5,
         isGrounded: false,
         invulnerableTimer: 0,
@@ -245,8 +257,8 @@ export class GameEngine {
         h: 64,
         vx: 0,
         vy: 0,
-        health: 200,
-        maxHealth: 200,
+        health: 350,
+        maxHealth: 350,
         facingRight: false,
         isGrounded: false,
         invulnerableTimer: 0,
@@ -270,8 +282,8 @@ export class GameEngine {
                 h: 32,
                 vx: 0,
                 vy: 0,
-                health: 30,
-                maxHealth: 30,
+                health: 50,
+                maxHealth: 50,
                 facingRight: Math.random() > 0.5,
                 isGrounded: true,
                 invulnerableTimer: 0,
@@ -455,12 +467,16 @@ export class GameEngine {
             this.state.mouse.y >= cy &&
             this.state.mouse.y <= cy + cardHeight
           ) {
-            if (this.state.player.coins >= u.cost) {
-              this.state.player.coins -= u.cost;
-              u.effect(this.state.player);
-              this.state.upgrades.splice(i, 1); // Remove purchased upgrade
-              break;
+            u.effect(this.state.player);
+            if (u.isSuper && u.abilityId) {
+              this.state.player.superAbility = u.abilityId;
+              this.state.player.superAbilityCooldown = 0;
+              this.state.player.superAbilityActive = false;
+              this.state.player.superAbilityTimer = 0;
             }
+            this.state.isFloorComplete = false;
+            this.initFloor(this.state.floor + 1);
+            break;
           }
         }
       }
@@ -472,6 +488,60 @@ export class GameEngine {
       this.state.mouse.clicked = false;
       this.state.prevKeys = { ...this.state.keys };
       return;
+    }
+
+    // Time slow accumulator logic (SUPERSONIC)
+    if (this.state.timeScale && this.state.timeScale < 1.0) {
+      this.state.timeAccumulator = (this.state.timeAccumulator || 0) + this.state.timeScale;
+      if (this.state.timeAccumulator < 1.0) {
+        // Only update camera and particles/texts for smooth render flow, skip physics/AI/player movement!
+        this.updateCamera();
+        this.updateParticlesAndTexts();
+        
+        // Still tick down real-world duration and cooldown of player abilities & poison
+        const p = this.state.player;
+        if (p.superAbilityActive) {
+          p.superAbilityTimer--;
+          if (p.superAbilityTimer <= 0) {
+            p.superAbilityActive = false;
+            p.timeSlowActive = false;
+            this.state.timeScale = 1.0;
+            p.superAbilityCooldown = 7500; // 125s CD
+          }
+        }
+        if (p.superAbilityCooldown > 0) p.superAbilityCooldown--;
+        if (p.poisonTimer > 0) p.poisonTimer--;
+        
+        return;
+      }
+      this.state.timeAccumulator -= 1.0;
+    }
+
+    // Gradual structure lighting fade
+    {
+      const p = this.state.player;
+      const txStart = Math.floor((p.x + 1) / TILE_SIZE);
+      const txEnd = Math.floor((p.x + p.w - 1) / TILE_SIZE);
+      const tyStart = Math.floor((p.y + 1) / TILE_SIZE);
+      const tyEnd = Math.floor((p.y + p.h - 1) / TILE_SIZE);
+
+      let inside = true;
+      for (let ty = tyStart; ty <= tyEnd; ty++) {
+        for (let tx = txStart; tx <= txEnd; tx++) {
+          if (!this.state.bgMap[ty] || this.state.bgMap[ty][tx] !== 9) {
+            inside = false;
+            break;
+          }
+        }
+        if (!inside) break;
+      }
+
+      const fadeRate = 1 / (0.125 * 60);
+      if (inside) {
+        this.state.structureOverlayAlpha = Math.min(1.0, this.state.structureOverlayAlpha + fadeRate);
+      } else {
+        this.state.structureOverlayAlpha = Math.max(0.0, this.state.structureOverlayAlpha - fadeRate);
+      }
     }
 
     this.updatePlayer();
@@ -540,11 +610,18 @@ export class GameEngine {
       p.onLadder = true;
 
     const isStunned =
-      p.attackTimer > 0 ||
-      (p.attackCooldown || 0) > 0 ||
       this.state.floorTitleState !== "none" ||
       this.state.transitionState !== "none" ||
       this.state.gateEntered;
+
+    // Compute weapon jump multiplier early (needed for jump code)
+    let earlyWeaponJumpMult = 1;
+    if (p.weaponEquipped && !p.clawsActive) {
+      if (p.weapon === 'colossal_sword') earlyWeaponJumpMult = 0.90;
+      else if (p.weapon === 'bow') earlyWeaponJumpMult = 1.20;
+      else if (p.weapon === 'dual_daggers') earlyWeaponJumpMult = 1.10;
+    }
+    if (p.superAbilityActive && p.superAbility === 'supersonic') earlyWeaponJumpMult *= 1.15;
 
     if (this.state.floorTitleState === "none") {
       p.facingRight = this.state.mouse.worldX > p.x + p.w / 2;
@@ -597,26 +674,15 @@ export class GameEngine {
     }
 
     if (hitIcicle && p.invulnerableTimer <= 0) {
-      p.health -= 5;
-      p.invulnerableTimer = 30;
-      p.vx = (p.x + p.w / 2 > icicleX ? 1 : -1) * 15;
-      p.vy = -7;
-      this.state.shakeTimer = Math.max(this.state.shakeTimer, 10);
-      this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, COLORS.blood, 10);
+      const kbDir = p.x + p.w / 2 > icicleX ? 1 : -1;
+      this.damagePlayer(5, kbDir, 15, -7, COLORS.blood);
     }
 
     if (this.state.biome === "ice" && inWater) {
       this.state.frostTimer = (this.state.frostTimer || 0) + 1;
       if (this.state.frostTimer % 120 === 0) {
         // Every 2 seconds
-        p.health -= 15; // Periodic damage
-        this.state.shakeTimer = Math.max(this.state.shakeTimer, 5);
-        this.spawnParticles(
-          p.x + p.w / 2,
-          p.y + p.h / 2,
-          "rgba(180, 220, 255, 0.9)",
-          15,
-        );
+        this.damagePlayer(15, undefined, 0, 0, "rgba(180, 220, 255, 0.9)", true);
       }
     } else {
       this.state.frostTimer = Math.max(0, (this.state.frostTimer || 0) - 2);
@@ -627,7 +693,7 @@ export class GameEngine {
       const isJumpHeld = keys["w"] || keys["ArrowUp"] || keys[" "];
 
       if (justPressedJump) {
-        const scaledJump = JUMP_POWER * p.jumpMulti;
+        const scaledJump = JUMP_POWER * p.jumpMulti * earlyWeaponJumpMult;
         if (p.isGrounded || (p.onLadder && p.vy > scaledJump + 2)) {
           p.vy = scaledJump;
           p.isGrounded = false;
@@ -654,7 +720,7 @@ export class GameEngine {
       }
 
       if (inWater && isJumpHeld) {
-        const scaledJump = JUMP_POWER * p.jumpMulti;
+        const scaledJump = JUMP_POWER * p.jumpMulti * earlyWeaponJumpMult;
         p.vy -= 0.5; // Swim up
         if (p.vy < scaledJump * 0.7) p.vy = scaledJump * 0.7;
         isClimbing = false;
@@ -670,28 +736,104 @@ export class GameEngine {
 
     if ((p.airAttackCooldown || 0) > 0) p.airAttackCooldown--;
 
+    // Hotbar: Press 1 to toggle equip/unequip weapon
+    if ((keys["1"] && !prevKeys["1"])) {
+      p.weaponEquipped = !p.weaponEquipped;
+      this.state.texts.push({
+        x: p.x + p.w / 2, y: p.y - 15,
+        text: p.weaponEquipped ? "Weapon Equipped" : "Weapon Unequipped",
+        life: 60, maxLife: 60
+      });
+    }
+
+    // Super ability activation: Press Q
+    if ((keys["q"] || keys["Q"]) && !(prevKeys["q"] || prevKeys["Q"])) {
+      if (p.superAbility && p.superAbilityCooldown <= 0 && !p.superAbilityActive) {
+        p.superAbilityActive = true;
+        if (p.superAbility === 'malevolence') {
+          p.superAbilityTimer = 900; // 15s
+          p.clawsActive = true;
+        } else if (p.superAbility === 'impenetrable') {
+          p.superAbilityTimer = 1200; // 20s
+          p.shieldActive = true;
+          p.shieldTimer = 1200;
+        } else if (p.superAbility === 'supersonic') {
+          p.superAbilityTimer = 600; // 10s
+          p.timeSlowActive = true;
+          this.state.timeScale = 0.3;
+        }
+        this.state.texts.push({
+          x: p.x + p.w / 2, y: p.y - 20,
+          text: `${p.superAbility.toUpperCase()} ACTIVATED!`,
+          life: 90, maxLife: 90
+        });
+      }
+    }
+
+    // Super ability timer tick
+    if (p.superAbilityActive) {
+      p.superAbilityTimer--;
+      if (p.superAbilityTimer <= 0) {
+        p.superAbilityActive = false;
+        p.clawsActive = false;
+        if (p.superAbility === 'impenetrable') {
+          p.shieldActive = false;
+          p.shieldTimer = 0;
+        }
+        if (p.superAbility === 'supersonic') {
+          p.timeSlowActive = false;
+          this.state.timeScale = 1;
+        }
+        // Start cooldown
+        if (p.superAbility === 'malevolence') p.superAbilityCooldown = 6000; // 100s
+        else if (p.superAbility === 'impenetrable') p.superAbilityCooldown = 6600; // 110s
+        else if (p.superAbility === 'supersonic') p.superAbilityCooldown = 7500; // 125s
+      }
+    }
+    if (p.superAbilityCooldown > 0) p.superAbilityCooldown--;
+
+    // Poison tick
+    if (p.poisonTimer > 0) {
+      p.poisonTimer--;
+      if (p.poisonTimer % 30 === 0 && p.poisonTimer > 0) {
+        p.health -= 1;
+        if (p.health <= 0) {
+          p.health = 0;
+          this.state.isGameOver = true;
+        }
+      }
+    }
+
+    // Attack (only when weapon equipped)
     if (
       this.state.mouse.down &&
       p.attackTimer <= 0 &&
       p.attackCooldown <= 0 &&
+      p.weaponEquipped &&
       this.state.floorTitleState === "none" &&
       this.state.transitionState === "none"
     ) {
-      const isBow = p.weapon === 'bow';
-      const isColossal = p.weapon === 'colossal_sword';
-      const isDaggers = p.weapon === 'dual_daggers';
+      const isBow = p.clawsActive ? false : p.weapon === 'bow';
+      const isColossal = p.clawsActive ? false : p.weapon === 'colossal_sword';
+      const isDaggers = p.clawsActive ? false : p.weapon === 'dual_daggers';
 
       p.isAttacking = true;
       p.isAirAttacking = false;
-      p.attackTimer = isBow ? 15 : (isColossal ? 20 : (isDaggers ? 6 : 10));
+
+      if (p.clawsActive) {
+        // Claws: 70% of daggers speed (6 * 0.7 ≈ 4 frames)
+        p.attackTimer = 4;
+      } else {
+        p.attackTimer = isBow ? 15 : (isColossal ? 20 : (isDaggers ? 6 : 10));
+      }
       p.slashFlipped = !p.slashFlipped;
       p.comboResetTimer = 120; // 2 seconds
       
       if (!p.wallSliding && !isClimbing && !p.onLadder && !inWater) {
         if (!isBow) {
           const lungeSpeed = isColossal ? 4 : (isDaggers ? 3 : 6);
-          p.vx = p.facingRight ? lungeSpeed : -lungeSpeed;
-          p.vy = -2; // slight hop on ground
+          p.vx += p.facingRight ? lungeSpeed * 0.5 : -lungeSpeed * 0.5;
+          p.vy = -1; // slight hop
         }
       }
       
@@ -701,23 +843,41 @@ export class GameEngine {
     }
 
     if (p.attackTimer > 0) {
-      if (!p.wallSliding && !isClimbing && !p.onLadder && !inWater) {
-        if (p.weapon !== 'bow') {
-          const lungeSpeed = p.weapon === 'colossal_sword' ? 4 : (p.weapon === 'dual_daggers' ? 3 : 6);
-          p.vx = p.facingRight ? lungeSpeed : -lungeSpeed;
-        }
-      }
-
-      if (p.weapon === 'bow' && p.attackTimer === 10) {
+      if (p.weapon === 'bow' && !p.clawsActive && p.attackTimer === 10) {
         this.fireArrow();
       }
 
       p.attackTimer--;
       if (p.attackTimer === 0) {
         p.isAttacking = false;
-        p.attackCooldown = p.weapon === 'colossal_sword' ? 50 : (p.weapon === 'dual_daggers' ? 5 : 12);
+        if (p.clawsActive) {
+          p.attackCooldown = 3;
+        } else {
+          p.attackCooldown = p.weapon === 'colossal_sword' ? 50 : (p.weapon === 'dual_daggers' ? 5 : 12);
+        }
       }
     }
+
+    // Weapon stat effects
+    let weaponSpeedMult = 1;
+    let weaponJumpMult = 1;
+    if (p.weaponEquipped && !p.clawsActive) {
+      if (p.weapon === 'colossal_sword') { weaponSpeedMult = 0.80; weaponJumpMult = 0.90; }
+      else if (p.weapon === 'bow') { weaponSpeedMult = 1.05; weaponJumpMult = 1.20; }
+      else if (p.weapon === 'dual_daggers') { weaponSpeedMult = 1.15; weaponJumpMult = 1.10; }
+    }
+
+    // SUPERSONIC active boost
+    let superSpeedMult = 1;
+    let superJumpMult = 1;
+    if (p.superAbilityActive && p.superAbility === 'supersonic') {
+      superSpeedMult = 1.20;
+      superJumpMult = 1.15;
+    }
+
+    // Apply effective multipliers
+    const effectiveSpeedMulti = p.speedMulti * weaponSpeedMult * superSpeedMult;
+    const effectiveJumpMulti = p.jumpMulti * weaponJumpMult * superJumpMult;
 
     // physics
     p.vx *= inWater ? 0.8 : FRICTION;
@@ -733,7 +893,7 @@ export class GameEngine {
         if (p.vy > MAX_FALL_SPEED) p.vy = MAX_FALL_SPEED;
       }
     }
-    const currentSpeed = PLAYER_SPEED * p.speedMulti;
+    const currentSpeed = PLAYER_SPEED * effectiveSpeedMulti;
     if (Math.abs(p.vx) > currentSpeed) {
       if (p.isGrounded) p.vx = Math.sign(p.vx) * currentSpeed;
       else
@@ -955,7 +1115,7 @@ export class GameEngine {
 
   checkAttackHits() {
     const p = this.state.player;
-    if (p.weapon === 'bow') return;
+    if (p.weapon === 'bow' && !p.clawsActive) return;
 
     let attackRect;
     let attackWidth = 65;
@@ -964,7 +1124,13 @@ export class GameEngine {
     let damage = 15;
     let knockback = 5;
 
-    if (p.weapon === 'colossal_sword') {
+    if (p.clawsActive) {
+      attackWidth = 90; // slightly smaller than colossal sword (110)
+      attackHeight = p.h + 50;
+      attackYOffset = -25;
+      damage = 90; // twice colossal sword (45 * 2)
+      knockback = 9;
+    } else if (p.weapon === 'colossal_sword') {
       attackWidth = 110;
       attackHeight = p.h + 70;
       attackYOffset = -35;
@@ -979,7 +1145,7 @@ export class GameEngine {
     }
 
     if (p.isAirAttacking) {
-      const scaleHeight = p.weapon === 'colossal_sword' ? 4.5 : (p.weapon === 'dual_daggers' ? 1.5 : 3.0);
+      const scaleHeight = p.clawsActive ? 3.0 : (p.weapon === 'colossal_sword' ? 4.5 : (p.weapon === 'dual_daggers' ? 1.5 : 3.0));
       attackRect = {
         x: p.x - 10,
         y: p.y + p.h,
@@ -1001,15 +1167,19 @@ export class GameEngine {
         // Hit!
         const finalDamage = damage * p.damageMulti;
         e.health -= finalDamage;
-        e.invulnerableTimer = p.weapon === 'dual_daggers' ? 6 : 10;
+        e.invulnerableTimer = p.clawsActive ? 8 : (p.weapon === 'dual_daggers' ? 6 : 10);
         e.vx = p.facingRight ? knockback : -knockback;
-        e.vy = p.weapon === 'colossal_sword' ? -5 : -3;
+        e.vy = p.clawsActive ? -4 : (p.weapon === 'colossal_sword' ? -5 : -3);
+        
+        // Claws have red VFX particles!
+        const pColor = p.clawsActive ? "#ff0000" : (e.type === "slime" || e.type === "frost_slime" || e.type === "moss_slime" ? COLORS.slime : COLORS.blood);
         this.spawnParticles(
           e.x + e.w / 2,
           e.y + e.h / 2,
-          e.type === "slime" ? COLORS.slime : COLORS.blood,
-          p.weapon === 'colossal_sword' ? 20 : 10
+          pColor,
+          p.clawsActive ? 15 : (p.weapon === 'colossal_sword' ? 20 : 10)
         );
+        
         this.state.texts.push({
           x: e.x,
           y: e.y - 10,
@@ -1017,9 +1187,65 @@ export class GameEngine {
           life: 30,
           maxLife: 30,
         });
-        this.state.shakeTimer = p.weapon === 'colossal_sword' ? 12 : 5;
+        this.state.shakeTimer = p.clawsActive ? 8 : (p.weapon === 'colossal_sword' ? 12 : 5);
       }
     }
+  }
+
+  damagePlayer(amount: number, kbDir?: number, kbForceX: number = 8, kbForceY: number = -5, particleColor: string = COLORS.blood, bypassInvuln: boolean = false) {
+    const p = this.state.player;
+    if (p.invulnerableTimer > 0 && !bypassInvuln) return false;
+
+    // Impenetrable shield check
+    if (p.shieldActive) {
+      p.shieldActive = false;
+      p.shieldTimer = 0;
+      p.superAbilityActive = false;
+      p.superAbilityCooldown = 6600; // 110s cd
+      
+      this.state.texts.push({
+        x: p.x + p.w / 2,
+        y: p.y - 20,
+        text: "SHIELD BLOCKED!",
+        life: 60,
+        maxLife: 60
+      });
+      
+      // Spawn shield shatter particles
+      this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, "rgba(100, 200, 255, 0.8)", 30);
+      return false;
+    }
+
+    // Malevolence claws: take 20% more damage
+    let finalDamage = amount;
+    if (p.clawsActive) {
+      finalDamage = Math.round(finalDamage * 1.20);
+    }
+
+    p.health -= finalDamage;
+    p.invulnerableTimer = 30;
+
+    if (kbDir !== undefined) {
+      p.vx = kbDir * kbForceX;
+      p.vy = kbForceY;
+    }
+
+    this.state.shakeTimer = Math.max(this.state.shakeTimer, 15);
+    this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, particleColor, 15);
+
+    this.state.texts.push({
+      x: p.x,
+      y: p.y - 20,
+      text: `-${finalDamage} HP`,
+      life: 45,
+      maxLife: 45
+    });
+
+    if (p.health <= 0) {
+      p.health = 0;
+      this.state.isGameOver = true;
+    }
+    return true;
   }
 
   fireArrow() {
@@ -1131,76 +1357,155 @@ export class GameEngine {
   }
 
   generateUpgrades() {
-    const pool = [
+    const normalPool = [
       {
-        title: "Healthy Habits",
-        desc: "+20 Max HP\n-5% Speed",
-        cost: 15,
+        title: "Fighter",
+        desc: "+20% Damage",
+        isSuper: false,
         effect: (p: any) => {
-          p.maxHealth += 20;
-          p.health += 20;
-          p.speedMulti -= 0.05;
-        },
-      },
-      {
-        title: "Swift Steps",
-        desc: "+15% Speed\n-10 Max HP",
-        cost: 12,
-        effect: (p: any) => {
-          p.speedMulti += 0.15;
-          p.maxHealth = Math.max(10, p.maxHealth - 10);
-          if (p.health > p.maxHealth) p.health = p.maxHealth;
-        },
-      },
-      {
-        title: "Strength Ring",
-        desc: "+20% Damage\n-5% Jump Power",
-        cost: 18,
-        effect: (p: any) => {
-          p.damageMulti += 0.2;
-          p.jumpMulti -= 0.05;
-        },
-      },
-      {
-        title: "Spring Heels",
-        desc: "+15% Jump\n-5 Max HP",
-        cost: 14,
-        effect: (p: any) => {
-          p.jumpMulti += 0.15;
-          p.maxHealth = Math.max(10, p.maxHealth - 5);
-          if (p.health > p.maxHealth) p.health = p.maxHealth;
-        },
+          p.damageMulti += 0.20;
+        }
       },
       {
         title: "Glass Cannon",
-        desc: "+40% Damage\n-30 Max HP",
-        cost: 25,
+        desc: "-35% HP\n+50% Damage",
+        isSuper: false,
         effect: (p: any) => {
-          p.damageMulti += 0.4;
-          p.maxHealth = Math.max(10, p.maxHealth - 30);
+          p.maxHealth = Math.max(10, Math.round(p.maxHealth * 0.65));
           if (p.health > p.maxHealth) p.health = p.maxHealth;
-        },
+          p.damageMulti += 0.50;
+        }
       },
       {
-        title: "Iron Skin",
-        desc: "+40 Max HP\n-15% Speed",
-        cost: 20,
+        title: "Workout",
+        desc: "+10% Damage\n+10% HP\n+5% Speed",
+        isSuper: false,
         effect: (p: any) => {
-          p.maxHealth += 40;
-          p.health += 40;
-          p.speedMulti -= 0.15;
-        },
+          p.damageMulti += 0.10;
+          p.maxHealth = Math.round(p.maxHealth * 1.10);
+          p.health += Math.round(p.baseMaxHealth * 0.10);
+          p.speedMulti += 0.05;
+        }
       },
+      {
+        title: "Bones of Steel",
+        desc: "+25% HP",
+        isSuper: false,
+        effect: (p: any) => {
+          p.maxHealth = Math.round(p.maxHealth * 1.25);
+          p.health += Math.round(p.baseMaxHealth * 0.25);
+        }
+      },
+      {
+        title: "Heavy",
+        desc: "+30% HP\n-15% Speed",
+        isSuper: false,
+        effect: (p: any) => {
+          p.maxHealth = Math.round(p.maxHealth * 1.30);
+          p.health += Math.round(p.baseMaxHealth * 0.30);
+          p.speedMulti -= 0.15;
+        }
+      },
+      {
+        title: "Runner",
+        desc: "+25% Speed",
+        isSuper: false,
+        effect: (p: any) => {
+          p.speedMulti += 0.25;
+        }
+      },
+      {
+        title: "Sprinter",
+        desc: "+40% Speed\n-20% Jump Height\n-15% HP",
+        isSuper: false,
+        effect: (p: any) => {
+          p.speedMulti += 0.40;
+          p.jumpMulti -= 0.20;
+          p.maxHealth = Math.max(10, Math.round(p.maxHealth * 0.85));
+          if (p.health > p.maxHealth) p.health = p.maxHealth;
+        }
+      },
+      {
+        title: "Spring Heels",
+        desc: "+25% Jump Height",
+        isSuper: false,
+        effect: (p: any) => {
+          p.jumpMulti += 0.25;
+        }
+      },
+      {
+        title: "Jumper",
+        desc: "+10% Speed\n+15% Jump Height",
+        isSuper: false,
+        effect: (p: any) => {
+          p.speedMulti += 0.10;
+          p.jumpMulti += 0.15;
+        }
+      }
     ];
 
-    pool.sort(() => Math.random() - 0.5);
-    this.state.upgrades = pool.slice(0, 3).map((u, i) => ({
-      id: `upgrade_${i}`,
-      title: u.title,
-      desc: u.desc,
-      cost: u.cost,
-      effect: u.effect,
-    }));
+    const superPool = [
+      {
+        title: "MALEVOLENCE",
+        desc: "+120% Damage\n+25% Speed\n+15% HP\n\nRip and Tear Claws\nability on Q (CD 100s)",
+        isSuper: true,
+        abilityId: 'malevolence' as const,
+        effect: (p: any) => {
+          p.damageMulti += 1.20;
+          p.speedMulti += 0.25;
+          p.maxHealth = Math.round(p.maxHealth * 1.15);
+          p.health += Math.round(p.baseMaxHealth * 0.15);
+        }
+      },
+      {
+        title: "IMPENETRABLE",
+        desc: "+110% HP\n-15% Speed\n-30% Jump Height\n\nShield of Solidity\nability on Q (CD 110s)",
+        isSuper: true,
+        abilityId: 'impenetrable' as const,
+        effect: (p: any) => {
+          p.maxHealth = Math.round(p.maxHealth * 2.10);
+          p.health += Math.round(p.baseMaxHealth * 1.10);
+          p.speedMulti -= 0.15;
+          p.jumpMulti -= 0.30;
+        }
+      },
+      {
+        title: "SUPERSONIC",
+        desc: "+70% Speed\n+45% Jump Height\n\nHyper Perception\nability on Q (CD 125s)",
+        isSuper: true,
+        abilityId: 'supersonic' as const,
+        effect: (p: any) => {
+          p.speedMulti += 0.70;
+          p.jumpMulti += 0.45;
+        }
+      }
+    ];
+
+    // Pick 3 random normal upgrades
+    normalPool.sort(() => Math.random() - 0.5);
+    const selected = normalPool.slice(0, 3);
+
+    // 5% chance to replace each chosen card with a random super card
+    this.state.upgrades = selected.map((u, i) => {
+      if (Math.random() < 0.05) {
+        const superUpgrade = superPool[Math.floor(Math.random() * superPool.length)];
+        return {
+          id: `upgrade_${i}`,
+          title: superUpgrade.title,
+          desc: superUpgrade.desc,
+          isSuper: true,
+          abilityId: superUpgrade.abilityId,
+          effect: superUpgrade.effect
+        };
+      }
+      return {
+        id: `upgrade_${i}`,
+        title: u.title,
+        desc: u.desc,
+        isSuper: false,
+        effect: u.effect
+      };
+    });
   }
 
   updateEnemies() {
@@ -1255,21 +1560,15 @@ export class GameEngine {
           e.vx *= 0.8;
         }
       } else if (e.type === "flytrap") {
-        // Static, no gravity needed if it's placed on ground.
-        // We'll keep it static.
         e.vx = 0;
-        e.vy += GRAVITY; // Just to stick to ground if it somehow fell
+        e.vy += GRAVITY;
 
         const dx = Math.abs(p.x - e.x);
         const dy = Math.abs(p.y - e.y);
 
-        if (dx < TILE_SIZE * 2.5 && dy < TILE_SIZE * 2.5 && e.stateTimer <= 0) {
-          // Attack player if within 5x5 area and not blocked by wall
-          // Basic direct line check, or we just rely on distances and assume its roots go through moss.
-          // Prompt says "cannot attack through walls".
-          // We can do a simpler check: if line of sight is clear
+        if (dx < TILE_SIZE * 3.5 && dy < TILE_SIZE * 3.5 && e.stateTimer <= 0) {
           let clear = true;
-          const steps = 5;
+          const steps = 6;
           for (let s = 1; s <= steps; s++) {
             const testX = e.x + (p.x - e.x) * (s / steps);
             const testY = e.y + (p.y - e.y) * (s / steps);
@@ -1277,50 +1576,54 @@ export class GameEngine {
             const ty = Math.floor(testY / TILE_SIZE);
             if (
               this.state.map[ty] &&
-              (this.state.map[ty][tx] === 1 || this.state.map[ty][tx] === 8)
-            ) {
-              // Allow it to attack through moss (15) but not solid dirt/stone that aren't mossy?
-              // Let's just say any solid tile blocks it.
-              // Wait, moss is 15. So 15 could block it?
-            }
-            if (
-              this.state.map[ty] &&
               this.state.map[ty][tx] !== 0 &&
-              this.state.map[ty][tx] !== 13
+              this.state.map[ty][tx] !== 13 &&
+              this.state.map[ty][tx] !== 5
             ) {
-              // Only pass through air/vines
               clear = false;
               break;
             }
           }
 
           if (clear) {
-            e.stateTimer = 60; // 1 second cooldown
-            e.aiState = "attacking";
-            // Spawn vine particles from it to player
-            for (let s = 0; s <= 5; s++) {
-              this.spawnParticles(
-                e.x + (p.x - e.x) * (s / 5),
-                e.y + (p.y - e.y) * (s / 5),
-                "#2d8d2d",
-                2,
-              );
+            if (e.aiState !== "tracking") {
+              e.aiState = "tracking";
+              e.trackTimer = 45; // 0.75 seconds tracking
+            } else {
+              e.trackTimer = (e.trackTimer || 45) - 1;
+              if (e.trackTimer <= 0) {
+                e.stateTimer = 90; // Cooldown
+                e.aiState = "attacking";
+                
+                // Deal damage and poison if player is in range
+                if (Math.hypot(p.x - e.x, p.y - e.y) < TILE_SIZE * 3.0) {
+                  const kbDir = p.x + p.w / 2 > e.x + e.w / 2 ? 1 : -1;
+                  const hit = this.damagePlayer(10, kbDir, 6, -3, "#2d8d2d");
+                  if (hit) {
+                    p.poisonTimer = 300; // 5s poison at 60fps
+                  }
+                }
+
+                // Vine/bite particles
+                for (let s = 0; s <= 5; s++) {
+                  this.spawnParticles(
+                    e.x + (p.x - e.x) * (s / 5),
+                    e.y + (p.y - e.y) * (s / 5),
+                    "#2d8d2d",
+                    2
+                  );
+                }
+              }
             }
-            if (p.invulnerableTimer <= 0) {
-              p.health -= 10;
-              p.invulnerableTimer = 30;
-              this.state.shakeTimer = 5;
-              this.spawnParticles(
-                p.x + p.w / 2,
-                p.y + p.h / 2,
-                COLORS.blood,
-                5,
-              );
-            }
+          } else {
+            e.aiState = "idle";
           }
-        }
-        if (e.stateTimer > 0) {
-          if (e.stateTimer < 40) e.aiState = "idle";
+        } else {
+          if (e.stateTimer > 0) {
+            if (e.stateTimer < 50) e.aiState = "idle";
+          } else {
+            e.aiState = "idle";
+          }
         }
       } else if (e.type === "bat") {
         if (e.stateTimer <= 0) {
@@ -1336,15 +1639,13 @@ export class GameEngine {
         e.vy += GRAVITY;
         if (e.isGrounded) {
           e.vx *= 0.8;
-          if (e.stateTimer <= 0 && distToPlayer < 400) {
-            e.stateTimer = 40 + Math.random() * 40;
-            if (Math.random() > 0.5) {
-              e.vy = -6;
-              e.vx = (p.x > e.x ? 1 : -1) * 5; // dash
-            } else {
-              e.vy = -10; // big jump
-              e.vx = (p.x > e.x ? 1 : -1) * 2;
-            }
+          e.aiState = "idle";
+          if (e.stateTimer <= 0 && distToPlayer < 500) {
+            e.stateTimer = 60 + Math.random() * 60;
+            e.aiState = "leaping";
+            e.vy = -12; // massive jump height
+            e.vx = (p.x > e.x ? 1 : -1) * 8; // massive leap speed
+            e.facingRight = p.x > e.x;
           }
         }
       } else if (e.type === "boss") {
@@ -1387,16 +1688,15 @@ export class GameEngine {
           e.type === "boss"
             ? 15
             : e.type === "yeti"
-              ? 12
+              ? 18 // Yeti rework: 18 damage
               : e.type === "frost_slime"
                 ? 8
                 : 5;
-        p.health -= damage;
-        p.invulnerableTimer = 30;
-        p.vx = (p.x > e.x ? 1 : -1) * 8;
-        p.vy = -5;
-        this.state.shakeTimer = 15;
-        this.spawnParticles(p.x, p.y, COLORS.blood, 15);
+        const kbDir = p.x + p.w / 2 > e.x + e.w / 2 ? 1 : -1;
+        const kbForceX = e.type === "yeti" ? 12 : 8; // Yeti rework: 12 knockback force
+        const kbForceY = e.type === "yeti" ? -7 : -5;
+        const pColor = e.type === "slime" || e.type === "frost_slime" || e.type === "moss_slime" ? COLORS.slime : COLORS.blood;
+        this.damagePlayer(damage, kbDir, kbForceX, kbForceY, pColor);
       }
     }
   }
@@ -1455,18 +1755,8 @@ export class GameEngine {
         // Player collision
         if (rectIntersect(icicle, p)) {
           if (p.invulnerableTimer <= 0) {
-            p.health -= icicle.damage;
-            p.invulnerableTimer = 30;
-            p.vx = (p.x + p.w / 2 > icicle.x + icicle.w / 2 ? 1 : -1) * 8;
-            p.vy = -3;
-            this.state.shakeTimer = 15;
-            this.state.texts.push({
-              x: p.x,
-              y: p.y - 20,
-              text: `-${icicle.damage} HP`,
-              life: 45,
-              maxLife: 45,
-            });
+            const kbDir = p.x + p.w / 2 > icicle.x + icicle.w / 2 ? 1 : -1;
+            this.damagePlayer(icicle.damage, kbDir, 8, -3, "rgba(180, 220, 255, 0.9)");
           }
           icicle.state = "broken";
         }
@@ -1550,6 +1840,7 @@ export class GameEngine {
   draw() {
     if (!this.ctx) return;
     const ctx = this.ctx;
+    const p = this.state.player;
 
     // Clear bg
     ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
@@ -2371,50 +2662,86 @@ export class GameEngine {
             : e.type === "moss_slime"
               ? "#a2f520"
               : "rgba(0,0,0,0.5)";
-        ctx.fillRect(
+ctx.fillRect(
           e.x + e.w / 2 + (e.facingRight ? 2 : -4),
           e.y + e.h - 8,
           2,
           2,
         );
       } else if (e.type === "flytrap") {
-        // Pixelated Flytrap
         // Stem
         ctx.fillStyle = "#1e3c1a"; // dark green stem
         ctx.fillRect(e.x + 10, e.y + 16, 4, e.h - 16);
 
-        // Head
-        ctx.fillStyle = "#1e801e"; // green head
-        // if attacking it opens its mouth
-        const jawOffset = e.aiState === "attacking" ? 4 : 0;
+        // Head (rotates toward player if tracking/attacking)
+        ctx.save();
+        ctx.translate(e.x + 12, e.y + 18);
+        
+        let trackAngle = 0;
+        if (e.aiState === "tracking" || e.aiState === "attacking") {
+          const targetAngle = Math.atan2(p.y + p.h / 2 - (e.y + 12), p.x + p.w / 2 - (e.x + 12));
+          trackAngle = targetAngle;
+          e.facingRight = (p.x + p.w / 2 > e.x + 12);
+          
+          if (e.facingRight) {
+            trackAngle = Math.max(-Math.PI * 0.25, Math.min(Math.PI * 0.25, trackAngle));
+          } else {
+            trackAngle = Math.atan2(-(p.y + p.h / 2 - (e.y + 12)), -(p.x + p.w / 2 - (e.x + 12)));
+            trackAngle = -Math.max(-Math.PI * 0.25, Math.min(Math.PI * 0.25, trackAngle));
+          }
+        }
+        
+        if (!e.facingRight) {
+          ctx.scale(-1, 1);
+        }
+        ctx.rotate(trackAngle);
+
+        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#1e801e";
+        const jawOffset = e.aiState === "attacking" ? 6 : (e.aiState === "tracking" ? 2 : 0);
+        
         // Upper jaw
-        ctx.fillRect(e.x + 2, e.y + 4 - jawOffset, 20, 8);
+        ctx.fillRect(-10, -14 - jawOffset, 20, 8);
         // Lower jaw
-        ctx.fillRect(e.x + 2, e.y + 12 + jawOffset, 20, 6);
+        ctx.fillRect(-10, -6 + jawOffset, 20, 6);
 
         // Teeth
         ctx.fillStyle = "#fff";
         for (let i = 0; i < 4; i++) {
-          // Upper teeth pointing down
-          ctx.fillRect(e.x + 4 + i * 4, e.y + 12 - jawOffset, 2, 2);
-          // Lower teeth pointing up
-          ctx.fillRect(e.x + 6 + i * 4, e.y + 10 + jawOffset, 2, 2);
+          ctx.fillRect(-8 + i * 4, -6 - jawOffset, 2, 2);
+          ctx.fillRect(-6 + i * 4, -8 + jawOffset, 2, 2);
         }
+        
+        // Eye
+        ctx.fillStyle = e.aiState === "tracking" ? "#ffcc00" : "#ff0000";
+        ctx.fillRect(2, -10, 3, 3);
+        
+        ctx.restore();
+
         // Leaf at bottom
         ctx.fillStyle = "#2d8d2d";
         ctx.fillRect(e.x + 4, e.y + e.h - 4, 6, 4);
         ctx.fillRect(e.x + 14, e.y + e.h - 4, 6, 4);
       } else if (e.type === "yeti") {
-        // Pixelated Yeti
+        // Body
         ctx.fillRect(e.x + 4, e.y, e.w - 8, e.h);
         ctx.fillRect(e.x + 2, e.y + 4, e.w - 4, e.h - 8);
         ctx.fillRect(e.x, e.y + 8, e.w, e.h - 16);
 
-        // Yeti Face (Blue skin)
+        // Raised arms if leaping
+        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#e2e8f0";
+        if (e.aiState === "leaping") {
+          ctx.fillRect(e.x - 4, e.y - 8, 4, 16);
+          ctx.fillRect(e.x + e.w, e.y - 8, 4, 16);
+        } else {
+          ctx.fillRect(e.x - 2, e.y + 8, 2, 16);
+          ctx.fillRect(e.x + e.w, e.y + 8, 2, 16);
+        }
+
+        // Face (Blue skin)
         ctx.fillStyle = "#7aa8b8";
         ctx.fillRect(e.x + 8, e.y + 8, e.w - 16, 12);
 
-        // Yeti Eyes
+        // Eyes
         ctx.fillStyle = "#fff";
         const eyeX = e.facingRight ? e.x + 16 : e.x + 12;
         ctx.fillRect(eyeX, e.y + 10, 4, 4);
@@ -2423,43 +2750,31 @@ export class GameEngine {
         ctx.fillRect(eyeX + (e.facingRight ? 2 : 0), e.y + 12, 2, 2);
         ctx.fillRect(eyeX + (e.facingRight ? 8 : -6), e.y + 12, 2, 2);
 
-        // Pixel Horns
+        // Horns
         ctx.fillStyle = "#fff";
         ctx.fillRect(e.x, e.y + 2, 4, 4);
         ctx.fillRect(e.x + e.w - 4, e.y + 2, 4, 4);
       } else if (e.type === "bat") {
-        // Pixel Bat Body
         ctx.fillRect(e.x + e.w / 2 - 4, e.y + e.h / 2 - 4, 8, 8);
 
-        // Wings
+        // Wings anim
         if (Math.floor(Date.now() / 150) % 2 === 0) {
-          // Wings down
           ctx.fillRect(e.x + e.w / 2 - 12, e.y + e.h / 2 + 2, 8, 4);
           ctx.fillRect(e.x + e.w / 2 - 16, e.y + e.h / 2 + 4, 4, 8);
-
           ctx.fillRect(e.x + e.w / 2 + 4, e.y + e.h / 2 + 2, 8, 4);
           ctx.fillRect(e.x + e.w / 2 + 12, e.y + e.h / 2 + 4, 4, 8);
         } else {
-          // Wings up
           ctx.fillRect(e.x + e.w / 2 - 12, e.y + e.h / 2 - 6, 8, 4);
           ctx.fillRect(e.x + e.w / 2 - 16, e.y + e.h / 2 - 12, 4, 8);
-
           ctx.fillRect(e.x + e.w / 2 + 4, e.y + e.h / 2 - 6, 8, 4);
           ctx.fillRect(e.x + e.w / 2 + 12, e.y + e.h / 2 - 12, 4, 8);
         }
         ctx.fillStyle = "red";
-        ctx.fillRect(
-          e.x + e.w / 2 + (e.facingRight ? 2 : -4),
-          e.y + e.h / 2 - 2,
-          2,
-          2,
-        );
+        ctx.fillRect(e.x + e.w / 2 + (e.facingRight ? 2 : -4), e.y + e.h / 2 - 2, 2, 2);
       } else if (e.type === "boss") {
-        // Boss base structure
         ctx.fillRect(e.x + 4, e.y, e.w - 8, e.h);
         ctx.fillRect(e.x, e.y + 8, e.w, e.h - 16);
 
-        // Face details
         ctx.fillStyle = "#000";
         ctx.fillRect(e.x + 16, e.y + 20, 8, 8);
         ctx.fillRect(e.x + e.w - 24, e.y + 20, 8, 8);
@@ -2470,18 +2785,36 @@ export class GameEngine {
         for (let i = 0; i < 4; i++) {
           ctx.fillRect(e.x + 24 + i * 4, e.y + 44 + (i % 2) * 4, 4, 4);
         }
-
-        // Boss Health
-        ctx.fillStyle = "red";
-        ctx.fillRect(e.x, e.y - 15, e.w, 4);
-        ctx.fillStyle = "#33cc33";
-        ctx.fillRect(e.x, e.y - 15, e.w * (e.health / e.maxHealth), 4);
       }
+
+      // Draw Enemy Health Bar (for all enemies)
+      if (e.health < e.maxHealth || e.type === "boss") {
+        ctx.save();
+        const barWidth = e.w;
+        const barHeight = 4;
+        const barX = e.x;
+        const barY = e.y - 14;
+
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+
+        ctx.fillStyle = "#ef4444";
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+        ctx.fillStyle = "#22c55e";
+        ctx.fillRect(barX, barY, barWidth * Math.max(0, e.health / e.maxHealth), barHeight);
+
+        ctx.font = "bold 8px 'Courier New', Courier, monospace";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        const hpText = `${Math.round(e.health)}/${Math.round(e.maxHealth)}`;
+        ctx.fillText(hpText, barX + barWidth / 2, barY - 4);
+        ctx.restore();
+      }
+
       ctx.restore();
     }
 
     // Draw Player Miner Model
-    const p = this.state.player;
     ctx.save();
     ctx.translate(
       Math.round(p.x * zoom) / zoom - p.x,
@@ -2522,129 +2855,154 @@ export class GameEngine {
     ctx.fillRect(p.x + 4, p.y + p.h - 4, 6, 4 - legOffset);
     ctx.fillRect(p.x + p.w - 10, p.y + p.h - 4, 6, 4 + legOffset);
 
-    // Draw Player Weapon Model
-    if (p.weapon === "colossal_sword") {
-      // Colossal Sword Blade (Behind Hand)
-      ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // steel grey
-      if (p.facingRight) ctx.fillRect(p.x + p.w - 3, p.y - 12 + bob, 6, 24);
-      else ctx.fillRect(p.x - 3, p.y - 12 + bob, 6, 24);
+    // Draw Player Weapon Model / Claws / Shield
+    if (p.shieldActive) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(p.x + p.w / 2, p.y + p.h / 2 + bob, 22, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0, 190, 255, 0.22)";
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(100, 220, 255, 0.8)";
+      ctx.stroke();
+      ctx.restore();
+    }
 
-      // Colossal Sword hilt (Front hand)
-      ctx.fillStyle = "#fbbf24"; // golden guard
-      if (p.facingRight) ctx.fillRect(p.x + p.w - 6, p.y + 10 + bob, 12, 4);
-      else ctx.fillRect(p.x - 6, p.y + 10 + bob, 12, 4);
-
-      // Colossal Sword handle
-      ctx.fillStyle = "#78350f"; // brown handle
-      if (p.facingRight) ctx.fillRect(p.x + p.w - 2, p.y + 14 + bob, 4, 6);
-      else ctx.fillRect(p.x - 2, p.y + 14 + bob, 4, 6);
-    } else if (p.weapon === "dual_daggers") {
-      // Dagger 1 (Back hand/arm)
-      ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1";
+    if (p.clawsActive) {
+      ctx.fillStyle = "#ff0000";
       if (p.facingRight) {
-        ctx.fillRect(p.x - 4, p.y + 6 + bob, 3, 6); // blade pointing down
-        ctx.fillStyle = "#ea580c";
-        ctx.fillRect(p.x - 5, p.y + 12 + bob, 5, 2); // hilt
+        ctx.fillRect(p.x + p.w - 2, p.y + 8 + bob, 8, 2);
+        ctx.fillRect(p.x + p.w, p.y + 11 + bob, 8, 2);
+        ctx.fillRect(p.x + p.w - 2, p.y + 14 + bob, 8, 2);
       } else {
-        ctx.fillRect(p.x + p.w + 1, p.y + 6 + bob, 3, 6);
-        ctx.fillStyle = "#ea580c";
-        ctx.fillRect(p.x + p.w, p.y + 12 + bob, 5, 2);
+        ctx.fillRect(p.x - 6, p.y + 8 + bob, 8, 2);
+        ctx.fillRect(p.x - 8, p.y + 11 + bob, 8, 2);
+        ctx.fillRect(p.x - 6, p.y + 14 + bob, 8, 2);
       }
+    } else if (p.weaponEquipped) {
+      if (p.weapon === "colossal_sword") {
+        // Colossal Sword Blade (Behind Hand)
+        ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // steel grey
+        if (p.facingRight) ctx.fillRect(p.x + p.w - 3, p.y - 12 + bob, 6, 24);
+        else ctx.fillRect(p.x - 3, p.y - 12 + bob, 6, 24);
 
-      // Dagger 2 (Front hand)
-      ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1";
-      if (p.facingRight) {
-        ctx.fillRect(p.x + p.w - 1, p.y + 8 + bob, 3, 6);
-        ctx.fillStyle = "#ea580c";
-        ctx.fillRect(p.x + p.w - 2, p.y + 14 + bob, 5, 2);
-      } else {
-        ctx.fillRect(p.x - 2, p.y + 8 + bob, 3, 6);
-        ctx.fillStyle = "#ea580c";
-        ctx.fillRect(p.x - 3, p.y + 14 + bob, 5, 2);
-      }
-    } else if (p.weapon === "bow") {
-      const bowX = p.facingRight ? p.x + p.w : p.x - 8;
-      const bowY = p.y + 6 + bob;
+        // Colossal Sword hilt (Front hand)
+        ctx.fillStyle = "#fbbf24"; // golden guard
+        if (p.facingRight) ctx.fillRect(p.x + p.w - 6, p.y + 10 + bob, 12, 4);
+        else ctx.fillRect(p.x - 6, p.y + 10 + bob, 12, 4);
 
-      if (p.isAttacking && p.attackTimer > 0) {
-        // Bow-pull-back Model (bending more, string pulled)
-        ctx.fillStyle = "#b45309"; // wood brown
+        // Colossal Sword handle
+        ctx.fillStyle = "#78350f"; // brown handle
+        if (p.facingRight) ctx.fillRect(p.x + p.w - 2, p.y + 14 + bob, 4, 6);
+        else ctx.fillRect(p.x - 2, p.y + 14 + bob, 4, 6);
+      } else if (p.weapon === "dual_daggers") {
+        // Dagger 1 (Back hand/arm)
+        ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1";
         if (p.facingRight) {
-          ctx.fillRect(bowX - 4, bowY + 1, 4, 2);
-          ctx.fillRect(bowX - 2, bowY + 3, 4, 2);
-          ctx.fillRect(bowX + 1, bowY + 5, 3, 6); // grip
-          ctx.fillRect(bowX - 2, bowY + 11, 4, 2);
-          ctx.fillRect(bowX - 4, bowY + 13, 4, 2);
-          // Draw pulled back string (forming a V shape)
-          ctx.fillStyle = "#cbd5e1";
-          ctx.fillRect(bowX - 6, bowY + 1, 2, 2);
-          ctx.fillRect(bowX - 8, bowY + 3, 2, 2);
-          ctx.fillRect(bowX - 10, bowY + 5, 2, 6);
-          ctx.fillRect(bowX - 8, bowY + 11, 2, 2);
-          ctx.fillRect(bowX - 6, bowY + 13, 2, 2);
-
-          // Draw arrow in the bow
-          ctx.fillStyle = "#78350f"; // wood arrow shaft
-          ctx.fillRect(bowX - 10, bowY + 7, 12, 2);
-          ctx.fillStyle = "#10b981"; // green arrow fletching
-          ctx.fillRect(bowX - 12, bowY + 6, 2, 4);
-          ctx.fillStyle = "#cbd5e1"; // steel arrowhead
-          ctx.fillRect(bowX + 2, bowY + 6, 3, 4);
+          ctx.fillRect(p.x - 4, p.y + 6 + bob, 3, 6); // blade pointing down
+          ctx.fillStyle = "#ea580c";
+          ctx.fillRect(p.x - 5, p.y + 12 + bob, 5, 2); // hilt
         } else {
-          ctx.fillRect(bowX + 8, bowY + 1, 4, 2);
-          ctx.fillRect(bowX + 6, bowY + 3, 4, 2);
-          ctx.fillRect(bowX + 4, bowY + 5, 3, 6); // grip
-          ctx.fillRect(bowX + 6, bowY + 11, 4, 2);
-          ctx.fillRect(bowX + 8, bowY + 13, 4, 2);
-          // Draw pulled back string
-          ctx.fillStyle = "#cbd5e1";
-          ctx.fillRect(bowX + 12, bowY + 1, 2, 2);
-          ctx.fillRect(bowX + 14, bowY + 3, 2, 2);
-          ctx.fillRect(bowX + 16, bowY + 5, 2, 6);
-          ctx.fillRect(bowX + 14, bowY + 11, 2, 2);
-          ctx.fillRect(bowX + 12, bowY + 13, 2, 2);
+          ctx.fillRect(p.x + p.w + 1, p.y + 6 + bob, 3, 6);
+          ctx.fillStyle = "#ea580c";
+          ctx.fillRect(p.x + p.w, p.y + 12 + bob, 5, 2);
+        }
 
-          // Draw arrow in the bow
-          ctx.fillStyle = "#78350f";
-          ctx.fillRect(bowX + 6, bowY + 7, 12, 2);
-          ctx.fillStyle = "#10b981";
-          ctx.fillRect(bowX + 18, bowY + 6, 2, 4);
-          ctx.fillStyle = "#cbd5e1";
-          ctx.fillRect(bowX + 3, bowY + 6, 3, 4);
+        // Dagger 2 (Front hand)
+        ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1";
+        if (p.facingRight) {
+          ctx.fillRect(p.x + p.w - 1, p.y + 8 + bob, 3, 6);
+          ctx.fillStyle = "#ea580c";
+          ctx.fillRect(p.x + p.w - 2, p.y + 14 + bob, 5, 2);
+        } else {
+          ctx.fillRect(p.x - 2, p.y + 8 + bob, 3, 6);
+          ctx.fillStyle = "#ea580c";
+          ctx.fillRect(p.x - 3, p.y + 14 + bob, 5, 2);
+        }
+      } else if (p.weapon === "bow") {
+        const bowX = p.facingRight ? p.x + p.w : p.x - 8;
+        const bowY = p.y + 6 + bob;
+
+        if (p.isAttacking && p.attackTimer > 0) {
+          // Bow-pull-back Model (bending more, string pulled)
+          ctx.fillStyle = "#b45309"; // wood brown
+          if (p.facingRight) {
+            ctx.fillRect(bowX - 4, bowY + 1, 4, 2);
+            ctx.fillRect(bowX - 2, bowY + 3, 4, 2);
+            ctx.fillRect(bowX + 1, bowY + 5, 3, 6); // grip
+            ctx.fillRect(bowX - 2, bowY + 11, 4, 2);
+            ctx.fillRect(bowX - 4, bowY + 13, 4, 2);
+            // Draw pulled back string (forming a V shape)
+            ctx.fillStyle = "#cbd5e1";
+            ctx.fillRect(bowX - 6, bowY + 1, 2, 2);
+            ctx.fillRect(bowX - 8, bowY + 3, 2, 2);
+            ctx.fillRect(bowX - 10, bowY + 5, 2, 6);
+            ctx.fillRect(bowX - 8, bowY + 11, 2, 2);
+            ctx.fillRect(bowX - 6, bowY + 13, 2, 2);
+
+            // Draw arrow in the bow
+            ctx.fillStyle = "#78350f"; // wood arrow shaft
+            ctx.fillRect(bowX - 10, bowY + 7, 12, 2);
+            ctx.fillStyle = "#10b981"; // green arrow fletching
+            ctx.fillRect(bowX - 12, bowY + 6, 2, 4);
+            ctx.fillStyle = "#cbd5e1"; // steel arrowhead
+            ctx.fillRect(bowX + 2, bowY + 6, 3, 4);
+          } else {
+            ctx.fillRect(bowX + 8, bowY + 1, 4, 2);
+            ctx.fillRect(bowX + 6, bowY + 3, 4, 2);
+            ctx.fillRect(bowX + 4, bowY + 5, 3, 6); // grip
+            ctx.fillRect(bowX + 6, bowY + 11, 4, 2);
+            ctx.fillRect(bowX + 8, bowY + 13, 4, 2);
+            // Draw pulled back string
+            ctx.fillStyle = "#cbd5e1";
+            ctx.fillRect(bowX + 12, bowY + 1, 2, 2);
+            ctx.fillRect(bowX + 14, bowY + 3, 2, 2);
+            ctx.fillRect(bowX + 16, bowY + 5, 2, 6);
+            ctx.fillRect(bowX + 14, bowY + 11, 2, 2);
+            ctx.fillRect(bowX + 12, bowY + 13, 2, 2);
+
+            // Draw arrow in the bow
+            ctx.fillStyle = "#78350f";
+            ctx.fillRect(bowX + 6, bowY + 7, 12, 2);
+            ctx.fillStyle = "#10b981";
+            ctx.fillRect(bowX + 18, bowY + 6, 2, 4);
+            ctx.fillStyle = "#cbd5e1";
+            ctx.fillRect(bowX + 3, bowY + 6, 3, 4);
+          }
+        } else {
+          // Bow Model (normal held)
+          ctx.fillStyle = "#b45309"; // wood brown
+          if (p.facingRight) {
+            ctx.fillRect(bowX - 2, bowY + 2, 4, 2);
+            ctx.fillRect(bowX, bowY + 4, 4, 2);
+            ctx.fillRect(bowX + 2, bowY + 6, 4, 4); // grip
+            ctx.fillRect(bowX, bowY + 10, 4, 2);
+            ctx.fillRect(bowX - 2, bowY + 12, 4, 2);
+            // Draw string
+            ctx.fillStyle = "#cbd5e1";
+            ctx.fillRect(bowX - 4, bowY + 2, 2, 12);
+          } else {
+            ctx.fillRect(bowX + 6, bowY + 2, 4, 2);
+            ctx.fillRect(bowX + 4, bowY + 4, 4, 2);
+            ctx.fillRect(bowX + 2, bowY + 6, 4, 4); // grip
+            ctx.fillRect(bowX + 4, bowY + 10, 4, 2);
+            ctx.fillRect(bowX + 6, bowY + 12, 4, 2);
+            // Draw string
+            ctx.fillStyle = "#cbd5e1";
+            ctx.fillRect(bowX + 10, bowY + 2, 2, 12);
+          }
         }
       } else {
-        // Bow Model (normal held)
-        ctx.fillStyle = "#b45309"; // wood brown
-        if (p.facingRight) {
-          ctx.fillRect(bowX - 2, bowY + 2, 4, 2);
-          ctx.fillRect(bowX, bowY + 4, 4, 2);
-          ctx.fillRect(bowX + 2, bowY + 6, 4, 4); // grip
-          ctx.fillRect(bowX, bowY + 10, 4, 2);
-          ctx.fillRect(bowX - 2, bowY + 12, 4, 2);
-          // Draw string
-          ctx.fillStyle = "#cbd5e1";
-          ctx.fillRect(bowX - 4, bowY + 2, 2, 12);
-        } else {
-          ctx.fillRect(bowX + 6, bowY + 2, 4, 2);
-          ctx.fillRect(bowX + 4, bowY + 4, 4, 2);
-          ctx.fillRect(bowX + 2, bowY + 6, 4, 4); // grip
-          ctx.fillRect(bowX + 4, bowY + 10, 4, 2);
-          ctx.fillRect(bowX + 6, bowY + 12, 4, 2);
-          // Draw string
-          ctx.fillStyle = "#cbd5e1";
-          ctx.fillRect(bowX + 10, bowY + 2, 2, 12);
-        }
-      }
-    } else {
-      // Standard Sword Blade (Behind Hand)
-      ctx.fillStyle = isHit ? COLORS.playerHit : "#e2e8f0";
-      if (p.facingRight) ctx.fillRect(p.x + p.w - 2, p.y - 2 + bob, 4, 14);
-      else ctx.fillRect(p.x - 2, p.y - 2 + bob, 4, 14);
+        // Standard Sword Blade (Behind Hand)
+        ctx.fillStyle = isHit ? COLORS.playerHit : "#e2e8f0";
+        if (p.facingRight) ctx.fillRect(p.x + p.w - 2, p.y - 2 + bob, 4, 14);
+        else ctx.fillRect(p.x - 2, p.y - 2 + bob, 4, 14);
 
-      // Standard Sword hilt (Front hand)
-      ctx.fillStyle = p.playerColor || "#ea580c";
-      if (p.facingRight) ctx.fillRect(p.x + p.w - 4, p.y + 10 + bob, 8, 4);
-      else ctx.fillRect(p.x - 4, p.y + 10 + bob, 8, 4);
+        // Standard Sword hilt (Front hand)
+        ctx.fillStyle = p.playerColor || "#ea580c";
+        if (p.facingRight) ctx.fillRect(p.x + p.w - 4, p.y + 10 + bob, 8, 4);
+        else ctx.fillRect(p.x - 4, p.y + 10 + bob, 8, 4);
+      }
     }
     ctx.restore();
 
@@ -2668,8 +3026,12 @@ export class GameEngine {
       if (p.slashFlipped) {
         ctx.scale(1, -1);
       }
-      const scaleX = p.weapon === "colossal_sword" ? 2.2 : (p.weapon === "dual_daggers" ? 0.7 : 1.2);
-      const scaleY = p.weapon === "colossal_sword" ? 1.2 : (p.weapon === "dual_daggers" ? 0.4 : 0.7);
+      let scaleX = p.weapon === "colossal_sword" ? 3.8 : (p.weapon === "dual_daggers" ? 1.4 : 2.4);
+      let scaleY = p.weapon === "colossal_sword" ? 0.7 : (p.weapon === "dual_daggers" ? 0.25 : 0.45);
+      if (p.clawsActive) {
+        scaleX = 3.2;
+        scaleY = 0.6;
+      }
       ctx.scale(scaleX, scaleY);
       ctx.rotate(Math.PI * 0.1); // tilt the whole oval a bit
 
@@ -2702,7 +3064,7 @@ export class GameEngine {
       };
 
       const drawSparks = (angle: number, radius: number, count: number) => {
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = p.clawsActive ? "#ff5500" : "#ffffff";
         for (let i = 0; i < count; i++) {
           const spread = (Math.random() - 0.5) * 0.4;
           const dist = radius + Math.random() * 20;
@@ -2710,17 +3072,23 @@ export class GameEngine {
           const py = Math.round((Math.sin(angle + spread) * dist) / PIX) * PIX;
           ctx.fillRect(px, py, PIX, PIX);
           if (Math.random() < 0.5) {
-            ctx.fillStyle = "#f3e1f5"; // light pink spark
+            ctx.fillStyle = p.clawsActive ? "#ff0000" : "#f3e1f5"; // red vs pink spark
             ctx.fillRect(px + PIX, py, PIX, PIX);
-            ctx.fillStyle = "#ffffff";
+            ctx.fillStyle = p.clawsActive ? "#ff5500" : "#ffffff";
           }
         }
       };
 
       // Colors
-      const white = "#ffffff";
-      const pink = "#f3e1f5";
-      const purple = "#c7aecb";
+      let white = "#ffffff";
+      let pink = "#f3e1f5";
+      let purple = "#c7aecb";
+      
+      if (p.clawsActive) {
+        white = "#ffffff";
+        pink = "#ff5500";
+        purple = "#990000";
+      }
 
       // Animate headAngle and tailLength
       const headAngle = -Math.PI * 0.5 + progress * Math.PI * 1.0;
@@ -2731,22 +3099,22 @@ export class GameEngine {
       const tailAngle = headAngle - trailLength;
 
       // Draw crescent: Pointy ends and wider middle design
-      const rBase = p.weapon === "colossal_sword" ? 30 : (p.weapon === "dual_daggers" ? 14 : 20);
-      const spread = p.weapon === "colossal_sword" ? 10 : (p.weapon === "dual_daggers" ? 2 : 5);
-      const maxThick = p.weapon === "colossal_sword" ? 28 : (p.weapon === "dual_daggers" ? 10 : 18);
+      const rBase = p.clawsActive ? 25 : (p.weapon === "colossal_sword" ? 30 : (p.weapon === "dual_daggers" ? 14 : 20));
+      const spread = p.clawsActive ? 6 : (p.weapon === "colossal_sword" ? 10 : (p.weapon === "dual_daggers" ? 2 : 5));
+      const maxThick = p.clawsActive ? 28 : (p.weapon === "colossal_sword" ? 36 : (p.weapon === "dual_daggers" ? 14 : 24));
       
       // Draw 3 layers for beautiful neon glow and pointy edges
-      // Outer purple glow
+      // Outer glow
       drawPixelCrescent(rBase, spread, maxThick + 4, tailAngle - 0.04, headAngle + 0.04, purple);
-      // Middle pink glow
+      // Middle glow
       drawPixelCrescent(rBase, spread, maxThick, tailAngle - 0.02, headAngle + 0.02, pink);
-      // Inner white core
+      // Inner core
       drawPixelCrescent(rBase, spread, Math.max(2, maxThick - 6), tailAngle, headAngle, white);
 
       // Sparks in front of the blade
       if (progress > 0.1 && progress < 0.9) {
-        const sparkCount = p.weapon === "colossal_sword" ? Math.floor(trailProgress * 12) : (p.weapon === "dual_daggers" ? Math.floor(trailProgress * 3) : Math.floor(trailProgress * 6));
-        const sparkRad = p.weapon === "colossal_sword" ? 40 : (p.weapon === "dual_daggers" ? 16 : 26);
+        const sparkCount = p.clawsActive ? Math.floor(trailProgress * 8) : (p.weapon === "colossal_sword" ? Math.floor(trailProgress * 12) : (p.weapon === "dual_daggers" ? Math.floor(trailProgress * 3) : Math.floor(trailProgress * 6)));
+        const sparkRad = p.clawsActive ? 32 : (p.weapon === "colossal_sword" ? 40 : (p.weapon === "dual_daggers" ? 16 : 26));
         drawSparks(headAngle + 0.1, sparkRad, sparkCount);
       }
 
@@ -3088,44 +3456,79 @@ export class GameEngine {
     if (lctx) {
       const centerTx = Math.floor((p.x + p.w / 2) / TILE_SIZE);
       const centerTy = Math.floor((p.y + p.h / 2) / TILE_SIZE);
-      
-      // Check if entire knight is touching the background walls (bgMap[y][x] === 9)
-      // We use a 1 pixel inset to avoid float precision edge issues
-      const pLeft = p.x + 1;
-      const pRight = p.x + p.w - 1;
-      const pTop = p.y + 1;
-      const pBottom = p.y + p.h - 1;
 
-      const txStart = Math.floor(pLeft / TILE_SIZE);
-      const txEnd = Math.floor(pRight / TILE_SIZE);
-      const tyStart = Math.floor(pTop / TILE_SIZE);
-      const tyEnd = Math.floor(pBottom / TILE_SIZE);
-
-      let isInsideStructure = true;
-      for (let ty = tyStart; ty <= tyEnd; ty++) {
-        for (let tx = txStart; tx <= txEnd; tx++) {
-          if (!this.state.bgMap[ty] || this.state.bgMap[ty][tx] !== 9) {
-            isInsideStructure = false;
-            break;
-          }
-        }
-        if (!isInsideStructure) break;
-      }
-
-      if (isInsideStructure) {
-        // Outside is 85% dark
-        lctx.fillStyle = "rgba(5, 2, 0, 0.85)";
+      // 1. Draw standard cave lighting (if structureOverlayAlpha < 1)
+      if (this.state.structureOverlayAlpha < 1.0) {
+        lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+        lctx.fillStyle = "rgba(5, 2, 0, 0.85)"; // 85% dark outside
         lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
-        // Only structure inside is clearly visible (we clear bounds of the current structure)
+        lctx.globalCompositeOperation = "destination-out";
         lctx.save();
         lctx.translate(Math.round(this.canvasWidth / 2), Math.round(this.canvasHeight / 2));
         lctx.translate(-scaledCamX, -scaledCamY);
         lctx.scale(zoom, zoom);
 
-        lctx.globalCompositeOperation = "destination-out";
-        lctx.fillStyle = "rgba(255, 255, 255, 1.0)";
+        const drawLight = (x: number, y: number, radius: number) => {
+          const grad = lctx.createRadialGradient(x, y, radius * 0.2, x, y, radius);
+          grad.addColorStop(0, "rgba(255,255,255,1)");
+          grad.addColorStop(0.4, "rgba(255,255,255,0.6)");
+          grad.addColorStop(1, "rgba(255,255,255,0)");
+          lctx.fillStyle = grad;
+          lctx.beginPath();
+          lctx.arc(x, y, radius, 0, Math.PI * 2);
+          lctx.fill();
+        };
 
+        // Draw Player light
+        drawLight(p.x + p.w / 2, p.y + p.h / 2, 175.5);
+
+        // Draw Torches light
+        const startColLight = Math.max(0, Math.floor((this.state.camera.x - this.canvasWidth / 2 / zoom - 300) / TILE_SIZE));
+        const endColLight = Math.min(this.state.width, Math.ceil((this.state.camera.x + this.canvasWidth / 2 / zoom + 300) / TILE_SIZE));
+        const startRowLight = Math.max(0, Math.floor((this.state.camera.y - this.canvasHeight / 2 / zoom - 300) / TILE_SIZE));
+        const endRowLight = Math.min(this.state.height, Math.ceil((this.state.camera.y + this.canvasHeight / 2 / zoom + 300) / TILE_SIZE));
+
+        for (let y = startRowLight; y < endRowLight; y++) {
+          for (let x = startColLight; x < endColLight; x++) {
+            if (this.state.map[y] && this.state.map[y][x] === 10) {
+              drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 162.5 + Math.random() * 15);
+            } else if (this.state.map[y] && this.state.map[y][x] === 12) {
+              drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 130 + Math.random() * 25);
+            }
+          }
+        }
+
+        // Draw exit/boss room light
+        if (this.state.floor < this.state.maxFloor && this.state.endPos.x >= startColLight && this.state.endPos.x < endColLight && this.state.endPos.y >= startRowLight && this.state.endPos.y < endRowLight) {
+          drawLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 227.5 + Math.random() * 30);
+        } else if (this.state.floor === this.state.maxFloor && !p.hasDiamond && this.state.endPos.x >= startColLight && this.state.endPos.x < endColLight && this.state.endPos.y >= startRowLight && this.state.endPos.y < endRowLight) {
+          drawLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 200 + Math.random() * 20);
+        }
+
+        lctx.restore();
+        lctx.globalCompositeOperation = "source-over";
+
+        ctx.save();
+        ctx.resetTransform();
+        ctx.globalAlpha = 1.0 - this.state.structureOverlayAlpha;
+        ctx.drawImage(this.lightCanvas, 0, 0);
+        ctx.restore();
+      }
+
+      // 2. Draw structure mask (if structureOverlayAlpha > 0)
+      if (this.state.structureOverlayAlpha > 0.0) {
+        lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+        lctx.fillStyle = "rgba(5, 2, 0, 0.85)"; // 85% dark outside
+        lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+
+        lctx.globalCompositeOperation = "destination-out";
+        lctx.save();
+        lctx.translate(Math.round(this.canvasWidth / 2), Math.round(this.canvasHeight / 2));
+        lctx.translate(-scaledCamX, -scaledCamY);
+        lctx.scale(zoom, zoom);
+
+        // Find structure bounds dynamically by walking outward along bgMap === 9
         let sx = centerTx;
         while (sx >= 0 && this.state.bgMap[centerTy]?.[sx] === 9) sx--;
         sx++;
@@ -3142,183 +3545,36 @@ export class GameEngine {
         while (ey < this.state.height && this.state.bgMap[ey]?.[centerTx] === 9) ey++;
         ey--;
 
-        const xMin = (sx - 1) * TILE_SIZE;
-        const xMax = (ex + 2) * TILE_SIZE;
-        const yMin = (sy - 1) * TILE_SIZE;
-        const yMax = (ey + 2) * TILE_SIZE;
+        // Light area fits structure exactly, NOT 1 block outside it
+        const xMin = sx * TILE_SIZE;
+        const xMax = (ex + 1) * TILE_SIZE;
+        const yMin = sy * TILE_SIZE;
+        const yMax = (ey + 1) * TILE_SIZE;
 
+        lctx.fillStyle = "rgba(255, 255, 255, 1.0)";
         lctx.fillRect(xMin, yMin, xMax - xMin, yMax - yMin);
         lctx.restore();
-      } else {
-        // Standard Darkness overlay
-        lctx.fillStyle = "rgba(5, 2, 0, 0.98)";
-        lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+        lctx.globalCompositeOperation = "source-over";
 
-        lctx.globalCompositeOperation = "destination-out";
-
-        lctx.save();
-        // Transform back to world space for lights
-        lctx.translate(Math.round(this.canvasWidth / 2), Math.round(this.canvasHeight / 2));
-        lctx.translate(-scaledCamX, -scaledCamY);
-        lctx.scale(zoom, zoom); // ponytail: round camera coordinates in screen space
-
-        const drawLight = (x: number, y: number, radius: number) => {
-          const grad = lctx.createRadialGradient(
-            x,
-            y,
-            radius * 0.2,
-            x,
-            y,
-            radius,
-          );
-          grad.addColorStop(0, "rgba(255,255,255,1)");
-          grad.addColorStop(0.4, "rgba(255,255,255,0.6)");
-          grad.addColorStop(1, "rgba(255,255,255,0)");
-          lctx.fillStyle = grad;
-          lctx.beginPath();
-          lctx.arc(x, y, radius, 0, Math.PI * 2);
-          lctx.fill();
-        };
-
-        // Player light
-        const playerLight = this.state.player;
-        drawLight(
-          playerLight.x + playerLight.w / 2,
-          playerLight.y + playerLight.h / 2,
-          175.5,
-        );
-
-        // Torches light
-        const startColLight = Math.max(
-          0,
-          Math.floor(
-            (this.state.camera.x -
-              this.canvasWidth / 2 / this.state.camera.zoom -
-              300) /
-              TILE_SIZE,
-          ),
-        );
-        const endColLight = Math.min(
-          this.state.width,
-          Math.ceil(
-            (this.state.camera.x +
-              this.canvasWidth / 2 / this.state.camera.zoom +
-              300) /
-              TILE_SIZE,
-          ),
-        );
-        const startRowLight = Math.max(
-          0,
-          Math.floor(
-            (this.state.camera.y -
-              this.canvasHeight / 2 / this.state.camera.zoom -
-              300) /
-              TILE_SIZE,
-          ),
-        );
-        const endRowLight = Math.min(
-          this.state.height,
-          Math.ceil(
-            (this.state.camera.y +
-              this.canvasHeight / 2 / this.state.camera.zoom +
-              300) /
-              TILE_SIZE,
-          ),
-        );
-
-        for (let y = startRowLight; y < endRowLight; y++) {
-          for (let x = startColLight; x < endColLight; x++) {
-            if (this.state.map[y] && this.state.map[y][x] === 10) {
-              drawLight(
-                x * TILE_SIZE + TILE_SIZE / 2,
-                y * TILE_SIZE + TILE_SIZE / 2,
-                162.5 + Math.random() * 15,
-              );
-            } else if (this.state.map[y] && this.state.map[y][x] === 12) {
-              // Purple torch creates slightly smaller, slightly fluctuating light
-              drawLight(
-                x * TILE_SIZE + TILE_SIZE / 2,
-                y * TILE_SIZE + TILE_SIZE / 2,
-                130 + Math.random() * 25,
-              );
-            }
-          }
-        }
-
-        if (
-          this.state.floor < this.state.maxFloor &&
-          this.state.endPos.x >= startColLight &&
-          this.state.endPos.x < endColLight &&
-          this.state.endPos.y >= startRowLight &&
-          this.state.endPos.y < endRowLight
-        ) {
-          // The exit itself glows
-          drawLight(
-            this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2,
-            this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2,
-            227.5 + Math.random() * 30,
-          );
-        } else if (
-          this.state.floor === this.state.maxFloor &&
-          !this.state.player.hasDiamond &&
-          this.state.endPos.x >= startColLight &&
-          this.state.endPos.x < endColLight &&
-          this.state.endPos.y >= startRowLight &&
-          this.state.endPos.y < endRowLight
-        ) {
-          drawLight(
-            this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2,
-            this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2,
-            200 + Math.random() * 20,
-          );
-        }
-
-        lctx.restore();
+        ctx.save();
+        ctx.resetTransform();
+        ctx.globalAlpha = this.state.structureOverlayAlpha;
+        ctx.drawImage(this.lightCanvas, 0, 0);
+        ctx.restore();
       }
 
-      lctx.globalCompositeOperation = "source-over";
+      // Outside of structure (or transitioning): inside of structure is faded dark and you can barely see
+      if (this.state.structureOverlayAlpha < 1.0) {
+        const startX = Math.max(0, Math.floor((this.state.camera.x - this.canvasWidth / 2 / zoom) / TILE_SIZE));
+        const endX = Math.min(this.state.width, Math.ceil((this.state.camera.x + this.canvasWidth / 2 / zoom) / TILE_SIZE));
+        const startY = Math.max(0, Math.floor((this.state.camera.y - this.canvasHeight / 2 / zoom) / TILE_SIZE));
+        const endY = Math.min(this.state.height, Math.ceil((this.state.camera.y + this.canvasHeight / 2 / zoom) / TILE_SIZE));
 
-      ctx.save();
-      ctx.resetTransform();
-      ctx.drawImage(this.lightCanvas, 0, 0);
-      ctx.restore();
-
-      // Outside of structure: inside of structure is faded dark and you can barely see
-      if (!isInsideStructure) {
-        const startX = Math.max(
-          0,
-          Math.floor(
-            (this.state.camera.x - this.canvasWidth / 2 / this.state.camera.zoom) /
-              TILE_SIZE,
-          ),
-        );
-        const endX = Math.min(
-          this.state.width,
-          Math.ceil(
-            (this.state.camera.x + this.canvasWidth / 2 / this.state.camera.zoom) /
-              TILE_SIZE,
-          ),
-        );
-        const startY = Math.max(
-          0,
-          Math.floor(
-            (this.state.camera.y - this.canvasHeight / 2 / this.state.camera.zoom) /
-              TILE_SIZE,
-          ),
-        );
-        const endY = Math.min(
-          this.state.height,
-          Math.ceil(
-            (this.state.camera.y + this.canvasHeight / 2 / this.state.camera.zoom) /
-              TILE_SIZE,
-          ),
-        );
-
-        ctx.fillStyle = "rgba(5, 2, 0, 0.85)";
+        ctx.fillStyle = `rgba(5, 2, 0, ${0.85 * (1.0 - this.state.structureOverlayAlpha)})`;
         for (let y = startY; y < endY; y++) {
           for (let x = startX; x < endX; x++) {
             if (this.state.bgMap[y] && this.state.bgMap[y][x] === 9) {
-              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1); // ponytail: overlap to prevent gaps
+              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
             }
           }
         }
@@ -3326,6 +3582,26 @@ export class GameEngine {
     }
 
     ctx.restore(); // Restore from Main Camera save
+
+    // Screen Tints (Supersonic slow-mo and Poison)
+    if (p.timeSlowActive) {
+      ctx.save();
+      ctx.fillStyle = "rgba(0, 150, 255, 0.12)";
+      ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+      for (let i = 0; i < 8; i++) {
+        const yOffset = (Date.now() / 2 + i * 90) % this.canvasHeight;
+        ctx.fillRect(0, yOffset, this.canvasWidth, 2);
+      }
+      ctx.restore();
+    }
+
+    if (p.poisonTimer > 0) {
+      ctx.save();
+      ctx.fillStyle = "rgba(46, 125, 50, 0.12)";
+      ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+      ctx.restore();
+    }
 
     // Screen Frost Overlay Pixelated
     // Suppress drawing the frost/screen borders completely upon descending or when transitioning
@@ -3432,36 +3708,42 @@ export class GameEngine {
           this.state.mouse.y >= cy &&
           this.state.mouse.y <= cy + cardHeight;
 
-        const canAfford = this.state.player.coins >= u.cost;
-
         // Card background
-        ctx.fillStyle = isHover
-          ? canAfford
-            ? "#2a2a35"
-            : "#352a2a"
-          : "#1a1a25";
-        ctx.strokeStyle = canAfford ? "#fbbf24" : "#ef4444";
-        ctx.lineWidth = 2;
+        let strokeColor = "#ffffff";
+        let fillStyle = isHover ? "#2a2a35" : "#13131e";
+        
+        if (u.isSuper) {
+          const timeCycle = Date.now() / 250;
+          const hue = Math.floor(45 + Math.sin(timeCycle) * 15);
+          strokeColor = `hsl(${hue}, 100%, 50%)`;
+          fillStyle = isHover ? "#322510" : "#1a150b";
+        } else {
+          strokeColor = isHover ? "#fbbf24" : "#4b5563";
+        }
+
+        ctx.fillStyle = fillStyle;
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = u.isSuper ? 3 : 2;
         ctx.fillRect(cx, cy, cardWidth, cardHeight);
         ctx.strokeRect(cx, cy, cardWidth, cardHeight);
 
         // Title
         ctx.textAlign = "center";
         ctx.font = "bold 18px 'Courier New', Courier, monospace";
-        ctx.fillStyle = "#fff";
+        ctx.fillStyle = u.isSuper ? "#fbbf24" : "#fff";
         ctx.fillText(u.title, cx + cardWidth / 2, cy + 30);
 
-        // Cost
-        ctx.fillStyle = canAfford ? "#fbbf24" : "#ef4444";
-        ctx.font = "bold 16px 'Courier New', Courier, monospace";
-        ctx.fillText(`COST: ${u.cost} Coins`, cx + cardWidth / 2, cy + 60);
+        // Label
+        ctx.font = "bold 12px 'Courier New', Courier, monospace";
+        ctx.fillStyle = u.isSuper ? "#f59e0b" : "#9ca3af";
+        ctx.fillText(u.isSuper ? "★ SUPER CARD ★" : "NORMAL UPGRADE", cx + cardWidth / 2, cy + 60);
 
         // Desc lines
-        ctx.fillStyle = "#aaa";
+        ctx.fillStyle = "#e5e7eb";
         ctx.font = "14px 'Courier New', Courier, monospace";
         const lines = u.desc.split("\n");
         for (let j = 0; j < lines.length; j++) {
-          ctx.fillText(lines[j], cx + cardWidth / 2, cy + 120 + j * 25);
+          ctx.fillText(lines[j], cx + cardWidth / 2, cy + 100 + j * 20);
         }
       }
 
@@ -3554,6 +3836,7 @@ export class GameEngine {
   drawHUD() {
     if (!this.ctx) return;
     const ctx = this.ctx;
+    const p = this.state.player;
 
     ctx.textAlign = "left";
     ctx.fillStyle = "rgba(0,0,0,0.6)";
@@ -3580,23 +3863,121 @@ export class GameEngine {
     ctx.fillRect(
       60,
       63,
-      180 *
-        (Math.max(0, this.state.player.health) / this.state.player.maxHealth),
+      180 * (Math.max(0, p.health) / p.maxHealth),
       15,
     );
 
     // Weapon Name display
     ctx.fillStyle = "#fbbf24"; // gold/yellow
     ctx.font = "bold 12px 'Courier New', Courier, monospace";
-    const weaponName = this.state.player.weapon ? this.state.player.weapon.toUpperCase().replace('_', ' ') : 'SWORD';
+    const weaponName = p.weaponEquipped
+      ? (p.clawsActive ? "RIP & TEAR CLAWS" : (p.weapon ? p.weapon.toUpperCase().replace('_', ' ') : 'SWORD'))
+      : "UNARMED";
     ctx.fillText(`WEAPON: ${weaponName}`, 30, 105);
 
+    let nextHUDY = 135;
+
+    // Super Ability status panel
+    if (p.superAbility) {
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(20, nextHUDY, 240, 40);
+      ctx.strokeStyle = "rgba(255,255,255,0.2)";
+      ctx.strokeRect(20, nextHUDY, 240, 40);
+
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 11px 'Courier New', Courier, monospace";
+      ctx.fillText(p.superAbility.toUpperCase(), 30, nextHUDY + 16);
+
+      // Status
+      if (p.superAbilityActive) {
+        ctx.fillStyle = "#f59e0b"; // orange
+        ctx.fillText(`ACTIVE: ${Math.ceil(p.superAbilityTimer / 60)}s`, 140, nextHUDY + 16);
+        
+        // Draw tiny active duration bar
+        const maxTimer = p.superAbility === "malevolence" ? 900 : (p.superAbility === "impenetrable" ? 1200 : 600);
+        ctx.fillStyle = "#d97706";
+        ctx.fillRect(30, nextHUDY + 24, 220 * (p.superAbilityTimer / maxTimer), 4);
+      } else if (p.superAbilityCooldown > 0) {
+        ctx.fillStyle = "#ef4444"; // red
+        ctx.fillText(`CD: ${Math.ceil(p.superAbilityCooldown / 60)}s`, 140, nextHUDY + 16);
+        
+        // Draw tiny cooldown bar
+        const maxCD = p.superAbility === "malevolence" ? 6000 : (p.superAbility === "impenetrable" ? 6600 : 7500);
+        ctx.fillStyle = "#7f1d1d";
+        ctx.fillRect(30, nextHUDY + 24, 220 * (1 - p.superAbilityCooldown / maxCD), 4);
+      } else {
+        ctx.fillStyle = "#22c55e"; // green
+        ctx.fillText("READY [Q]", 140, nextHUDY + 16);
+      }
+      nextHUDY += 50;
+    }
+
+    // Poison status panel
+    if (p.poisonTimer > 0) {
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(20, nextHUDY, 240, 35);
+      ctx.strokeStyle = "#22c55e";
+      ctx.strokeRect(20, nextHUDY, 240, 35);
+
+      ctx.fillStyle = "#22c55e";
+      ctx.font = "bold 11px 'Courier New', Courier, monospace";
+      ctx.fillText(`POISONED: ${Math.ceil(p.poisonTimer / 60)}s`, 30, nextHUDY + 16);
+      
+      // Poison progress bar
+      ctx.fillStyle = "#15803d";
+      ctx.fillRect(30, nextHUDY + 22, 220 * (p.poisonTimer / 300), 4);
+      nextHUDY += 45;
+    }
+
     // Diamond status
-    if (this.state.player.hasDiamond) {
+    if (p.hasDiamond) {
       ctx.fillStyle = COLORS.diamond;
       ctx.font = "bold 14px 'Courier New', Courier, monospace";
       ctx.textAlign = "left";
-      ctx.fillText("[TRUE DIAMOND SECURED]", 30, 145);
+      ctx.fillText("[TRUE DIAMOND SECURED]", 30, nextHUDY + 15);
     }
+
+    // Hotbar slots rendering (bottom-center)
+    const hotbarX = this.canvasWidth / 2 - 25;
+    const hotbarY = this.canvasHeight - 75;
+    const hotbarW = 50;
+    const hotbarH = 50;
+
+    // Slot border glow/active style
+    ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+    ctx.fillRect(hotbarX, hotbarY, hotbarW, hotbarH);
+
+    ctx.strokeStyle = p.weaponEquipped ? "#fbbf24" : "#4b5563";
+    ctx.lineWidth = p.weaponEquipped ? 2 : 1;
+    ctx.strokeRect(hotbarX, hotbarY, hotbarW, hotbarH);
+
+    // [1] Label
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "bold 9px 'Courier New', Courier, monospace";
+    ctx.textAlign = "left";
+    ctx.fillText("[1]", hotbarX + 4, hotbarY + 11);
+
+    // Slot contents text/icon abbreviation
+    ctx.textAlign = "center";
+    ctx.font = "bold 12px 'Courier New', Courier, monospace";
+    ctx.fillStyle = p.weaponEquipped ? "#ffffff" : "#4b5563";
+    
+    let activeWepName = "SWD";
+    if (p.weapon === "colossal_sword") activeWepName = "CLSL";
+    else if (p.weapon === "dual_daggers") activeWepName = "DGR";
+    else if (p.weapon === "bow") activeWepName = "BOW";
+
+    ctx.fillText(activeWepName, hotbarX + hotbarW / 2, hotbarY + 28);
+    
+    // Equipped/Unequipped state label
+    ctx.font = "bold 8px 'Courier New', Courier, monospace";
+    ctx.fillStyle = p.weaponEquipped ? "#fbbf24" : "#6b7280";
+    ctx.fillText(p.weaponEquipped ? "EQ" : "UNEQ", hotbarX + hotbarW / 2, hotbarY + 42);
+
+    // Hotbar label above
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "bold 9px 'Courier New', Courier, monospace";
+    ctx.fillText("HOTBAR", hotbarX + hotbarW / 2, hotbarY - 6);
   }
 }
