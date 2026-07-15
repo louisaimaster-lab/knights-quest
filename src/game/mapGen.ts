@@ -170,8 +170,8 @@ export function generateCave(floor: number, maxFloor: number) {
       // Add a torch
       map[sy+1][sx+Math.floor(sw/2)] = 10;
 
-      // 20% chance to spawn chest inside the structure
-      if (Math.random() < 0.20) {
+      // 60% chance to spawn chest inside the structure
+      if (Math.random() < 0.60) {
           let cx = sx + Math.floor(sw / 2);
           const cy = sy + sh - 2; // Bottom inside row
           // Avoid platforms

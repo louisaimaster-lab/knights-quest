@@ -5,6 +5,8 @@ import {
   InteractionText,
   Rect,
   EnemyType,
+  WeaponType,
+  UpgradeChoice,
 } from "./types";
 import { generateCave } from "./mapGen";
 import { AABBMapCollision, rectIntersect, checkTilesAt } from "./physics";
@@ -78,6 +80,24 @@ export class GameEngine {
         baseSpeedMulti: 1,
         baseJumpMulti: 1,
         baseMaxHealth: 100,
+        hotbar: ["sword", null],
+        activeSlot: 0,
+        maceChargeTimer: 0,
+        maceChargeRatio: 0,
+        axeSpinCooldown: 0,
+        axeSpinTimer: 0,
+        hasMalevolence: false,
+        malevolenceCooldown: 0,
+        malevolenceActive: false,
+        malevolenceTimer: 0,
+        hasImpenetrable: false,
+        impenetrableCooldown: 0,
+        impenetrableActive: false,
+        impenetrableTimer: 0,
+        hasSupersonic: false,
+        supersonicCooldown: 0,
+        supersonicActive: false,
+        supersonicTimer: 0,
       },
       enemies: [],
       particles: [],
@@ -159,8 +179,13 @@ export class GameEngine {
     this.state.projectiles = [];
     this.state.droppedWeapons = [];
     this.state.chests = gen.chests ? gen.chests.map((c, idx) => {
-      const weapons: ('bow' | 'colossal_sword' | 'dual_daggers')[] = ['bow', 'colossal_sword', 'dual_daggers'];
-      const randomWeapon = weapons[Math.floor(Math.random() * weapons.length)];
+      let chestItem: WeaponType;
+      if (Math.random() < 0.60) {
+        chestItem = 'torch';
+      } else {
+        const weaponPool: WeaponType[] = ['sword', 'bow', 'colossal_sword', 'dual_daggers', 'mace', 'battle_axe'];
+        chestItem = weaponPool[Math.floor(Math.random() * weaponPool.length)];
+      }
       return {
         id: `chest_${floor}_${idx}`,
         x: c.x * TILE_SIZE + 4,
@@ -168,7 +193,7 @@ export class GameEngine {
         w: 24,
         h: 18,
         isOpen: false,
-        weapon: randomWeapon
+        weapon: chestItem
       };
     }) : [];
     this.state.fallingIcicles = [];
@@ -467,15 +492,20 @@ export class GameEngine {
             this.state.mouse.y >= cy &&
             this.state.mouse.y <= cy + cardHeight
           ) {
-            u.effect(this.state.player);
-            if (u.isSuper && u.abilityId) {
-              this.state.player.superAbility = u.abilityId;
-              this.state.player.superAbilityCooldown = 0;
-              this.state.player.superAbilityActive = false;
-              this.state.player.superAbilityTimer = 0;
+            if (this.state.player.coins >= u.cost) {
+              this.state.player.coins -= u.cost;
+              u.effect(this.state.player);
+              this.state.isFloorComplete = false;
+              this.initFloor(this.state.floor + 1);
+            } else {
+              this.state.texts.push({
+                x: this.state.player.x + this.state.player.w / 2,
+                y: this.state.player.y - 15,
+                text: "Not enough coins!",
+                life: 60,
+                maxLife: 60
+              });
             }
-            this.state.isFloorComplete = false;
-            this.initFloor(this.state.floor + 1);
             break;
           }
         }
@@ -500,16 +530,41 @@ export class GameEngine {
         
         // Still tick down real-world duration and cooldown of player abilities & poison
         const p = this.state.player;
-        if (p.superAbilityActive) {
-          p.superAbilityTimer--;
-          if (p.superAbilityTimer <= 0) {
-            p.superAbilityActive = false;
+        if (p.malevolenceActive) {
+          p.malevolenceTimer--;
+          if (p.malevolenceTimer <= 0) {
+            p.malevolenceActive = false;
+            p.clawsActive = false;
+            p.malevolenceCooldown = 6000;
+          }
+        } else if (p.malevolenceCooldown > 0) {
+          p.malevolenceCooldown--;
+        }
+
+        if (p.impenetrableActive) {
+          p.impenetrableTimer--;
+          if (p.impenetrableTimer <= 0) {
+            p.impenetrableActive = false;
+            p.shieldActive = false;
+            p.shieldTimer = 0;
+            p.impenetrableCooldown = 6600;
+          }
+        } else if (p.impenetrableCooldown > 0) {
+          p.impenetrableCooldown--;
+        }
+
+        if (p.supersonicActive) {
+          p.supersonicTimer--;
+          if (p.supersonicTimer <= 0) {
+            p.supersonicActive = false;
             p.timeSlowActive = false;
             this.state.timeScale = 1.0;
-            p.superAbilityCooldown = 7500; // 125s CD
+            p.supersonicCooldown = 7500;
           }
+        } else if (p.supersonicCooldown > 0) {
+          p.supersonicCooldown--;
         }
-        if (p.superAbilityCooldown > 0) p.superAbilityCooldown--;
+
         if (p.poisonTimer > 0) p.poisonTimer--;
         
         return;
@@ -736,61 +791,89 @@ export class GameEngine {
 
     if ((p.airAttackCooldown || 0) > 0) p.airAttackCooldown--;
 
-    // Hotbar: Press 1 to toggle equip/unequip weapon
-    if ((keys["1"] && !prevKeys["1"])) {
-      p.weaponEquipped = !p.weaponEquipped;
-      this.state.texts.push({
-        x: p.x + p.w / 2, y: p.y - 15,
-        text: p.weaponEquipped ? "Weapon Equipped" : "Weapon Unequipped",
-        life: 60, maxLife: 60
-      });
+    // Hotbar: Press 1 or 2 to switch slots / toggle equip
+    if (keys["1"] && !prevKeys["1"]) {
+      if (p.activeSlot === 0) {
+        p.weaponEquipped = !p.weaponEquipped;
+      } else {
+        p.activeSlot = 0;
+        p.weaponEquipped = true;
+      }
+      p.weapon = p.hotbar[0] || undefined;
+    } else if (keys["2"] && !prevKeys["2"]) {
+      if (p.activeSlot === 1) {
+        p.weaponEquipped = !p.weaponEquipped;
+      } else {
+        p.activeSlot = 1;
+        p.weaponEquipped = true;
+      }
+      p.weapon = p.hotbar[1] || undefined;
     }
 
-    // Super ability activation: Press Q
-    if ((keys["q"] || keys["Q"]) && !(prevKeys["q"] || prevKeys["Q"])) {
-      if (p.superAbility && p.superAbilityCooldown <= 0 && !p.superAbilityActive) {
-        p.superAbilityActive = true;
-        if (p.superAbility === 'malevolence') {
-          p.superAbilityTimer = 900; // 15s
-          p.clawsActive = true;
-        } else if (p.superAbility === 'impenetrable') {
-          p.superAbilityTimer = 1200; // 20s
-          p.shieldActive = true;
-          p.shieldTimer = 1200;
-        } else if (p.superAbility === 'supersonic') {
-          p.superAbilityTimer = 600; // 10s
-          p.timeSlowActive = true;
-          this.state.timeScale = 0.3;
-        }
-        this.state.texts.push({
-          x: p.x + p.w / 2, y: p.y - 20,
-          text: `${p.superAbility.toUpperCase()} ACTIVATED!`,
-          life: 90, maxLife: 90
-        });
+    // Super ability activation: Malevolence (Claws) on Q
+    if (p.hasMalevolence && (keys["q"] || keys["Q"]) && !(prevKeys["q"] || prevKeys["Q"])) {
+      if (p.malevolenceCooldown <= 0 && !p.malevolenceActive) {
+        p.malevolenceActive = true;
+        p.malevolenceTimer = 900; // 15s
+        p.clawsActive = true;
       }
     }
 
-    // Super ability timer tick
-    if (p.superAbilityActive) {
-      p.superAbilityTimer--;
-      if (p.superAbilityTimer <= 0) {
-        p.superAbilityActive = false;
+    // Super ability activation: Impenetrable (Shield) on Z
+    if (p.hasImpenetrable && (keys["z"] || keys["Z"]) && !(prevKeys["z"] || prevKeys["Z"])) {
+      if (p.impenetrableCooldown <= 0 && !p.impenetrableActive) {
+        p.impenetrableActive = true;
+        p.impenetrableTimer = 1200; // 20s
+        p.shieldActive = true;
+        p.shieldTimer = 1200;
+      }
+    }
+
+    // Super ability activation: Supersonic (Time Slow) on X or C
+    if (p.hasSupersonic && (keys["x"] || keys["X"] || keys["c"] || keys["C"]) && !(prevKeys["x"] || prevKeys["X"] || keys["c"] || prevKeys["C"])) {
+      if (p.supersonicCooldown <= 0 && !p.supersonicActive) {
+        p.supersonicActive = true;
+        p.supersonicTimer = 600; // 10s
+        p.timeSlowActive = true;
+        this.state.timeScale = 0.3;
+      }
+    }
+
+    // Super ability timer ticks
+    if (p.malevolenceActive) {
+      p.malevolenceTimer--;
+      if (p.malevolenceTimer <= 0) {
+        p.malevolenceActive = false;
         p.clawsActive = false;
-        if (p.superAbility === 'impenetrable') {
-          p.shieldActive = false;
-          p.shieldTimer = 0;
-        }
-        if (p.superAbility === 'supersonic') {
-          p.timeSlowActive = false;
-          this.state.timeScale = 1;
-        }
-        // Start cooldown
-        if (p.superAbility === 'malevolence') p.superAbilityCooldown = 6000; // 100s
-        else if (p.superAbility === 'impenetrable') p.superAbilityCooldown = 6600; // 110s
-        else if (p.superAbility === 'supersonic') p.superAbilityCooldown = 7500; // 125s
+        p.malevolenceCooldown = 6000; // 100s CD
       }
+    } else if (p.malevolenceCooldown > 0) {
+      p.malevolenceCooldown--;
     }
-    if (p.superAbilityCooldown > 0) p.superAbilityCooldown--;
+
+    if (p.impenetrableActive) {
+      p.impenetrableTimer--;
+      if (p.impenetrableTimer <= 0) {
+        p.impenetrableActive = false;
+        p.shieldActive = false;
+        p.shieldTimer = 0;
+        p.impenetrableCooldown = 6600; // 110s CD
+      }
+    } else if (p.impenetrableCooldown > 0) {
+      p.impenetrableCooldown--;
+    }
+
+    if (p.supersonicActive) {
+      p.supersonicTimer--;
+      if (p.supersonicTimer <= 0) {
+        p.supersonicActive = false;
+        p.timeSlowActive = false;
+        this.state.timeScale = 1.0;
+        p.supersonicCooldown = 7500; // 125s CD
+      }
+    } else if (p.supersonicCooldown > 0) {
+      p.supersonicCooldown--;
+    }
 
     // Poison tick
     if (p.poisonTimer > 0) {
@@ -804,18 +887,80 @@ export class GameEngine {
       }
     }
 
-    // Attack (only when weapon equipped)
+    // Mace charge tracking
+    if (p.weapon === 'mace' && p.weaponEquipped && !p.clawsActive && this.state.floorTitleState === "none" && this.state.transitionState === "none") {
+      if (this.state.mouse.down && p.attackTimer <= 0 && p.attackCooldown <= 0) {
+        if (p.maceChargeTimer < 180) {
+          p.maceChargeTimer++;
+        }
+        // Slowly slide forward
+        p.vx = (p.facingRight ? 0.6 : -0.6) * p.speedMulti;
+      } else if (p.maceChargeTimer > 0 && !this.state.mouse.down) {
+        // Release Mace Smash!
+        const ratio = Math.max(0.2, p.maceChargeTimer / 180);
+        p.maceChargeRatio = ratio;
+        p.isAttacking = true;
+        p.isAirAttacking = false;
+        p.attackTimer = 18; // Mace swing duration
+        p.slashFlipped = !p.slashFlipped;
+
+        // Lunge and slight hop
+        p.vx = (p.facingRight ? 1 : -1) * (4 + ratio * 10);
+        p.vy = -2.5;
+
+        this.checkAttackHits();
+        p.maceChargeTimer = 0;
+        p.attackCooldown = 25; // mace recovery CD
+      }
+    }
+
+    // Battle Axe spin attack (Shift or R)
+    if (p.weapon === 'battle_axe' && p.weaponEquipped && !p.clawsActive && this.state.floorTitleState === "none" && this.state.transitionState === "none") {
+      const pressedSpin = (keys["r"] || keys["R"] || keys["Shift"]) && !(prevKeys["r"] || prevKeys["R"] || prevKeys["Shift"]);
+      if (pressedSpin && p.axeSpinCooldown <= 0 && p.axeSpinTimer <= 0) {
+        p.axeSpinTimer = 25; // 25 frames spin
+        p.axeSpinCooldown = 300; // 5s CD
+
+        // Lunge player toward mouse
+        const px = p.x + p.w / 2;
+        const py = p.y + p.h / 2;
+        const dx = this.state.mouse.worldX - px;
+        const dy = this.state.mouse.worldY - py;
+        const angle = Math.atan2(dy, dx);
+
+        p.vx = Math.cos(angle) * 12;
+        p.vy = Math.sin(angle) * 12;
+        
+        // Spawn spin dust/spark particles
+        this.spawnParticles(px, py, "#e2e8f0", 8);
+        this.checkAttackHits();
+      }
+    }
+
+    // Spin attack timer tick
+    if (p.axeSpinTimer > 0) {
+      p.axeSpinTimer--;
+      this.checkAttackHits(); // deal continuous spin damage
+    }
+    if (p.axeSpinCooldown > 0) {
+      p.axeSpinCooldown--;
+    }
+
+    // Attack (only when weapon equipped - click/normal attack)
     if (
       this.state.mouse.down &&
       p.attackTimer <= 0 &&
       p.attackCooldown <= 0 &&
+      p.weapon !== 'mace' && // Mace uses charge release
       p.weaponEquipped &&
+      p.axeSpinTimer <= 0 && // Cannot attack while spinning
       this.state.floorTitleState === "none" &&
       this.state.transitionState === "none"
     ) {
       const isBow = p.clawsActive ? false : p.weapon === 'bow';
       const isColossal = p.clawsActive ? false : p.weapon === 'colossal_sword';
       const isDaggers = p.clawsActive ? false : p.weapon === 'dual_daggers';
+      const isAxe = p.clawsActive ? false : p.weapon === 'battle_axe';
 
       p.isAttacking = true;
       p.isAirAttacking = false;
@@ -824,14 +969,14 @@ export class GameEngine {
         // Claws: 70% of daggers speed (6 * 0.7 ≈ 4 frames)
         p.attackTimer = 4;
       } else {
-        p.attackTimer = isBow ? 15 : (isColossal ? 20 : (isDaggers ? 6 : 10));
+        p.attackTimer = isBow ? 15 : (isColossal ? 20 : (isDaggers ? 6 : (isAxe ? 12 : 10)));
       }
       p.slashFlipped = !p.slashFlipped;
       p.comboResetTimer = 120; // 2 seconds
       
       if (!p.wallSliding && !isClimbing && !p.onLadder && !inWater) {
         if (!isBow) {
-          const lungeSpeed = isColossal ? 4 : (isDaggers ? 3 : 6);
+          const lungeSpeed = isColossal ? 4 : (isDaggers ? 3 : (isAxe ? 5 : 6));
           p.vx += p.facingRight ? lungeSpeed * 0.5 : -lungeSpeed * 0.5;
           p.vy = -1; // slight hop
         }
@@ -843,7 +988,7 @@ export class GameEngine {
     }
 
     if (p.attackTimer > 0) {
-      if (p.weapon === 'bow' && !p.clawsActive && p.attackTimer === 10) {
+      if (p.weapon === 'bow' && !p.clawsActive && p.attackTimer === 1) {
         this.fireArrow();
       }
 
@@ -853,7 +998,7 @@ export class GameEngine {
         if (p.clawsActive) {
           p.attackCooldown = 3;
         } else {
-          p.attackCooldown = p.weapon === 'colossal_sword' ? 50 : (p.weapon === 'dual_daggers' ? 5 : 12);
+          p.attackCooldown = p.weapon === 'colossal_sword' ? 50 : (p.weapon === 'dual_daggers' ? 5 : (p.weapon === 'battle_axe' ? 15 : 12));
         }
       }
     }
@@ -865,12 +1010,14 @@ export class GameEngine {
       if (p.weapon === 'colossal_sword') { weaponSpeedMult = 0.80; weaponJumpMult = 0.90; }
       else if (p.weapon === 'bow') { weaponSpeedMult = 1.05; weaponJumpMult = 1.20; }
       else if (p.weapon === 'dual_daggers') { weaponSpeedMult = 1.15; weaponJumpMult = 1.10; }
+      else if (p.weapon === 'battle_axe') { weaponSpeedMult = 0.90; weaponJumpMult = 0.95; }
+      else if (p.weapon === 'mace') { weaponSpeedMult = 0.85; weaponJumpMult = 0.90; }
     }
 
     // SUPERSONIC active boost
     let superSpeedMult = 1;
     let superJumpMult = 1;
-    if (p.superAbilityActive && p.superAbility === 'supersonic') {
+    if (p.supersonicActive) {
       superSpeedMult = 1.20;
       superJumpMult = 1.15;
     }
@@ -1056,12 +1203,27 @@ export class GameEngine {
       }
     }
 
-    if (nearestDropped) {
-      if (justPressedSwap) {
-        // Swap active weapon with dropped weapon
-        const oldWeapon = p.weapon || 'sword';
-        p.weapon = nearestDropped.type;
-        nearestDropped.type = oldWeapon; // Swap in place
+      if (nearestDropped && justPressedSwap) {
+        const activeItem = p.hotbar[p.activeSlot];
+        
+        if (activeItem === null) {
+          // Slot is empty: pick up the item
+          p.hotbar[p.activeSlot] = nearestDropped.type;
+          
+          // Remove dropped weapon from world
+          const index = this.state.droppedWeapons.indexOf(nearestDropped);
+          if (index !== -1) {
+            this.state.droppedWeapons.splice(index, 1);
+          }
+        } else {
+          // Slot is occupied: swap in place
+          const oldItem = activeItem;
+          p.hotbar[p.activeSlot] = nearestDropped.type;
+          nearestDropped.type = oldItem;
+        }
+
+        p.weapon = p.hotbar[p.activeSlot] || undefined;
+        p.weaponEquipped = true;
 
         // Consume key
         keys["f"] = false;
@@ -1072,21 +1234,24 @@ export class GameEngine {
         }
 
         // Spawn pop up text
-        const weaponNames: Record<string, string> = {
+        const itemNames: Record<string, string> = {
           'sword': 'Sword',
           'bow': 'Bow',
           'colossal_sword': 'Colossal Sword',
-          'dual_daggers': 'Dual Daggers'
+          'dual_daggers': 'Dual Daggers',
+          'mace': 'Mace',
+          'battle_axe': 'Battle Axe',
+          'torch': 'Torch'
         };
+        const itemName = itemNames[p.weapon || ''] || p.weapon || 'Nothing';
         this.state.texts.push({
           x: p.x + p.w / 2,
           y: p.y - 15,
-          text: `Equipped ${weaponNames[p.weapon] || p.weapon}!`,
+          text: `Equipped ${itemName}!`,
           life: 80,
           maxLife: 80
         });
       }
-    }
 
     // Exit Check
     if (centerTx === this.state.endPos.x && centerTy === this.state.endPos.y) {
@@ -1117,6 +1282,35 @@ export class GameEngine {
     const p = this.state.player;
     if (p.weapon === 'bow' && !p.clawsActive) return;
 
+    // Spin attack: check hits in a circle around the player
+    if (p.weapon === 'battle_axe' && p.axeSpinTimer > 0) {
+      const px = p.x + p.w / 2;
+      const py = p.y + p.h / 2;
+      for (let e of this.state.enemies) {
+        if (e.invulnerableTimer > 0) continue;
+        const ex = e.x + e.w / 2;
+        const ey = e.y + e.h / 2;
+        if (Math.hypot(px - ex, py - ey) < 55) {
+          const finalDamage = 45 * p.damageMulti;
+          e.health -= finalDamage;
+          e.invulnerableTimer = 10;
+          const angle = Math.atan2(ey - py, ex - px);
+          e.vx = Math.cos(angle) * 10;
+          e.vy = Math.sin(angle) * 10 - 2;
+
+          this.spawnParticles(ex, ey, COLORS.blood, 10);
+          this.state.texts.push({
+            x: e.x,
+            y: e.y - 10,
+            text: Math.round(finalDamage).toString(),
+            life: 30,
+            maxLife: 30,
+          });
+        }
+      }
+      return;
+    }
+
     let attackRect;
     let attackWidth = 65;
     let attackHeight = p.h + 40;
@@ -1125,10 +1319,10 @@ export class GameEngine {
     let knockback = 5;
 
     if (p.clawsActive) {
-      attackWidth = 90; // slightly smaller than colossal sword (110)
+      attackWidth = 90;
       attackHeight = p.h + 50;
       attackYOffset = -25;
-      damage = 90; // twice colossal sword (45 * 2)
+      damage = 90;
       knockback = 9;
     } else if (p.weapon === 'colossal_sword') {
       attackWidth = 110;
@@ -1142,6 +1336,18 @@ export class GameEngine {
       attackYOffset = -5;
       damage = 8;
       knockback = 2.5;
+    } else if (p.weapon === 'mace') {
+      attackWidth = 70;
+      attackHeight = p.h + 50;
+      attackYOffset = -25;
+      damage = 25 * (1 + (p.maceChargeRatio || 0) * 2.5);
+      knockback = 4 + (p.maceChargeRatio || 0) * 10;
+    } else if (p.weapon === 'battle_axe') {
+      attackWidth = 80;
+      attackHeight = p.h + 30;
+      attackYOffset = -15;
+      damage = 35;
+      knockback = 8;
     }
 
     if (p.isAirAttacking) {
@@ -1251,37 +1457,33 @@ export class GameEngine {
   fireArrow() {
     const p = this.state.player;
     const arrowSpeed = 14;
-    let vx = 0;
-    let vy = 0;
-    let w = 16;
-    let h = 8;
-    let x = p.x + p.w / 2 - w / 2;
-    let y = p.y + p.h / 2 - h / 2;
 
-    if (p.isAirAttacking) {
-      vy = arrowSpeed;
-      w = 8;
-      h = 16;
-      y = p.y + p.h;
-    } else {
-      vx = p.facingRight ? arrowSpeed : -arrowSpeed;
-      x = p.facingRight ? p.x + p.w : p.x - w;
-    }
+    const px = p.x + p.w / 2;
+    const py = p.y + p.h / 2;
+    const dx = this.state.mouse.worldX - px;
+    const dy = this.state.mouse.worldY - py;
+    const angle = Math.atan2(dy, dx);
+
+    const vx = Math.cos(angle) * arrowSpeed;
+    const vy = Math.sin(angle) * arrowSpeed;
+
+    const w = 16;
+    const h = 8;
 
     this.state.projectiles.push({
       id: `arrow_${Date.now()}_${Math.random()}`,
-      x,
-      y,
+      x: px - w / 2,
+      y: py - h / 2,
       w,
       h,
       vx,
       vy,
       type: 'arrow',
       damage: 12,
-      facingRight: p.facingRight
+      facingRight: Math.cos(angle) >= 0
     });
 
-    this.spawnParticles(x + w / 2, y + h / 2, "rgba(255, 255, 255, 0.5)", 4);
+    this.spawnParticles(px, py, "rgba(255, 255, 255, 0.5)", 4);
   }
 
   updateProjectiles() {
@@ -1360,16 +1562,18 @@ export class GameEngine {
     const normalPool = [
       {
         title: "Fighter",
-        desc: "+20% Damage",
+        desc: "-20% Damage",
         isSuper: false,
+        cost: 15,
         effect: (p: any) => {
-          p.damageMulti += 0.20;
+          p.damageMulti -= 0.20;
         }
       },
       {
         title: "Glass Cannon",
         desc: "-35% HP\n+50% Damage",
         isSuper: false,
+        cost: 15,
         effect: (p: any) => {
           p.maxHealth = Math.max(10, Math.round(p.maxHealth * 0.65));
           if (p.health > p.maxHealth) p.health = p.maxHealth;
@@ -1380,6 +1584,7 @@ export class GameEngine {
         title: "Workout",
         desc: "+10% Damage\n+10% HP\n+5% Speed",
         isSuper: false,
+        cost: 15,
         effect: (p: any) => {
           p.damageMulti += 0.10;
           p.maxHealth = Math.round(p.maxHealth * 1.10);
@@ -1391,6 +1596,7 @@ export class GameEngine {
         title: "Bones of Steel",
         desc: "+25% HP",
         isSuper: false,
+        cost: 15,
         effect: (p: any) => {
           p.maxHealth = Math.round(p.maxHealth * 1.25);
           p.health += Math.round(p.baseMaxHealth * 0.25);
@@ -1400,6 +1606,7 @@ export class GameEngine {
         title: "Heavy",
         desc: "+30% HP\n-15% Speed",
         isSuper: false,
+        cost: 15,
         effect: (p: any) => {
           p.maxHealth = Math.round(p.maxHealth * 1.30);
           p.health += Math.round(p.baseMaxHealth * 0.30);
@@ -1410,6 +1617,7 @@ export class GameEngine {
         title: "Runner",
         desc: "+25% Speed",
         isSuper: false,
+        cost: 15,
         effect: (p: any) => {
           p.speedMulti += 0.25;
         }
@@ -1418,6 +1626,7 @@ export class GameEngine {
         title: "Sprinter",
         desc: "+40% Speed\n-20% Jump Height\n-15% HP",
         isSuper: false,
+        cost: 15,
         effect: (p: any) => {
           p.speedMulti += 0.40;
           p.jumpMulti -= 0.20;
@@ -1429,6 +1638,7 @@ export class GameEngine {
         title: "Spring Heels",
         desc: "+25% Jump Height",
         isSuper: false,
+        cost: 15,
         effect: (p: any) => {
           p.jumpMulti += 0.25;
         }
@@ -1437,6 +1647,7 @@ export class GameEngine {
         title: "Jumper",
         desc: "+10% Speed\n+15% Jump Height",
         isSuper: false,
+        cost: 15,
         effect: (p: any) => {
           p.speedMulti += 0.10;
           p.jumpMulti += 0.15;
@@ -1450,7 +1661,9 @@ export class GameEngine {
         desc: "+120% Damage\n+25% Speed\n+15% HP\n\nRip and Tear Claws\nability on Q (CD 100s)",
         isSuper: true,
         abilityId: 'malevolence' as const,
+        cost: 35,
         effect: (p: any) => {
+          p.hasMalevolence = true;
           p.damageMulti += 1.20;
           p.speedMulti += 0.25;
           p.maxHealth = Math.round(p.maxHealth * 1.15);
@@ -1459,10 +1672,12 @@ export class GameEngine {
       },
       {
         title: "IMPENETRABLE",
-        desc: "+110% HP\n-15% Speed\n-30% Jump Height\n\nShield of Solidity\nability on Q (CD 110s)",
+        desc: "+110% HP\n-15% Speed\n-30% Jump Height\n\nShield of Solidity\nability on Z (CD 110s)",
         isSuper: true,
         abilityId: 'impenetrable' as const,
+        cost: 35,
         effect: (p: any) => {
+          p.hasImpenetrable = true;
           p.maxHealth = Math.round(p.maxHealth * 2.10);
           p.health += Math.round(p.baseMaxHealth * 1.10);
           p.speedMulti -= 0.15;
@@ -1471,10 +1686,12 @@ export class GameEngine {
       },
       {
         title: "SUPERSONIC",
-        desc: "+70% Speed\n+45% Jump Height\n\nHyper Perception\nability on Q (CD 125s)",
+        desc: "+70% Speed\n+45% Jump Height\n\nHyper Perception\nability on X (CD 125s)",
         isSuper: true,
         abilityId: 'supersonic' as const,
+        cost: 35,
         effect: (p: any) => {
+          p.hasSupersonic = true;
           p.speedMulti += 0.70;
           p.jumpMulti += 0.45;
         }
@@ -1495,6 +1712,7 @@ export class GameEngine {
           desc: superUpgrade.desc,
           isSuper: true,
           abilityId: superUpgrade.abilityId,
+          cost: 35,
           effect: superUpgrade.effect
         };
       }
@@ -1503,6 +1721,7 @@ export class GameEngine {
         title: u.title,
         desc: u.desc,
         isSuper: false,
+        cost: 15,
         effect: u.effect
       };
     });
@@ -1643,8 +1862,8 @@ export class GameEngine {
           if (e.stateTimer <= 0 && distToPlayer < 500) {
             e.stateTimer = 60 + Math.random() * 60;
             e.aiState = "leaping";
-            e.vy = -12; // massive jump height
-            e.vx = (p.x > e.x ? 1 : -1) * 8; // massive leap speed
+            e.vy = -7.5; // slower jump height
+            e.vx = (p.x > e.x ? 1 : -1) * 4.5; // slower leap speed
             e.facingRight = p.x > e.x;
           }
         }
@@ -2669,25 +2888,54 @@ ctx.fillRect(
           2,
         );
       } else if (e.type === "flytrap") {
-        // Stem
-        ctx.fillStyle = "#1e3c1a"; // dark green stem
-        ctx.fillRect(e.x + 10, e.y + 16, 4, e.h - 16);
+        let stretch = 0;
+        if (e.aiState === "tracking") {
+          stretch = (1 - (e.trackTimer || 45) / 45) * 45;
+        } else if (e.aiState === "attacking") {
+          if (e.stateTimer > 70) {
+            stretch = 90;
+          } else {
+            stretch = (e.stateTimer / 70) * 90;
+          }
+        }
+
+        const baseX = e.x + 12;
+        const baseY = e.y + e.h - 8;
+        const targetAngle = Math.atan2(p.y + p.h / 2 - baseY, p.x + p.w / 2 - baseX);
+        const headX = baseX + Math.cos(targetAngle) * stretch;
+        const headY = baseY + Math.sin(targetAngle) * stretch;
+
+        // Draw segmented stretching vine neck
+        ctx.fillStyle = "#1e3c1a";
+        const joints = 7;
+        for (let j = 0; j <= joints; j++) {
+          const t = j / joints;
+          const jx = baseX + (headX - baseX) * t;
+          const jy = baseY + (headY - baseY) * t;
+          ctx.beginPath();
+          ctx.arc(jx, jy, 4, 0, Math.PI * 2);
+          ctx.fill();
+          if (j > 0 && j < joints) {
+            ctx.fillStyle = "#2d8d2d";
+            ctx.fillRect(jx + (j % 2 === 0 ? 3 : -5), jy - 2, 2, 2);
+            ctx.fillStyle = "#1e3c1a";
+          }
+        }
 
         // Head (rotates toward player if tracking/attacking)
         ctx.save();
-        ctx.translate(e.x + 12, e.y + 18);
+        ctx.translate(headX, headY);
         
         let trackAngle = 0;
         if (e.aiState === "tracking" || e.aiState === "attacking") {
-          const targetAngle = Math.atan2(p.y + p.h / 2 - (e.y + 12), p.x + p.w / 2 - (e.x + 12));
           trackAngle = targetAngle;
-          e.facingRight = (p.x + p.w / 2 > e.x + 12);
+          e.facingRight = (p.x + p.w / 2 > headX);
           
           if (e.facingRight) {
-            trackAngle = Math.max(-Math.PI * 0.25, Math.min(Math.PI * 0.25, trackAngle));
+            trackAngle = Math.max(-Math.PI * 0.4, Math.min(Math.PI * 0.4, trackAngle));
           } else {
-            trackAngle = Math.atan2(-(p.y + p.h / 2 - (e.y + 12)), -(p.x + p.w / 2 - (e.x + 12)));
-            trackAngle = -Math.max(-Math.PI * 0.25, Math.min(Math.PI * 0.25, trackAngle));
+            trackAngle = Math.atan2(-(p.y + p.h / 2 - headY), -(p.x + p.w / 2 - headX));
+            trackAngle = -Math.max(-Math.PI * 0.4, Math.min(Math.PI * 0.4, trackAngle));
           }
         }
         
@@ -2699,10 +2947,16 @@ ctx.fillRect(
         ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#1e801e";
         const jawOffset = e.aiState === "attacking" ? 6 : (e.aiState === "tracking" ? 2 : 0);
         
-        // Upper jaw
+        // Upper jaw (red inner mouth details)
         ctx.fillRect(-10, -14 - jawOffset, 20, 8);
+        ctx.fillStyle = "#991b1b"; // red mouth interior
+        ctx.fillRect(-8, -8 - jawOffset, 16, 2);
+
         // Lower jaw
+        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#166534";
         ctx.fillRect(-10, -6 + jawOffset, 20, 6);
+        ctx.fillStyle = "#991b1b"; // red mouth interior
+        ctx.fillRect(-8, -6 + jawOffset, 16, 2);
 
         // Teeth
         ctx.fillStyle = "#fff";
@@ -2711,9 +2965,9 @@ ctx.fillRect(
           ctx.fillRect(-6 + i * 4, -8 + jawOffset, 2, 2);
         }
         
-        // Eye
+        // Eye (yellow tracking / red attacking)
         ctx.fillStyle = e.aiState === "tracking" ? "#ffcc00" : "#ff0000";
-        ctx.fillRect(2, -10, 3, 3);
+        ctx.fillRect(2, -11, 3, 3);
         
         ctx.restore();
 
@@ -2722,38 +2976,65 @@ ctx.fillRect(
         ctx.fillRect(e.x + 4, e.y + e.h - 4, 6, 4);
         ctx.fillRect(e.x + 14, e.y + e.h - 4, 6, 4);
       } else if (e.type === "yeti") {
-        // Body
-        ctx.fillRect(e.x + 4, e.y, e.w - 8, e.h);
-        ctx.fillRect(e.x + 2, e.y + 4, e.w - 4, e.h - 8);
-        ctx.fillRect(e.x, e.y + 8, e.w, e.h - 16);
+        const isHitColor = e.invulnerableTimer > 0;
+        
+        // Fur Body (roundish fluffy shape)
+        ctx.fillStyle = isHitColor ? "#fff" : "#cbd5e1"; // shadow fur base
+        ctx.fillRect(e.x + 2, e.y + 6, e.w - 4, e.h - 8);
+        ctx.fillStyle = isHitColor ? "#fff" : "#e2e8f0"; // highlight fur top
+        ctx.fillRect(e.x + 4, e.y + 2, e.w - 8, e.h - 10);
+        
+        // Fluffy fur texture patches
+        ctx.fillStyle = isHitColor ? "#fff" : "#94a3b8"; // dark fur tuft shadows
+        ctx.fillRect(e.x + 6, e.y + 12, 3, 3);
+        ctx.fillRect(e.x + 18, e.y + 16, 3, 3);
+        ctx.fillRect(e.x + 10, e.y + 22, 4, 2);
 
-        // Raised arms if leaping
-        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#e2e8f0";
+        // Yeti head / face region
+        ctx.fillStyle = isHitColor ? "#fff" : "#7aa8b8"; // blue skin face
+        ctx.fillRect(e.x + 8, e.y + 6, e.w - 16, 10);
+        
+        // Eyes (glowing ice-yellow/red eyes)
+        ctx.fillStyle = isHitColor ? "#fff" : (e.aiState === "leaping" ? "#ef4444" : "#fbbf24");
+        const eyeX = e.facingRight ? e.x + 14 : e.x + 10;
+        ctx.fillRect(eyeX, e.y + 8, 3, 3);
+        ctx.fillRect(eyeX + (e.facingRight ? 6 : -6), e.y + 8, 3, 3);
+
+        // Horns (detailed curved white horns on head)
+        ctx.fillStyle = isHitColor ? "#fff" : "#ffffff";
+        // Left horn
+        ctx.fillRect(e.x + 2, e.y, 3, 3);
+        ctx.fillRect(e.x, e.y - 2, 3, 3);
+        // Right horn
+        ctx.fillRect(e.x + e.w - 5, e.y, 3, 3);
+        ctx.fillRect(e.x + e.w - 3, e.y - 2, 3, 3);
+
+        // Yeti big arms (raised high if leaping, otherwise hanging low)
+        ctx.fillStyle = isHitColor ? "#fff" : "#e2e8f0";
         if (e.aiState === "leaping") {
-          ctx.fillRect(e.x - 4, e.y - 8, 4, 16);
-          ctx.fillRect(e.x + e.w, e.y - 8, 4, 16);
+          // Arms raised up
+          ctx.fillRect(e.x - 5, e.y - 4, 5, 16); // Left arm
+          ctx.fillRect(e.x + e.w, e.y - 4, 5, 16);  // Right arm
+          ctx.fillStyle = isHitColor ? "#fff" : "#7aa8b8"; // blue hands
+          ctx.fillRect(e.x - 5, e.y - 8, 5, 4);
+          ctx.fillRect(e.x + e.w, e.y - 8, 5, 4);
         } else {
-          ctx.fillRect(e.x - 2, e.y + 8, 2, 16);
-          ctx.fillRect(e.x + e.w, e.y + 8, 2, 16);
+          // Arms hanging down
+          const walkBob = Math.sin(Date.now() / 80) * 2;
+          ctx.fillRect(e.x - 3, e.y + 8 + walkBob, 4, 16);
+          ctx.fillRect(e.x + e.w - 1, e.y + 8 - walkBob, 4, 16);
+          ctx.fillStyle = isHitColor ? "#fff" : "#7aa8b8";
+          ctx.fillRect(e.x - 3, e.y + 24 + walkBob, 4, 4);
+          ctx.fillRect(e.x + e.w - 1, e.y + 24 - walkBob, 4, 4);
         }
 
-        // Face (Blue skin)
-        ctx.fillStyle = "#7aa8b8";
-        ctx.fillRect(e.x + 8, e.y + 8, e.w - 16, 12);
-
-        // Eyes
-        ctx.fillStyle = "#fff";
-        const eyeX = e.facingRight ? e.x + 16 : e.x + 12;
-        ctx.fillRect(eyeX, e.y + 10, 4, 4);
-        ctx.fillRect(eyeX + (e.facingRight ? 6 : -6), e.y + 10, 4, 4);
-        ctx.fillStyle = "#000";
-        ctx.fillRect(eyeX + (e.facingRight ? 2 : 0), e.y + 12, 2, 2);
-        ctx.fillRect(eyeX + (e.facingRight ? 8 : -6), e.y + 12, 2, 2);
-
-        // Horns
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(e.x, e.y + 2, 4, 4);
-        ctx.fillRect(e.x + e.w - 4, e.y + 2, 4, 4);
+        // Fluffy legs & feet
+        ctx.fillStyle = isHitColor ? "#fff" : "#cbd5e1";
+        ctx.fillRect(e.x + 4, e.y + e.h - 4, 6, 4);
+        ctx.fillRect(e.x + e.w - 10, e.y + e.h - 4, 6, 4);
+        ctx.fillStyle = isHitColor ? "#fff" : "#7aa8b8"; // blue feet
+        ctx.fillRect(e.x + 2, e.y + e.h - 2, 6, 2);
+        ctx.fillRect(e.x + e.w - 8, e.y + e.h - 2, 6, 2);
       } else if (e.type === "bat") {
         ctx.fillRect(e.x + e.w / 2 - 4, e.y + e.h / 2 - 4, 8, 8);
 
@@ -2826,34 +3107,67 @@ ctx.fillRect(
     const isHit =
       p.invulnerableTimer > 0 && Math.floor(Date.now() / 100) % 2 === 0;
 
-    // Shield (Back arm)
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#475569";
-    if (p.facingRight) ctx.fillRect(p.x - 2, p.y + 10 + bob, 8, 10);
-    else ctx.fillRect(p.x + p.w - 6, p.y + 10 + bob, 8, 10);
-
-    // Body
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#a0aab5";
-    ctx.fillRect(p.x + 4, p.y + 10 + bob, p.w - 8, p.h - 14);
-
-    // Helmet
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1";
-    ctx.fillRect(p.x + 2, p.y + bob, p.w - 4, 14);
-
-    // Visor
-    ctx.fillStyle = "#1e293b";
+    // Red Cape (flowing behind the player)
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#dc2626";
+    const capeBob = isMoving ? Math.sin(Date.now() / 70) * 3 : 0;
     if (p.facingRight) {
-      ctx.fillRect(p.x + 8, p.y + 4 + bob, p.w - 10, 4); // Top bar
-      ctx.fillRect(p.x + p.w - 8, p.y + 8 + bob, 4, 6); // Vert bar
+      ctx.fillRect(p.x - 1, p.y + 10 + bob, 4, 10);
+      ctx.fillRect(p.x - 3, p.y + 12 + bob, 3, 8 + capeBob);
     } else {
-      ctx.fillRect(p.x + 2, p.y + 4 + bob, p.w - 10, 4);
-      ctx.fillRect(p.x + 4, p.y + 8 + bob, 4, 6);
+      ctx.fillRect(p.x + p.w - 3, p.y + 10 + bob, 4, 10);
+      ctx.fillRect(p.x + p.w, p.y + 12 + bob, 3, 8 + capeBob);
     }
 
-    // Legs
+    // Body Armor (Detailed steel breastplate)
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // steel grey
+    ctx.fillRect(p.x + 4, p.y + 10 + bob, p.w - 8, p.h - 14);
+    // Gold trim on shoulders
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#fbbf24";
+    ctx.fillRect(p.x + 3, p.y + 10 + bob, 2, 4);
+    ctx.fillRect(p.x + p.w - 5, p.y + 10 + bob, 2, 4);
+    // Leather belt with gold buckle
+    ctx.fillStyle = "#78350f"; // leather brown
+    ctx.fillRect(p.x + 4, p.y + 16 + bob, p.w - 8, 2);
+    ctx.fillStyle = "#fbbf24"; // golden buckle
+    ctx.fillRect(p.x + p.w / 2 - 2, p.y + 16 + bob, 4, 2);
+
+    // Helmet (Detailed metal helm with reflections)
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1"; // polished metal
+    ctx.fillRect(p.x + 2, p.y + bob, p.w - 4, 14);
+    // Helmet shadow / outline for 3D feel
     ctx.fillStyle = isHit ? COLORS.playerHit : "#64748b";
+    ctx.fillRect(p.x + 2, p.y + bob, 2, 14);
+    ctx.fillRect(p.x + p.w - 4, p.y + bob, 2, 14);
+    // Golden crest plume on top of helmet
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#f59e0b";
+    ctx.fillRect(p.x + p.w / 2 - 2, p.y - 3 + bob, 4, 3);
+    ctx.fillRect(p.x + p.w / 2 - 1, p.y - 5 + bob, 2, 2);
+
+    // Visor (Glowing blue visor strip)
+    ctx.fillStyle = "#1e293b"; // dark frame
+    if (p.facingRight) {
+      ctx.fillRect(p.x + 6, p.y + 4 + bob, p.w - 8, 4); 
+      ctx.fillStyle = "#22d3ee"; // glowing cyan center
+      ctx.fillRect(p.x + 10, p.y + 5 + bob, p.w - 12, 2);
+    } else {
+      ctx.fillRect(p.x + 2, p.y + 4 + bob, p.w - 8, 4);
+      ctx.fillStyle = "#22d3ee"; // glowing cyan center
+      ctx.fillRect(p.x + 2, p.y + 5 + bob, p.w - 12, 2);
+    }
+
+    // Legs (Detailed iron sabatons/boots)
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#475569";
     const legOffset = isMoving ? Math.sin(Date.now() / 50) * 4 : 0;
+    // Left leg
     ctx.fillRect(p.x + 4, p.y + p.h - 4, 6, 4 - legOffset);
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // iron shoe tip
+    ctx.fillRect(p.x + 3 + (p.facingRight ? 1 : -1), p.y + p.h - 2, 4, 2);
+    
+    // Right leg
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#475569";
     ctx.fillRect(p.x + p.w - 10, p.y + p.h - 4, 6, 4 + legOffset);
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8";
+    ctx.fillRect(p.x + p.w - 11 + (p.facingRight ? 1 : -1), p.y + p.h - 2, 4, 2);
 
     // Draw Player Weapon Model / Claws / Shield
     if (p.shieldActive) {
@@ -2920,78 +3234,146 @@ ctx.fillRect(
           ctx.fillRect(p.x - 3, p.y + 14 + bob, 5, 2);
         }
       } else if (p.weapon === "bow") {
-        const bowX = p.facingRight ? p.x + p.w : p.x - 8;
-        const bowY = p.y + 6 + bob;
+        const px = p.x + p.w / 2;
+        const py = p.y + p.h / 2;
+        const dx = this.state.mouse.worldX - px;
+        const dy = this.state.mouse.worldY - py;
+        const angle = Math.atan2(dy, dx);
 
+        ctx.save();
+        ctx.translate(px, py + bob);
+        ctx.rotate(angle);
+
+        ctx.fillStyle = "#b45309"; // wood brown
         if (p.isAttacking && p.attackTimer > 0) {
-          // Bow-pull-back Model (bending more, string pulled)
-          ctx.fillStyle = "#b45309"; // wood brown
-          if (p.facingRight) {
-            ctx.fillRect(bowX - 4, bowY + 1, 4, 2);
-            ctx.fillRect(bowX - 2, bowY + 3, 4, 2);
-            ctx.fillRect(bowX + 1, bowY + 5, 3, 6); // grip
-            ctx.fillRect(bowX - 2, bowY + 11, 4, 2);
-            ctx.fillRect(bowX - 4, bowY + 13, 4, 2);
-            // Draw pulled back string (forming a V shape)
-            ctx.fillStyle = "#cbd5e1";
-            ctx.fillRect(bowX - 6, bowY + 1, 2, 2);
-            ctx.fillRect(bowX - 8, bowY + 3, 2, 2);
-            ctx.fillRect(bowX - 10, bowY + 5, 2, 6);
-            ctx.fillRect(bowX - 8, bowY + 11, 2, 2);
-            ctx.fillRect(bowX - 6, bowY + 13, 2, 2);
-
-            // Draw arrow in the bow
-            ctx.fillStyle = "#78350f"; // wood arrow shaft
-            ctx.fillRect(bowX - 10, bowY + 7, 12, 2);
-            ctx.fillStyle = "#10b981"; // green arrow fletching
-            ctx.fillRect(bowX - 12, bowY + 6, 2, 4);
-            ctx.fillStyle = "#cbd5e1"; // steel arrowhead
-            ctx.fillRect(bowX + 2, bowY + 6, 3, 4);
-          } else {
-            ctx.fillRect(bowX + 8, bowY + 1, 4, 2);
-            ctx.fillRect(bowX + 6, bowY + 3, 4, 2);
-            ctx.fillRect(bowX + 4, bowY + 5, 3, 6); // grip
-            ctx.fillRect(bowX + 6, bowY + 11, 4, 2);
-            ctx.fillRect(bowX + 8, bowY + 13, 4, 2);
-            // Draw pulled back string
-            ctx.fillStyle = "#cbd5e1";
-            ctx.fillRect(bowX + 12, bowY + 1, 2, 2);
-            ctx.fillRect(bowX + 14, bowY + 3, 2, 2);
-            ctx.fillRect(bowX + 16, bowY + 5, 2, 6);
-            ctx.fillRect(bowX + 14, bowY + 11, 2, 2);
-            ctx.fillRect(bowX + 12, bowY + 13, 2, 2);
-
-            // Draw arrow in the bow
-            ctx.fillStyle = "#78350f";
-            ctx.fillRect(bowX + 6, bowY + 7, 12, 2);
-            ctx.fillStyle = "#10b981";
-            ctx.fillRect(bowX + 18, bowY + 6, 2, 4);
-            ctx.fillStyle = "#cbd5e1";
-            ctx.fillRect(bowX + 3, bowY + 6, 3, 4);
-          }
+          // Pulled bow (V bent)
+          ctx.fillRect(4, -8, 3, 2);
+          ctx.fillRect(6, -6, 3, 2);
+          ctx.fillRect(8, -4, 3, 8); // grip
+          ctx.fillRect(6, 4, 3, 2);
+          ctx.fillRect(4, 6, 3, 2);
+          
+          // Drawn string
+          ctx.fillStyle = "#cbd5e1";
+          ctx.fillRect(-2, -8, 2, 2);
+          ctx.fillRect(-4, -6, 2, 2);
+          ctx.fillRect(-6, -4, 2, 8);
+          ctx.fillRect(-4, 4, 2, 2);
+          ctx.fillRect(-2, 6, 2, 2);
+          
+          // Drawn arrow inside the bow
+          ctx.fillStyle = "#78350f"; // shaft
+          ctx.fillRect(-6, -1, 14, 2);
+          ctx.fillStyle = "#10b981"; // fletching
+          ctx.fillRect(-8, -2, 2, 4);
+          ctx.fillStyle = "#cbd5e1"; // tip
+          ctx.fillRect(8, -2, 3, 4);
         } else {
-          // Bow Model (normal held)
-          ctx.fillStyle = "#b45309"; // wood brown
-          if (p.facingRight) {
-            ctx.fillRect(bowX - 2, bowY + 2, 4, 2);
-            ctx.fillRect(bowX, bowY + 4, 4, 2);
-            ctx.fillRect(bowX + 2, bowY + 6, 4, 4); // grip
-            ctx.fillRect(bowX, bowY + 10, 4, 2);
-            ctx.fillRect(bowX - 2, bowY + 12, 4, 2);
-            // Draw string
-            ctx.fillStyle = "#cbd5e1";
-            ctx.fillRect(bowX - 4, bowY + 2, 2, 12);
-          } else {
-            ctx.fillRect(bowX + 6, bowY + 2, 4, 2);
-            ctx.fillRect(bowX + 4, bowY + 4, 4, 2);
-            ctx.fillRect(bowX + 2, bowY + 6, 4, 4); // grip
-            ctx.fillRect(bowX + 4, bowY + 10, 4, 2);
-            ctx.fillRect(bowX + 6, bowY + 12, 4, 2);
-            // Draw string
-            ctx.fillStyle = "#cbd5e1";
-            ctx.fillRect(bowX + 10, bowY + 2, 2, 12);
-          }
+          // Normal unpulled bow
+          ctx.fillRect(4, -8, 2, 2);
+          ctx.fillRect(6, -6, 2, 2);
+          ctx.fillRect(8, -4, 2, 8); // grip
+          ctx.fillRect(6, 4, 2, 2);
+          ctx.fillRect(4, 6, 2, 2);
+          
+          // Straight string
+          ctx.fillStyle = "#cbd5e1";
+          ctx.fillRect(2, -8, 2, 18);
         }
+        ctx.restore();
+      } else if (p.weapon === "mace") {
+        const maceX = p.facingRight ? p.x + p.w - 2 : p.x - 6;
+        const maceY = p.y + 2 + bob;
+        
+        ctx.save();
+        ctx.translate(maceX + 4, maceY + 12);
+        if (p.maceChargeTimer > 0) {
+          const shake = (Math.random() - 0.5) * (p.maceChargeTimer / 30);
+          ctx.translate(shake, shake);
+          ctx.rotate(p.facingRight ? -Math.PI * 0.25 : Math.PI * 0.25);
+        }
+        
+        // Brown handle
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-2, -2, 4, 14);
+        
+        // Steel mace head
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(-6, -10, 12, 8);
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillRect(-4, -8, 8, 4);
+        
+        // Yellow charge glow
+        if (p.maceChargeTimer > 0) {
+          ctx.fillStyle = "rgba(251, 191, 36, 0.4)";
+          ctx.fillRect(-8, -12, 16, 12);
+        }
+        
+        // Spikes
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(-1, -12, 2, 2);
+        ctx.fillRect(-8, -7, 2, 2);
+        ctx.fillRect(6, -7, 2, 2);
+        
+        ctx.restore();
+      } else if (p.weapon === "battle_axe") {
+        const axeX = p.facingRight ? p.x + p.w - 2 : p.x - 6;
+        const axeY = p.y + bob;
+        
+        ctx.save();
+        ctx.translate(axeX + 4, axeY + 12);
+        if (p.axeSpinTimer > 0) {
+          const spinAngle = (25 - p.axeSpinTimer) * Math.PI * 0.4;
+          ctx.rotate(spinAngle);
+        }
+        
+        // Brown handle
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-1.5, -6, 3, 20);
+        
+        // Axe blades (double-sided)
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(-8, -6, 16, 6);
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillRect(-9, -7, 3, 8);
+        ctx.fillRect(6, -7, 3, 8);
+        
+        ctx.restore();
+      } else if (p.weapon === "torch") {
+        const torchX = p.facingRight ? p.x + p.w - 2 : p.x - 6;
+        const torchY = p.y + bob;
+        
+        ctx.save();
+        ctx.translate(torchX + 4, torchY + 12);
+        ctx.rotate(p.facingRight ? Math.PI * 0.15 : -Math.PI * 0.15);
+        
+        // Wood stick
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-1.5, -4, 3, 14);
+        
+        // Gold collar
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillRect(-2.5, -5, 5, 2);
+        
+        // Flickering flame
+        const flameCycle = Math.floor(Date.now() / 100) % 3;
+        ctx.fillStyle = "#f97316";
+        ctx.fillRect(-3, -10, 6, 5);
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillRect(-1.5, -8, 3, 3);
+        
+        if (flameCycle === 0) {
+          ctx.fillStyle = "#ef4444";
+          ctx.fillRect(-1.5, -12, 3, 2);
+        } else if (flameCycle === 1) {
+          ctx.fillStyle = "#ef4444";
+          ctx.fillRect(0, -11, 2, 2);
+        } else {
+          ctx.fillStyle = "#ef4444";
+          ctx.fillRect(-2, -11, 2, 2);
+        }
+        
+        ctx.restore();
       } else {
         // Standard Sword Blade (Behind Hand)
         ctx.fillStyle = isHit ? COLORS.playerHit : "#e2e8f0";
@@ -3328,7 +3710,7 @@ ctx.fillRect(
           ctx.fillRect(-10, 8, 3, 3);
         } else if (type === 'dual_daggers') {
           // Crossed daggers
-          // Dagger 1 (slash right)
+          // Dagger 1
           ctx.strokeStyle = "#9ca3af";
           ctx.lineWidth = 1.5;
           ctx.beginPath();
@@ -3338,7 +3720,7 @@ ctx.fillRect(
           ctx.fillStyle = "#fbbf24";
           ctx.fillRect(-7, 5, 2, 2);
           
-          // Dagger 2 (slash left)
+          // Dagger 2
           ctx.strokeStyle = "#9ca3af";
           ctx.lineWidth = 1.5;
           ctx.beginPath();
@@ -3347,6 +3729,51 @@ ctx.fillRect(
           ctx.stroke();
           ctx.fillStyle = "#fbbf24";
           ctx.fillRect(5, 5, 2, 2);
+        } else if (type === 'mace') {
+          ctx.strokeStyle = "#78350f";
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(-6, 6);
+          ctx.lineTo(1, -1);
+          ctx.stroke();
+
+          ctx.fillStyle = "#94a3b8";
+          ctx.fillRect(0, -6, 6, 6);
+          ctx.fillStyle = "#cbd5e1";
+          ctx.fillRect(1, -5, 4, 4);
+
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(2, -8, 2, 2);
+          ctx.fillRect(-2, -4, 2, 2);
+          ctx.fillRect(6, -4, 2, 2);
+        } else if (type === 'battle_axe') {
+          ctx.strokeStyle = "#78350f";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(-7, 7);
+          ctx.lineTo(1, -1);
+          ctx.stroke();
+
+          ctx.fillStyle = "#cbd5e1";
+          ctx.fillRect(0, -6, 5, 5);
+          ctx.fillRect(-5, -6, 5, 5);
+          ctx.fillStyle = "#94a3b8";
+          ctx.fillRect(4, -7, 2, 7);
+          ctx.fillRect(-6, -7, 2, 7);
+        } else if (type === 'torch') {
+          ctx.strokeStyle = "#78350f";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(-4, 6);
+          ctx.lineTo(2, -2);
+          ctx.stroke();
+
+          ctx.fillStyle = "#fbbf24";
+          ctx.fillRect(1, -4, 2, 2);
+          ctx.fillStyle = "#f97316";
+          ctx.fillRect(0, -7, 4, 3);
+          ctx.fillStyle = "#ef4444";
+          ctx.fillRect(1, -9, 2, 2);
         }
         
         ctx.restore();
@@ -3356,16 +3783,20 @@ ctx.fillRect(
         const py = this.state.player.y + this.state.player.h / 2;
         const dist = Math.hypot(px - (dw.x + dw.w / 2), py - (dw.y + dw.h / 2));
         if (dist < 32) {
-          const weaponNames: Record<string, string> = {
+          const itemNames: Record<string, string> = {
             'sword': 'Sword',
             'bow': 'Bow',
             'colossal_sword': 'Colossal Sword',
-            'dual_daggers': 'Dual Daggers'
+            'dual_daggers': 'Dual Daggers',
+            'mace': 'Mace',
+            'battle_axe': 'Battle Axe',
+            'torch': 'Torch'
           };
+          const itemName = itemNames[dw.type] || dw.type;
           ctx.fillStyle = "#ffffff";
           ctx.font = "bold 9px 'Courier New', Courier, monospace";
           ctx.textAlign = "center";
-          ctx.fillText(`[F] SWAP TO ${weaponNames[dw.type].toUpperCase()}`, dw.x + dw.w / 2, dw.y - 12);
+          ctx.fillText(`[F] SWAP TO ${itemName.toUpperCase()}`, dw.x + dw.w / 2, dw.y - 12);
         }
       }
     }
@@ -3374,44 +3805,31 @@ ctx.fillRect(
     if (this.state.projectiles) {
       for (const proj of this.state.projectiles) {
         if (proj.type === 'arrow') {
-          const px = Math.round(proj.x * zoom) / zoom; // ponytail: round coordinates in screen space
+          const px = Math.round(proj.x * zoom) / zoom;
           const py = Math.round(proj.y * zoom) / zoom;
           const pw = proj.w;
           const ph = proj.h;
           
-          if (proj.vy > 0) {
-            // Shaft (vertical brown line)
-            ctx.fillStyle = "#78350f";
-            ctx.fillRect(px + pw / 2 - 1, py + 2, 2, ph - 6);
-            // Fletching (green feathers at top)
-            ctx.fillStyle = "#10b981";
-            ctx.fillRect(px + pw / 2 - 3, py, 6, 2);
-            // Steel point (cyan/steel tip at bottom)
-            ctx.fillStyle = "#cbd5e1";
-            ctx.fillRect(px + pw / 2 - 2, py + ph - 4, 4, 4);
-          } else {
-            if (proj.facingRight) {
-              // Shaft
-              ctx.fillStyle = "#78350f";
-              ctx.fillRect(px + 2, py + ph / 2 - 1, pw - 6, 2);
-              // Fletching (feathers on left)
-              ctx.fillStyle = "#10b981";
-              ctx.fillRect(px, py + ph / 2 - 3, 2, 6);
-              // Arrowhead on right
-              ctx.fillStyle = "#cbd5e1";
-              ctx.fillRect(px + pw - 4, py + ph / 2 - 2, 4, 4);
-            } else {
-              // Shaft
-              ctx.fillStyle = "#78350f";
-              ctx.fillRect(px + 4, py + ph / 2 - 1, pw - 6, 2);
-              // Fletching on right
-              ctx.fillStyle = "#10b981";
-              ctx.fillRect(px + pw - 2, py + ph / 2 - 3, 2, 6);
-              // Arrowhead on left
-              ctx.fillStyle = "#cbd5e1";
-              ctx.fillRect(px, py + ph / 2 - 2, 4, 4);
-            }
-          }
+          const angle = Math.atan2(proj.vy, proj.vx);
+          
+          ctx.save();
+          ctx.translate(px + pw / 2, py + ph / 2);
+          ctx.rotate(angle);
+          
+          // Shaft (brown)
+          ctx.fillStyle = "#78350f";
+          ctx.fillRect(-8, -1, 12, 2);
+          // Fletching (green feathers)
+          ctx.fillStyle = "#10b981";
+          ctx.fillRect(-10, -3, 2, 6);
+          ctx.fillRect(-9, -2, 1, 4);
+          // Steel arrowhead (polished grey with point)
+          ctx.fillStyle = "#cbd5e1";
+          ctx.fillRect(4, -2, 4, 4);
+          ctx.fillStyle = "#94a3b8";
+          ctx.fillRect(4, -1, 1, 2);
+          
+          ctx.restore();
         }
       }
     }
@@ -3455,12 +3873,10 @@ ctx.fillRect(
     const lctx = this.lightCanvas.getContext("2d");
     if (lctx) {
       const centerTx = Math.floor((p.x + p.w / 2) / TILE_SIZE);
-      const centerTy = Math.floor((p.y + p.h / 2) / TILE_SIZE);
-
-      // 1. Draw standard cave lighting (if structureOverlayAlpha < 1)
+      const centerTy = Math.floor((p.y + p.h / 2) / TILE_SIZE);      // 1. Draw standard cave lighting (if structureOverlayAlpha < 1)
       if (this.state.structureOverlayAlpha < 1.0) {
         lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-        lctx.fillStyle = "rgba(5, 2, 0, 0.85)"; // 85% dark outside
+        lctx.fillStyle = "rgba(0, 0, 0, 1.0)"; // Pitch black outside
         lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
         lctx.globalCompositeOperation = "destination-out";
@@ -3470,18 +3886,28 @@ ctx.fillRect(
         lctx.scale(zoom, zoom);
 
         const drawLight = (x: number, y: number, radius: number) => {
-          const grad = lctx.createRadialGradient(x, y, radius * 0.2, x, y, radius);
+          const tx = Math.floor(x / TILE_SIZE);
+          const ty = Math.floor(y / TILE_SIZE);
+          const isLightInside = this.state.bgMap[ty] && this.state.bgMap[ty][tx] === 9;
+          
+          let finalRadius = radius;
+          if (isLightInside) {
+            finalRadius = radius * 0.55; // 45% reduction inside structures
+          }
+
+          const grad = lctx.createRadialGradient(x, y, finalRadius * 0.2, x, y, finalRadius);
           grad.addColorStop(0, "rgba(255,255,255,1)");
           grad.addColorStop(0.4, "rgba(255,255,255,0.6)");
           grad.addColorStop(1, "rgba(255,255,255,0)");
           lctx.fillStyle = grad;
           lctx.beginPath();
-          lctx.arc(x, y, radius, 0, Math.PI * 2);
+          lctx.arc(x, y, finalRadius, 0, Math.PI * 2);
           lctx.fill();
         };
 
-        // Draw Player light
-        drawLight(p.x + p.w / 2, p.y + p.h / 2, 175.5);
+        // Draw Player light (higher radius if holding torch)
+        const pLightRad = (p.weapon === 'torch' && p.weaponEquipped) ? 275.0 : 175.5;
+        drawLight(p.x + p.w / 2, p.y + p.h / 2, pLightRad);
 
         // Draw Torches light
         const startColLight = Math.max(0, Math.floor((this.state.camera.x - this.canvasWidth / 2 / zoom - 300) / TILE_SIZE));
@@ -3519,7 +3945,7 @@ ctx.fillRect(
       // 2. Draw structure mask (if structureOverlayAlpha > 0)
       if (this.state.structureOverlayAlpha > 0.0) {
         lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-        lctx.fillStyle = "rgba(5, 2, 0, 0.85)"; // 85% dark outside
+        lctx.fillStyle = "rgba(0, 0, 0, 0.85)"; // 85% dark outside when inside structure
         lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
         lctx.globalCompositeOperation = "destination-out";
@@ -3563,14 +3989,15 @@ ctx.fillRect(
         ctx.restore();
       }
 
-      // Outside of structure (or transitioning): inside of structure is faded dark and you can barely see
-      if (this.state.structureOverlayAlpha < 1.0) {
+      // Structure dark overlay (always present in structure, dimmer when player inside)
+      {
         const startX = Math.max(0, Math.floor((this.state.camera.x - this.canvasWidth / 2 / zoom) / TILE_SIZE));
         const endX = Math.min(this.state.width, Math.ceil((this.state.camera.x + this.canvasWidth / 2 / zoom) / TILE_SIZE));
         const startY = Math.max(0, Math.floor((this.state.camera.y - this.canvasHeight / 2 / zoom) / TILE_SIZE));
         const endY = Math.min(this.state.height, Math.ceil((this.state.camera.y + this.canvasHeight / 2 / zoom) / TILE_SIZE));
 
-        ctx.fillStyle = `rgba(5, 2, 0, ${0.85 * (1.0 - this.state.structureOverlayAlpha)})`;
+        const structOpacity = 0.85 - 0.45 * this.state.structureOverlayAlpha;
+        ctx.fillStyle = `rgba(0, 0, 0, ${structOpacity})`;
         for (let y = startY; y < endY; y++) {
           for (let x = startX; x < endX; x++) {
             if (this.state.bgMap[y] && this.state.bgMap[y][x] === 9) {
@@ -3578,7 +4005,7 @@ ctx.fillRect(
             }
           }
         }
-      }
+      } 
     }
 
     ctx.restore(); // Restore from Main Camera save
@@ -3745,6 +4172,12 @@ ctx.fillRect(
         for (let j = 0; j < lines.length; j++) {
           ctx.fillText(lines[j], cx + cardWidth / 2, cy + 100 + j * 20);
         }
+
+        // Card cost
+        const affordable = this.state.player.coins >= u.cost;
+        ctx.font = "bold 15px 'Courier New', Courier, monospace";
+        ctx.fillStyle = affordable ? "#fbbf24" : "#f87171";
+        ctx.fillText(`COST: ${u.cost} COINS`, cx + cardWidth / 2, cy + cardHeight - 25);
       }
 
       ctx.textAlign = "center";
@@ -3877,8 +4310,9 @@ ctx.fillRect(
 
     let nextHUDY = 135;
 
-    // Super Ability status panel
-    if (p.superAbility) {
+    // Super Abilities status panels (Multiple super cards can be owned)
+    const drawAbilityPanel = (title: string, has: boolean, active: boolean, timer: number, cooldown: number, maxTimer: number, maxCooldown: number, keyChar: string) => {
+      if (!has) return;
       ctx.fillStyle = "rgba(0,0,0,0.6)";
       ctx.fillRect(20, nextHUDY, 240, 40);
       ctx.strokeStyle = "rgba(255,255,255,0.2)";
@@ -3886,31 +4320,28 @@ ctx.fillRect(
 
       ctx.fillStyle = "#fff";
       ctx.font = "bold 11px 'Courier New', Courier, monospace";
-      ctx.fillText(p.superAbility.toUpperCase(), 30, nextHUDY + 16);
+      ctx.fillText(title, 30, nextHUDY + 16);
 
-      // Status
-      if (p.superAbilityActive) {
-        ctx.fillStyle = "#f59e0b"; // orange
-        ctx.fillText(`ACTIVE: ${Math.ceil(p.superAbilityTimer / 60)}s`, 140, nextHUDY + 16);
-        
-        // Draw tiny active duration bar
-        const maxTimer = p.superAbility === "malevolence" ? 900 : (p.superAbility === "impenetrable" ? 1200 : 600);
+      if (active) {
+        ctx.fillStyle = "#f59e0b";
+        ctx.fillText(`ACTIVE: ${Math.ceil(timer / 60)}s`, 140, nextHUDY + 16);
         ctx.fillStyle = "#d97706";
-        ctx.fillRect(30, nextHUDY + 24, 220 * (p.superAbilityTimer / maxTimer), 4);
-      } else if (p.superAbilityCooldown > 0) {
-        ctx.fillStyle = "#ef4444"; // red
-        ctx.fillText(`CD: ${Math.ceil(p.superAbilityCooldown / 60)}s`, 140, nextHUDY + 16);
-        
-        // Draw tiny cooldown bar
-        const maxCD = p.superAbility === "malevolence" ? 6000 : (p.superAbility === "impenetrable" ? 6600 : 7500);
+        ctx.fillRect(30, nextHUDY + 24, 220 * (timer / maxTimer), 4);
+      } else if (cooldown > 0) {
+        ctx.fillStyle = "#ef4444";
+        ctx.fillText(`CD: ${Math.ceil(cooldown / 60)}s`, 140, nextHUDY + 16);
         ctx.fillStyle = "#7f1d1d";
-        ctx.fillRect(30, nextHUDY + 24, 220 * (1 - p.superAbilityCooldown / maxCD), 4);
+        ctx.fillRect(30, nextHUDY + 24, 220 * (1 - cooldown / maxCooldown), 4);
       } else {
-        ctx.fillStyle = "#22c55e"; // green
-        ctx.fillText("READY [Q]", 140, nextHUDY + 16);
+        ctx.fillStyle = "#22c55e";
+        ctx.fillText(`READY [${keyChar}]`, 140, nextHUDY + 16);
       }
-      nextHUDY += 50;
-    }
+      nextHUDY += 48;
+    };
+
+    drawAbilityPanel("MALEVOLENCE", p.hasMalevolence, p.malevolenceActive, p.malevolenceTimer, p.malevolenceCooldown, 900, 6000, "Q");
+    drawAbilityPanel("IMPENETRABLE", p.hasImpenetrable, p.impenetrableActive, p.impenetrableTimer, p.impenetrableCooldown, 1200, 6600, "Z");
+    drawAbilityPanel("SUPERSONIC", p.hasSupersonic, p.supersonicActive, p.supersonicTimer, p.supersonicCooldown, 600, 7500, "X");
 
     // Poison status panel
     if (p.poisonTimer > 0) {
@@ -3937,47 +4368,120 @@ ctx.fillRect(
       ctx.fillText("[TRUE DIAMOND SECURED]", 30, nextHUDY + 15);
     }
 
-    // Hotbar slots rendering (bottom-center)
-    const hotbarX = this.canvasWidth / 2 - 25;
+    // Hotbar slots rendering (bottom-center, 2 slots)
+    const midX = this.canvasWidth / 2;
     const hotbarY = this.canvasHeight - 75;
-    const hotbarW = 50;
-    const hotbarH = 50;
+    const slotW = 50;
+    const slotH = 50;
 
-    // Slot border glow/active style
-    ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
-    ctx.fillRect(hotbarX, hotbarY, hotbarW, hotbarH);
+    const drawItemIcon = (x: number, y: number, type: WeaponType) => {
+      ctx.save();
+      ctx.translate(x + 25, y + 25);
+      
+      if (type === 'sword') {
+        // Diagonal sword
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(-10, 10); ctx.lineTo(10, -10); ctx.stroke();
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillRect(-12, 8, 4, 4);
+      } else if (type === 'bow') {
+        // Small bow
+        ctx.strokeStyle = "#b45309";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(0, 0, 12, -Math.PI * 0.4, Math.PI * 0.4); ctx.stroke();
+        ctx.strokeStyle = "#e2e8f0";
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(5, -10); ctx.lineTo(5, 10); ctx.stroke();
+      } else if (type === 'colossal_sword') {
+        // Colossal sword
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(-12, 12); ctx.lineTo(12, -12); ctx.stroke();
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillRect(-14, 10, 5, 5);
+      } else if (type === 'dual_daggers') {
+        // Crossed daggers
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-10, 10); ctx.lineTo(6, -6); ctx.stroke();
+        ctx.fillStyle = "#ea580c"; ctx.fillRect(-12, 10, 3, 3);
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.beginPath(); ctx.moveTo(10, 10); ctx.lineTo(-6, -6); ctx.stroke();
+        ctx.fillStyle = "#ea580c"; ctx.fillRect(9, 10, 3, 3);
+      } else if (type === 'mace') {
+        // Spiked mace
+        ctx.strokeStyle = "#78350f";
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(-10, 10); ctx.lineTo(2, -2); ctx.stroke();
+        ctx.fillStyle = "#cbd5e1";
+        ctx.beginPath(); ctx.arc(4, -4, 6, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(4, -12, 2, 2);
+        ctx.fillRect(-4, -4, 2, 2);
+        ctx.fillRect(10, -4, 2, 2);
+      } else if (type === 'battle_axe') {
+        // Battle axe
+        ctx.strokeStyle = "#78350f";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(-10, 10); ctx.lineTo(2, -2); ctx.stroke();
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(1, -9, 7, 7);
+        ctx.fillRect(-6, -9, 7, 7);
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillRect(7, -10, 2, 9);
+        ctx.fillRect(-7, -10, 2, 9);
+      } else if (type === 'torch') {
+        // Torch icon
+        ctx.strokeStyle = "#78350f";
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(-6, 8); ctx.lineTo(2, -2); ctx.stroke();
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillRect(1, -5, 3, 3);
+        ctx.fillStyle = "#f97316";
+        ctx.fillRect(0, -9, 5, 4);
+        ctx.fillStyle = "#ef4444";
+        ctx.fillRect(2, -12, 2, 3);
+      }
+      
+      ctx.restore();
+    };
 
-    ctx.strokeStyle = p.weaponEquipped ? "#fbbf24" : "#4b5563";
-    ctx.lineWidth = p.weaponEquipped ? 2 : 1;
-    ctx.strokeRect(hotbarX, hotbarY, hotbarW, hotbarH);
+    for (let i = 0; i < 2; i++) {
+      const slotX = i === 0 ? midX - 55 : midX + 5;
+      const isActive = p.activeSlot === i;
+      
+      // Draw background
+      ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+      ctx.fillRect(slotX, hotbarY, slotW, slotH);
 
-    // [1] Label
+      // Border style: highlighted if active
+      if (isActive) {
+        ctx.strokeStyle = p.weaponEquipped ? "#fbbf24" : "#9ca3af";
+        ctx.lineWidth = 3;
+      } else {
+        ctx.strokeStyle = "#4b5563";
+        ctx.lineWidth = 1;
+      }
+      ctx.strokeRect(slotX, hotbarY, slotW, slotH);
+
+      // Label [1] or [2]
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = "bold 9px 'Courier New', Courier, monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(`[${i + 1}]`, slotX + 4, hotbarY + 11);
+
+      // Draw item icon if slot is not empty
+      const item = p.hotbar[i];
+      if (item !== null) {
+        drawItemIcon(slotX, hotbarY, item);
+      }
+    }
+
+    // Hotbar label above slots
+    ctx.textAlign = "center";
     ctx.fillStyle = "#9ca3af";
     ctx.font = "bold 9px 'Courier New', Courier, monospace";
-    ctx.textAlign = "left";
-    ctx.fillText("[1]", hotbarX + 4, hotbarY + 11);
-
-    // Slot contents text/icon abbreviation
-    ctx.textAlign = "center";
-    ctx.font = "bold 12px 'Courier New', Courier, monospace";
-    ctx.fillStyle = p.weaponEquipped ? "#ffffff" : "#4b5563";
-    
-    let activeWepName = "SWD";
-    if (p.weapon === "colossal_sword") activeWepName = "CLSL";
-    else if (p.weapon === "dual_daggers") activeWepName = "DGR";
-    else if (p.weapon === "bow") activeWepName = "BOW";
-
-    ctx.fillText(activeWepName, hotbarX + hotbarW / 2, hotbarY + 28);
-    
-    // Equipped/Unequipped state label
-    ctx.font = "bold 8px 'Courier New', Courier, monospace";
-    ctx.fillStyle = p.weaponEquipped ? "#fbbf24" : "#6b7280";
-    ctx.fillText(p.weaponEquipped ? "EQ" : "UNEQ", hotbarX + hotbarW / 2, hotbarY + 42);
-
-    // Hotbar label above
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#9ca3af";
-    ctx.font = "bold 9px 'Courier New', Courier, monospace";
-    ctx.fillText("HOTBAR", hotbarX + hotbarW / 2, hotbarY - 6);
+    ctx.fillText("HOTBAR", midX, hotbarY - 6);
   }
 }

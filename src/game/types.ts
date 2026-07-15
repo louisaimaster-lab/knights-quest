@@ -22,7 +22,7 @@ export interface Entity extends Rect {
   onLadder: boolean;
 }
 
-export type WeaponType = 'sword' | 'bow' | 'colossal_sword' | 'dual_daggers';
+export type WeaponType = 'sword' | 'bow' | 'colossal_sword' | 'dual_daggers' | 'mace' | 'battle_axe' | 'torch';
 export type SuperAbilityType = 'malevolence' | 'impenetrable' | 'supersonic';
 
 export interface Player extends Entity {
@@ -57,12 +57,31 @@ export interface Player extends Entity {
   baseSpeedMulti: number;
   baseJumpMulti: number;
   baseMaxHealth: number;
+  hotbar: (WeaponType | null)[];
+  activeSlot: number;
+  maceChargeTimer: number;
+  maceChargeRatio: number;
+  axeSpinCooldown: number;
+  axeSpinTimer: number;
+  hasMalevolence: boolean;
+  malevolenceCooldown: number;
+  malevolenceActive: boolean;
+  malevolenceTimer: number;
+  hasImpenetrable: boolean;
+  impenetrableCooldown: number;
+  impenetrableActive: boolean;
+  impenetrableTimer: number;
+  hasSupersonic: boolean;
+  supersonicCooldown: number;
+  supersonicActive: boolean;
+  supersonicTimer: number;
 }
 
 export interface UpgradeChoice {
   id: string;
   title: string;
   desc: string;
+  cost: number;
   isSuper?: boolean;
   abilityId?: SuperAbilityType;
   effect: (p: Player) => void;
