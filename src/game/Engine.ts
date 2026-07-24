@@ -1562,11 +1562,11 @@ export class GameEngine {
     const normalPool = [
       {
         title: "Fighter",
-        desc: "-20% Damage",
+        desc: "+20% Damage",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
-          p.damageMulti -= 0.20;
+          p.damageMulti += 0.20;
         }
       },
       {

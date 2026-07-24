@@ -296,7 +296,7 @@ export default function Game() {
       {appState === "menu" && (
         <div className="absolute inset-0 bg-black/80 z-30 flex flex-col items-center justify-center p-8 backdrop-blur-sm">
           <h1 className="text-6xl text-white font-bold mb-2 tracking-widest drop-shadow-lg text-center shadow-black">
-            DEEP MINE <span className="text-cyan-500">KNIGHT</span>
+            KNIGHT'S <span className="text-cyan-500">QUEST</span>
           </h1>
           <p className="text-gray-400 mb-12">Descend. Survive. Conquer.</p>
           <div className="space-y-4 flex flex-col w-64">
