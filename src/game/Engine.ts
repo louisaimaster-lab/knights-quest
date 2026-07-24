@@ -130,6 +130,9 @@ export class GameEngine {
       structureOverlayAlpha: 0,
       timeScale: 1,
       timeAccumulator: 0,
+      bossCutsceneTriggered: false,
+      bossCutsceneTimer: 0,
+      letterboxHeight: 0,
     };
   }
 
@@ -272,18 +275,18 @@ export class GameEngine {
     }
 
     if (floor === this.state.maxFloor) {
-      // Spawn Boss near endPos
+      // Spawn Cavern Titan Boss near endPos
       this.state.enemies.push({
         id: "boss",
         type: "boss",
-        x: gen.endPos.x * TILE_SIZE - TILE_SIZE,
-        y: gen.endPos.y * TILE_SIZE - TILE_SIZE,
-        w: 64,
-        h: 64,
+        x: gen.endPos.x * TILE_SIZE - TILE_SIZE * 1.5,
+        y: gen.endPos.y * TILE_SIZE - TILE_SIZE * 2,
+        w: 80,
+        h: 80,
         vx: 0,
         vy: 0,
-        health: 350,
-        maxHealth: 350,
+        health: 500,
+        maxHealth: 500,
         facingRight: false,
         isGrounded: false,
         invulnerableTimer: 0,
@@ -1255,6 +1258,36 @@ export class GameEngine {
         });
       }
 
+    // Boss Cutscene Proximity Check on Floor 25
+    if (this.state.floor === this.state.maxFloor) {
+      const distToDiamond = Math.hypot(
+        p.x - this.state.endPos.x * TILE_SIZE,
+        p.y - this.state.endPos.y * TILE_SIZE
+      );
+
+      if (distToDiamond < 320 && !this.state.bossCutsceneTriggered) {
+        this.state.bossCutsceneTriggered = true;
+        this.state.bossCutsceneTimer = 90; // 1.5s intro cutscene
+        this.state.shakeTimer = 30;
+        const boss = this.state.enemies.find((e) => e.type === "boss");
+        if (boss) {
+          this.spawnParticles(boss.x + boss.w / 2, boss.y + boss.h / 2, "#f97316", 25);
+          this.spawnParticles(boss.x + boss.w / 2, boss.y + boss.h / 2, "#ef4444", 25);
+        }
+      }
+
+      if (this.state.bossCutsceneTimer && this.state.bossCutsceneTimer > 0) {
+        this.state.bossCutsceneTimer--;
+        p.vx = 0;
+        p.vy = 0;
+        // Top and bottom screen borders close in during cutscene
+        this.state.letterboxHeight = Math.min(60, (90 - this.state.bossCutsceneTimer) * 2);
+      } else if (this.state.bossCutsceneTriggered) {
+        // Maintain cinematic letterbox borders during boss fight
+        this.state.letterboxHeight = 35;
+      }
+    }
+
     // Exit Check
     if (centerTx === this.state.endPos.x && centerTy === this.state.endPos.y) {
       if (this.state.floor < this.state.maxFloor) {
@@ -1518,9 +1551,19 @@ export class GameEngine {
       }
 
       if (hitWall) {
-        this.spawnParticles(proj.x + proj.w / 2, proj.y + proj.h / 2, "rgba(200, 200, 200, 0.4)", 4);
+        this.spawnParticles(proj.x + (proj.w || 8) / 2, proj.y + (proj.h || 8) / 2, "rgba(200, 200, 200, 0.4)", 4);
         this.state.projectiles.splice(i, 1);
         continue;
+      }
+
+      if (proj.type === "magma") {
+        this.spawnParticles(proj.x, proj.y, "#f97316", 1);
+        if (p.invulnerableTimer <= 0 && rectIntersect({ x: proj.x - 4, y: proj.y - 4, w: 8, h: 8 }, p)) {
+          this.damagePlayer(proj.damage, Math.sign(proj.vx) || 1, 8, -4, "#f97316");
+          this.spawnParticles(proj.x, proj.y, "#ef4444", 8);
+          this.state.projectiles.splice(i, 1);
+          continue;
+        }
       }
 
       let hitEnemy = false;
@@ -1902,17 +1945,70 @@ export class GameEngine {
         }
       } else if (e.type === "boss") {
         e.vy += GRAVITY;
-        if (e.stateTimer <= 0) {
-          e.aiState = Math.random() > 0.5 ? "jump" : "smash";
-          e.stateTimer = 100;
+        const isEnraged = e.health < e.maxHealth * 0.5;
+
+        if (isEnraged && Math.random() < 0.3) {
+          // Enraged flame aura particles
+          this.spawnParticles(
+            e.x + Math.random() * e.w,
+            e.y + Math.random() * e.h,
+            "#f97316",
+            1
+          );
         }
-        if (e.aiState === "jump" && e.isGrounded) {
-          e.vy = -12;
-          e.vx = (p.x > e.x ? 1 : -1) * 4;
-          e.isGrounded = false;
-          this.state.shakeTimer = 10;
+
+        if (e.stateTimer <= 0) {
+          const rand = Math.random();
+          if (isEnraged && rand < 0.45) {
+            // Phase 2: Magma Fireball Burst
+            e.aiState = "magma_burst";
+            e.stateTimer = 50;
+            e.vx = 0;
+            // Spawn 3 magma fireballs directed at player
+            for (let i = -1; i <= 1; i++) {
+              const angle = Math.atan2(p.y - e.y, p.x - e.x) + i * 0.25;
+              this.state.projectiles.push({
+                id: `magma_${Date.now()}_${i}`,
+                x: e.x + e.w / 2 - 6,
+                y: e.y + e.h / 2 - 6,
+                w: 12,
+                h: 12,
+                vx: Math.cos(angle) * 7,
+                vy: Math.sin(angle) * 7,
+                damage: 12,
+                type: "magma",
+                facingRight: Math.cos(angle) >= 0,
+              });
+            }
+          } else if (rand < 0.7) {
+            // Ground Smash Shockwave
+            e.aiState = "smash";
+            e.stateTimer = isEnraged ? 40 : 60;
+            e.vx = (p.x > e.x ? 1 : -1) * (isEnraged ? 3.5 : 2.5);
+          } else {
+            // Pounce Leap
+            e.aiState = "jump";
+            e.stateTimer = isEnraged ? 45 : 65;
+            if (e.isGrounded) {
+              e.vy = -12.5;
+              e.vx = (p.x > e.x ? 1 : -1) * (isEnraged ? 5.5 : 4);
+              e.isGrounded = false;
+              this.state.shakeTimer = 15;
+            }
+          }
         } else if (e.aiState === "smash") {
-          if (e.isGrounded) e.vx *= 0.9;
+          e.vx *= 0.85;
+          // Frame 20 shockwave impact
+          if (e.stateTimer === 20) {
+            this.state.shakeTimer = 20;
+            const slamX = e.x + e.w / 2;
+            this.spawnParticles(slamX, e.y + e.h, "#f97316", 20);
+            this.spawnParticles(slamX, e.y + e.h, "#ef4444", 20);
+            if (Math.hypot(p.x - slamX, p.y - (e.y + e.h)) < 110 && p.invulnerableTimer <= 0) {
+              const kbDir = p.x > slamX ? 1 : -1;
+              this.damagePlayer(16, kbDir, 14, -8, "#f97316");
+            }
+          }
         }
       }
 
@@ -3123,19 +3219,45 @@ export class GameEngine {
         ctx.fillStyle = "red";
         ctx.fillRect(e.x + e.w / 2 + (e.facingRight ? 2 : -4), e.y + e.h / 2 - 2, 2, 2);
       } else if (e.type === "boss") {
-        ctx.fillRect(e.x + 4, e.y, e.w - 8, e.h);
-        ctx.fillRect(e.x, e.y + 8, e.w, e.h - 16);
+        // Pixelated Cavern Titan Golem Model (80x80)
+        const isHitColor = e.invulnerableTimer > 0;
+        const isEnraged = e.health < e.maxHealth * 0.5;
 
-        ctx.fillStyle = "#000";
-        ctx.fillRect(e.x + 16, e.y + 20, 8, 8);
-        ctx.fillRect(e.x + e.w - 24, e.y + 20, 8, 8);
-        ctx.fillStyle = "#ff4d00";
-        ctx.fillRect(e.x + 20, e.y + 24, 4, 4);
-        ctx.fillRect(e.x + e.w - 20, e.y + 24, 4, 4);
-        ctx.fillStyle = "#000";
-        for (let i = 0; i < 4; i++) {
-          ctx.fillRect(e.x + 24 + i * 4, e.y + 44 + (i % 2) * 4, 4, 4);
-        }
+        // Base Shadow
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.fillRect(e.x + 4, e.y + e.h - 6, e.w - 8, 6);
+
+        // Heavy Obsidian Body Base
+        ctx.fillStyle = isHitColor ? "#ffffff" : (isEnraged ? "#7f1d1d" : "#0f172a");
+        ctx.fillRect(e.x + 8, e.y + 12, e.w - 16, e.h - 20);
+
+        // Stone Armor Plates
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#334155";
+        ctx.fillRect(e.x + 12, e.y + 16, e.w - 24, e.h - 28);
+
+        // Magma Core Chest (Glowing Orange/Red)
+        const corePulse = Math.sin(Date.now() / 200) * 0.2 + 0.8;
+        ctx.fillStyle = isHitColor ? "#ffffff" : `rgba(249, 115, 22, ${corePulse})`;
+        ctx.fillRect(e.x + e.w / 2 - 12, e.y + 24, 24, 20);
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#ef4444";
+        ctx.fillRect(e.x + e.w / 2 - 6, e.y + 28, 12, 12);
+
+        // Massive Stone Shoulder Pauldrons
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#475569";
+        ctx.fillRect(e.x - 4, e.y + 10, 16, 20);
+        ctx.fillRect(e.x + e.w - 12, e.y + 10, 16, 20);
+
+        // Heavy Fists
+        const fistBob = Math.sin(Date.now() / 100) * 3;
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#1e293b";
+        ctx.fillRect(e.x - 6, e.y + 32 + fistBob, 14, 18);
+        ctx.fillRect(e.x + e.w - 8, e.y + 32 - fistBob, 14, 18);
+
+        // Glowing Fiery Eyes
+        ctx.fillStyle = isHitColor ? "#ffffff" : (isEnraged ? "#ef4444" : "#f59e0b");
+        const eyeX = e.facingRight ? e.x + e.w / 2 + 6 : e.x + e.w / 2 - 14;
+        ctx.fillRect(eyeX, e.y + 16, 8, 4);
+        ctx.fillRect(eyeX + (e.facingRight ? 12 : -12), e.y + 16, 8, 4);
       }
 
       // Draw Enemy Health Bar (for all enemies)
@@ -3165,39 +3287,37 @@ export class GameEngine {
       ctx.restore();
     }
 
-    // Draw Legacy Knight Player Model
+    // Draw Legacy Knight Player Model (No cape, no helmet plume/hat thing)
     ctx.save();
     ctx.translate(
       Math.round(p.x * zoom) / zoom - p.x,
       Math.round(p.y * zoom) / zoom - p.y,
     ); // ponytail: align player model to integer pixel grid in screen space
+
     const isMoving = Math.abs(p.vx) > 0.5 && p.isGrounded;
-    const bob = isMoving ? Math.round(Math.sin(Date.now() / 50) * 2) : 0;
-    const isHit =
-      p.invulnerableTimer > 0 && Math.floor(Date.now() / 100) % 2 === 0;
+    const isJumping = !p.isGrounded && p.vy < 0;
+    const isFalling = !p.isGrounded && p.vy >= 0;
+
+    // Animations:
+    // - Idle: smooth breathing bob (350ms sine wave)
+    // - Walk: rhythmic stride (50ms sine wave)
+    // - Jump (upwards momentum): legs tuck up (-3px)
+    // - Fall (downwards momentum): legs extend down (+3px)
+    const idleBob = (!isMoving && p.isGrounded) ? Math.round(Math.sin(Date.now() / 350) * 1.5) : 0;
+    const bob = isMoving ? Math.round(Math.sin(Date.now() / 50) * 2) : idleBob;
+    const isHit = p.invulnerableTimer > 0 && Math.floor(Date.now() / 100) % 2 === 0;
 
     const accentColor = p.playerColor || "#ea580c";
 
-    // 1. Flowing Custom Cape (behind knight)
-    ctx.fillStyle = isHit ? COLORS.playerHit : accentColor;
-    const capeBob = isMoving ? Math.sin(Date.now() / 70) * 3 : 0;
-    if (p.facingRight) {
-      ctx.fillRect(p.x - 2, p.y + 8 + bob, 5, 12);
-      ctx.fillRect(p.x - 4, p.y + 11 + bob, 4, 9 + capeBob);
-    } else {
-      ctx.fillRect(p.x + p.w - 3, p.y + 8 + bob, 5, 12);
-      ctx.fillRect(p.x + p.w, p.y + 11 + bob, 4, 9 + capeBob);
-    }
-
-    // 2. Legacy Knight Body Armor (Iron breastplate + gold pauldrons)
+    // 1. Legacy Knight Body Armor (Iron breastplate + gold pauldrons)
     ctx.fillStyle = isHit ? COLORS.playerHit : "#475569"; // Iron dark base
     ctx.fillRect(p.x + 3, p.y + 9 + bob, p.w - 6, p.h - 13);
 
     ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // Polished steel plate
     ctx.fillRect(p.x + 5, p.y + 10 + bob, p.w - 10, p.h - 16);
 
-    // Gold shoulder pauldrons
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#fbbf24";
+    // Shoulder pauldrons with custom accent trim
+    ctx.fillStyle = isHit ? COLORS.playerHit : accentColor;
     ctx.fillRect(p.x + 2, p.y + 9 + bob, 3, 4);
     ctx.fillRect(p.x + p.w - 5, p.y + 9 + bob, 3, 4);
 
@@ -3207,18 +3327,13 @@ export class GameEngine {
     ctx.fillStyle = "#fbbf24";
     ctx.fillRect(p.x + p.w / 2 - 2, p.y + 16 + bob, 4, 2);
 
-    // 3. Legacy Great-Helm (Classic T-Visor Helmet)
+    // 2. Legacy Great-Helm (Classic T-Visor Helmet - clean top, NO plume/hat)
     ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1"; // Bright steel helm
     ctx.fillRect(p.x + 2, p.y + bob, p.w - 4, 13);
     ctx.fillStyle = isHit ? COLORS.playerHit : "#64748b"; // Helm rim shadow
     ctx.fillRect(p.x + 2, p.y + 11 + bob, p.w - 4, 2);
 
-    // Helmet Plume / Feather Crest (matching custom accentColor)
-    ctx.fillStyle = isHit ? COLORS.playerHit : accentColor;
-    ctx.fillRect(p.x + p.w / 2 - 2, p.y - 4 + bob, 4, 4);
-    ctx.fillRect(p.x + p.w / 2 - 1, p.y - 6 + bob, 2, 2);
-
-    // Classic T-Visor slit
+    // Classic T-Visor slit with glowing eye slit
     ctx.fillStyle = "#0f172a"; // Dark T-slit
     if (p.facingRight) {
       ctx.fillRect(p.x + 8, p.y + 4 + bob, p.w - 9, 3); // Horizontal eye slit
@@ -3227,16 +3342,23 @@ export class GameEngine {
       ctx.fillRect(p.x + 1, p.y + 4 + bob, p.w - 9, 3);
       ctx.fillRect(p.x + 8, p.y + 4 + bob, 3, 6);
     }
-    // Visor eye glow (cyan)
-    ctx.fillStyle = "#38bdf8";
+    // Visor eye glow (custom accentColor)
+    ctx.fillStyle = accentColor;
     const visorX = p.facingRight ? p.x + 12 : p.x + 7;
     ctx.fillRect(visorX, p.y + 5 + bob, 3, 1);
 
-    // 4. Sabatons / Iron Boots
+    // 3. Sabatons / Iron Boots with Jump/Fall Momentum Stance
     ctx.fillStyle = isHit ? COLORS.playerHit : "#334155";
-    const legOffset = isMoving ? Math.sin(Date.now() / 50) * 3 : 0;
-    ctx.fillRect(p.x + 4, p.y + p.h - 4, 5, 4 - legOffset);
-    ctx.fillRect(p.x + p.w - 9, p.y + p.h - 4, 5, 4 + legOffset);
+    let legOffset = 0;
+    if (isMoving) {
+      legOffset = Math.sin(Date.now() / 50) * 3.5;
+    } else if (isJumping) {
+      legOffset = -3; // Jump: legs tucked up
+    } else if (isFalling) {
+      legOffset = 3;  // Fall: legs extended down
+    }
+    ctx.fillRect(p.x + 4, p.y + p.h - 4, 5, Math.max(1, 4 - legOffset));
+    ctx.fillRect(p.x + p.w - 9, p.y + p.h - 4, 5, Math.max(1, 4 + legOffset));
     ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // Iron toe caps
     ctx.fillRect(p.x + 3 + (p.facingRight ? 1 : -1), p.y + p.h - 2, 4, 2);
     ctx.fillRect(p.x + p.w - 10 + (p.facingRight ? 1 : -1), p.y + p.h - 2, 4, 2);
@@ -4130,6 +4252,25 @@ export class GameEngine {
           }
         }
       }
+    }
+
+    // Cinematic Letterbox Top & Bottom Borders (Closing in during cutscene & boss fight)
+    if (this.state.letterboxHeight && this.state.letterboxHeight > 0) {
+      ctx.save();
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, this.canvasWidth, this.state.letterboxHeight);
+      ctx.fillRect(0, this.canvasHeight - this.state.letterboxHeight, this.canvasWidth, this.state.letterboxHeight);
+
+      if (this.state.bossCutsceneTimer && this.state.bossCutsceneTimer > 0) {
+        ctx.fillStyle = "#ef4444";
+        ctx.font = "bold 30px 'Courier New', Courier, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("★ CAVERN TITAN AWAKENS ★", this.canvasWidth / 2, this.canvasHeight / 2 - 30);
+        ctx.font = "bold 16px 'Courier New', Courier, monospace";
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillText("ANCIENT GOLEM OF THE DEEP DEMANDS YOUR SOUL", this.canvasWidth / 2, this.canvasHeight / 2 + 10);
+      }
+      ctx.restore();
     }
 
     // HUD

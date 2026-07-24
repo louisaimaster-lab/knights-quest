@@ -322,15 +322,13 @@ export default function Game() {
                 className="p-6 bg-gray-900 border border-gray-700 rounded-lg flex flex-col items-center min-w-[250px] shadow-lg"
               >
                 <div className="w-16 h-16 mb-2 relative bg-slate-900 border-2 border-slate-700 rounded-lg flex items-center justify-center p-1">
-                  {/* Legacy Knight Helmet & Plume Preview */}
-                  <div className="relative w-8 h-10 flex flex-col items-center">
-                    {/* Plume */}
-                    <div className="w-2 h-2 rounded-t-sm mb-[1px]" style={{ backgroundColor: save.color }}></div>
+                  {/* Legacy Knight Helmet Preview */}
+                  <div className="relative w-8 h-8 flex flex-col items-center">
                     {/* Helm */}
                     <div className="w-7 h-7 bg-slate-300 rounded-t-md relative border border-slate-500 shadow-inner">
                       {/* T-Visor */}
                       <div className="absolute top-2 inset-x-1 h-1.5 bg-slate-950 flex items-center justify-center">
-                        <div className="w-2 h-[2px] bg-cyan-400"></div>
+                        <div className="w-2 h-[2px]" style={{ backgroundColor: save.color }}></div>
                       </div>
                       <div className="absolute top-3 left-1/2 -translate-x-1/2 w-1.5 h-3 bg-slate-950"></div>
                     </div>
@@ -342,7 +340,7 @@ export default function Game() {
                 </p>
 
                 {/* Character Color Customization Swatches */}
-                <p className="text-xs text-gray-400 mb-1">Knight Cape & Plume Color:</p>
+                <p className="text-xs text-gray-400 mb-1">Knight Accent & Visor Color:</p>
                 <div className="flex space-x-1.5 mb-4">
                   {[
                     "#ea580c", // Orange

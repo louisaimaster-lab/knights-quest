@@ -138,7 +138,7 @@ export interface Projectile extends Rect {
   id: string;
   vx: number;
   vy: number;
-  type: 'arrow';
+  type: 'arrow' | 'magma';
   damage: number;
   facingRight: boolean;
 }
@@ -188,4 +188,7 @@ export interface GameState {
   structureOverlayAlpha: number;
   timeScale: number;
   timeAccumulator?: number;
+  bossCutsceneTriggered?: boolean;
+  bossCutsceneTimer?: number;
+  letterboxHeight?: number;
 }
