@@ -1770,10 +1770,10 @@ export class GameEngine {
         e.vy += GRAVITY;
         if (e.isGrounded && e.stateTimer <= 0 && distToPlayer < 300) {
           e.vy =
-            e.type === "frost_slime" ? -8 : e.type === "moss_slime" ? -9 : -7;
+            e.type === "frost_slime" ? -4 : e.type === "moss_slime" ? -4.5 : -3.5;
           e.vx =
             (p.x > e.x ? 1 : -1) *
-            (e.type === "frost_slime" ? 4 : e.type === "moss_slime" ? 5 : 3);
+            (e.type === "frost_slime" ? 6 : e.type === "moss_slime" ? 7.5 : 4.5);
           e.stateTimer = 60 + Math.random() * 30;
         } else if (e.isGrounded) {
           e.vx *= 0.8;
@@ -1860,7 +1860,7 @@ export class GameEngine {
           e.vx *= 0.8;
           e.aiState = "idle";
           if (e.stateTimer <= 0 && distToPlayer < 500) {
-            e.stateTimer = 60 + Math.random() * 60;
+            e.stateTimer = Math.round((60 + Math.random() * 60) * 0.65);
             e.aiState = "leaping";
             e.vy = -7.5; // slower jump height
             e.vx = (p.x > e.x ? 1 : -1) * 4.5; // slower leap speed
@@ -1907,7 +1907,7 @@ export class GameEngine {
           e.type === "boss"
             ? 15
             : e.type === "yeti"
-              ? 18 // Yeti rework: 18 damage
+              ? 12 // Yeti damage adjusted x0.65 (18 -> 12)
               : e.type === "frost_slime"
                 ? 8
                 : 5;
