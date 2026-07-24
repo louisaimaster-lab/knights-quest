@@ -3279,7 +3279,7 @@ export class GameEngine {
       ctx.restore();
     }
 
-    // Draw Pixel-Art Knight Player Model with Distinct Animation Sprite Poses (Torso, Head, Legs, Sword)
+    // Draw Pixel-Art Knight Player Model (Clean, sleek Legacy Knight)
     ctx.save();
     ctx.translate(
       Math.round(p.x * zoom) / zoom - p.x,
@@ -3291,7 +3291,6 @@ export class GameEngine {
     const isFalling = !p.isGrounded && p.vy >= 0;
 
     // Sprite Animation States:
-    // 'idle' | 'walk0' | 'walk1' | 'walk2' | 'jump' | 'fall'
     let animState = 'idle';
     if (isJumping) {
       animState = 'jump';
@@ -3309,16 +3308,15 @@ export class GameEngine {
     const accentColor = p.playerColor || "#ea580c";
     const dir = p.facingRight ? 1 : -1;
 
-    // --- 1. TORSO & ARMOR ANIMATED SPRITE POSES ---
-    // Torso X/Y offsets per animation state
+    // --- 1. TORSO & ARMOR ---
     let torsoX = p.x + 3;
     let torsoY = p.y + 8 + bob;
     if (animState === 'walk0' || animState === 'walk2') {
       torsoX = p.x + 3 + (dir > 0 ? 1 : -1);
     } else if (animState === 'jump') {
-      torsoY = p.y + 6 + bob; // Raised chest in leap
+      torsoY = p.y + 6 + bob;
     } else if (animState === 'fall') {
-      torsoY = p.y + 9 + bob; // Heavy descent
+      torsoY = p.y + 9 + bob;
     }
 
     // Body Armor (Detailed steel breastplate)
@@ -3326,23 +3324,12 @@ export class GameEngine {
     ctx.fillRect(torsoX, torsoY, p.w - 6, p.h - 12);
 
     ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // Polished steel plate
-    ctx.fillRect(torsoX + 2, torsoY + 1, p.w - 10, p.h - 15);
+    ctx.fillRect(torsoX + 1, torsoY + 1, p.w - 8, p.h - 15);
 
-    // Shoulder pauldrons (Poses shift dynamically per animation)
+    // Shoulder pauldrons (Flush with torso - no back protrusion)
     ctx.fillStyle = isHit ? COLORS.playerHit : accentColor;
-    if (animState === 'jump') {
-      ctx.fillRect(torsoX - 2, torsoY - 2, 4, 4); // Flared high shoulders in jump
-      ctx.fillRect(torsoX + p.w - 8, torsoY - 2, 4, 4);
-    } else if (animState === 'walk0') {
-      ctx.fillRect(torsoX + (dir > 0 ? 0 : -2), torsoY, 3, 4);
-      ctx.fillRect(torsoX + p.w - (dir > 0 ? 7 : 9), torsoY, 3, 4);
-    } else if (animState === 'walk2') {
-      ctx.fillRect(torsoX + (dir > 0 ? -2 : 0), torsoY, 3, 4);
-      ctx.fillRect(torsoX + p.w - (dir > 0 ? 9 : 7), torsoY, 3, 4);
-    } else {
-      ctx.fillRect(torsoX - 1, torsoY, 3, 4);
-      ctx.fillRect(torsoX + p.w - 8, torsoY, 3, 4);
-    }
+    ctx.fillRect(torsoX, torsoY, 2, 4);
+    ctx.fillRect(torsoX + p.w - 8, torsoY, 2, 4);
 
     // Leather belt with gold buckle
     ctx.fillStyle = "#78350f";
@@ -3350,7 +3337,7 @@ export class GameEngine {
     ctx.fillStyle = "#fbbf24";
     ctx.fillRect(torsoX + p.w / 2 - 3, torsoY + 7, 4, 2);
 
-    // --- 2. RESCULPTED GREAT-HELMET (Slightly less width: 8px, slightly more height: 11px) ---
+    // --- 2. RESCULPTED GREAT-HELMET (8px wide, 11px high, clean T-visor, NO eye glow) ---
     const headX = p.x + 4; // 8px wide, centered
     const headY = torsoY - 9; // 11px height
     ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1"; // Bright steel helm
@@ -3358,19 +3345,15 @@ export class GameEngine {
     ctx.fillStyle = isHit ? COLORS.playerHit : "#64748b"; // Helm rim shadow
     ctx.fillRect(headX, headY + 10, p.w - 8, 1);
 
-    // T-Visor eye slit
+    // Clean T-Visor eye slit (no eye pixel)
     ctx.fillStyle = "#0f172a"; // Dark T-slit
     if (p.facingRight) {
-      ctx.fillRect(headX + 4, headY + 3, p.w - 11, 3);
-      ctx.fillRect(headX + 7, headY + 3, 2, 5);
+      ctx.fillRect(headX + 2, headY + 3, 5, 2); // Horizontal eye slit
+      ctx.fillRect(headX + 5, headY + 3, 2, 5); // Vertical nose slit
     } else {
-      ctx.fillRect(headX + 1, headY + 3, p.w - 11, 3);
-      ctx.fillRect(headX + 3, headY + 3, 2, 5);
+      ctx.fillRect(headX + 1, headY + 3, 5, 2);
+      ctx.fillRect(headX + 2, headY + 3, 2, 5);
     }
-    // Visor eye glow
-    ctx.fillStyle = accentColor;
-    const visorX = p.facingRight ? headX + 6 : headX + 3;
-    ctx.fillRect(visorX, headY + 4, 3, 1);
 
     // --- 3. DISTINCT SPRITE POSES FOR LEGS & SABATONS ---
     ctx.fillStyle = isHit ? COLORS.playerHit : "#334155";
@@ -3413,20 +3396,8 @@ export class GameEngine {
       ctx.fillRect(p.x + p.w - 10 + (dir > 0 ? 1 : -1), p.y + p.h - 2, 4, 2);
     }
 
-    // --- 4. SWORD & WEAPON ANIMATION INTEGRATION ACROSS SPRITE POSES ---
-    let weaponOffsetY = bob;
-    let weaponAngle = 0;
-    if (!p.isAttacking) {
-      if (animState === 'jump') {
-        weaponOffsetY = bob - 3;
-        weaponAngle = dir * 0.25; // Sword raised high in leap stance
-      } else if (animState === 'fall') {
-        weaponOffsetY = bob + 2;
-        weaponAngle = -dir * 0.2; // Sword angled down for descent
-      } else if (animState === 'walk0' || animState === 'walk2') {
-        weaponAngle = (animState === 'walk0' ? 1 : -1) * dir * 0.12; // Sword rhythmically sways with walk
-      }
-    }
+    // --- 4. WEAPONS (Steady posture, no non-attack sway) ---
+    const weaponOffsetY = bob;
 
     // Draw Player Weapon Model / Claws / Shield
     if (p.shieldActive) {
@@ -3454,14 +3425,6 @@ export class GameEngine {
       }
     } else if (p.weaponEquipped) {
       ctx.save();
-      const handX = p.x + (p.facingRight ? p.w - 2 : 2);
-      const handY = p.y + 12 + weaponOffsetY;
-
-      if (!p.isAttacking && weaponAngle !== 0) {
-        ctx.translate(handX, handY);
-        ctx.rotate(weaponAngle);
-        ctx.translate(-handX, -handY);
-      }
 
       if (p.weapon === "colossal_sword") {
         // Colossal Sword Blade (Behind Hand)
