@@ -3279,126 +3279,72 @@ export class GameEngine {
       ctx.restore();
     }
 
-    // Draw Pixel-Art Knight Player Model (Clean Legacy Knight with Unified Matrix Flip)
+    // Draw Legacy Knight Player Model
     ctx.save();
-    
-    // Align center of player bounding box to integer screen pixel grid
-    const cx = Math.round(p.x * zoom) / zoom + p.w / 2;
-    const cy = Math.round(p.y * zoom) / zoom;
-    ctx.translate(cx, cy);
+    ctx.translate(
+      Math.round(p.x * zoom) / zoom - p.x,
+      Math.round(p.y * zoom) / zoom - p.y,
+    ); // ponytail: align player model to integer pixel grid in screen space
 
-    // FLIP ENTIRE PLAYER MODEL HORIZONTALLY WHEN FACING LEFT
+    const cx = p.x + p.w / 2;
+    const cy = p.y + p.h / 2;
+
+    ctx.translate(cx, cy);
     if (!p.facingRight) {
       ctx.scale(-1, 1);
     }
+    ctx.translate(-cx, -cy);
 
     const isMoving = Math.abs(p.vx) > 0.5 && p.isGrounded;
-    const isJumping = !p.isGrounded && p.vy < 0;
-    const isFalling = !p.isGrounded && p.vy >= 0;
-
-    // Sprite Animation States:
-    let animState = 'idle';
-    if (isJumping) {
-      animState = 'jump';
-    } else if (isFalling) {
-      animState = 'fall';
-    } else if (isMoving) {
-      const walkFrame = Math.floor(Date.now() / 90) % 4;
-      animState = walkFrame === 0 ? 'walk0' : (walkFrame === 1 || walkFrame === 3 ? 'walk1' : 'walk2');
-    }
-
-    const idleBob = (animState === 'idle') ? Math.round(Math.sin(Date.now() / 350) * 1) : 0;
-    const bob = (animState === 'walk1') ? 1 : idleBob;
-    const isHit = p.invulnerableTimer > 0 && Math.floor(Date.now() / 100) % 2 === 0;
+    const bob = isMoving ? Math.round(Math.sin(Date.now() / 50) * 2) : 0;
+    const isHit =
+      p.invulnerableTimer > 0 && Math.floor(Date.now() / 100) % 2 === 0;
 
     const accentColor = p.playerColor || "#ea580c";
 
-    // --- 1. TORSO & ARMOR (Full Heroic Proportions) ---
-    let torsoX = -6;
-    let torsoY = 8 + bob;
-    if (animState === 'walk0' || animState === 'walk2') {
-      torsoX += 1;
-    } else if (animState === 'jump') {
-      torsoY = 6 + bob;
-    } else if (animState === 'fall') {
-      torsoY = 9 + bob;
-    }
-
-    // Body Armor (Detailed steel breastplate base - 12px wide)
+    // 1. Legacy Knight Body Armor (Iron breastplate + gold pauldrons)
     ctx.fillStyle = isHit ? COLORS.playerHit : "#475569"; // Iron dark base
-    ctx.fillRect(torsoX, torsoY, 12, 12);
+    ctx.fillRect(p.x + 3, p.y + 9 + bob, p.w - 6, p.h - 13);
 
-    // Polished steel chest plate
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8";
-    ctx.fillRect(torsoX + 2, torsoY + 1, 9, 9);
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // Polished steel plate
+    ctx.fillRect(p.x + 5, p.y + 10 + bob, p.w - 10, p.h - 16);
 
-    // Broad Shoulder pauldrons (Spans full 15px across shoulders)
-    ctx.fillStyle = isHit ? COLORS.playerHit : accentColor;
-    ctx.fillRect(torsoX - 2, torsoY, 4, 4); // Back shoulder
-    ctx.fillRect(torsoX + 8, torsoY, 5, 4); // Front shoulder
+    // Gold shoulder pauldrons
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#fbbf24";
+    ctx.fillRect(p.x + 2, p.y + 9 + bob, 3, 4);
+    ctx.fillRect(p.x + p.w - 5, p.y + 9 + bob, 3, 4);
 
     // Leather belt with gold buckle
     ctx.fillStyle = "#78350f";
-    ctx.fillRect(torsoX, torsoY + 7, 12, 2);
+    ctx.fillRect(p.x + 4, p.y + 16 + bob, p.w - 8, 2);
     ctx.fillStyle = "#fbbf24";
-    ctx.fillRect(torsoX + 5, torsoY + 7, 4, 2);
+    ctx.fillRect(p.x + p.w / 2 - 2, p.y + 16 + bob, 4, 2);
 
-    // --- 2. FULL GREAT-HELMET & VISOR (12px wide helm, NOT skinny) ---
-    const headX = -6;
-    const headY = torsoY - 9;
+    // 2. Legacy Great-Helm (Classic T-Visor Helmet)
     ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1"; // Bright steel helm
-    ctx.fillRect(headX, headY, 12, 11);
+    ctx.fillRect(p.x + 2, p.y + bob, p.w - 4, 13);
     ctx.fillStyle = isHit ? COLORS.playerHit : "#64748b"; // Helm rim shadow
-    ctx.fillRect(headX, headY + 10, 12, 1);
+    ctx.fillRect(p.x + 2, p.y + 11 + bob, p.w - 4, 2);
 
-    // Classic Wide T-Visor
-    ctx.fillStyle = "#0f172a"; // Dark visor slit
-    ctx.fillRect(headX + 1, headY + 3, 10, 3); // 3px tall, 10px wide horizontal slit
-    ctx.fillRect(headX + 5, headY + 3, 2, 6); // Centered vertical stem
+    // Classic T-Visor slit
+    ctx.fillStyle = "#0f172a"; // Dark T-slit
+    ctx.fillRect(p.x + 8, p.y + 4 + bob, p.w - 9, 3); // Horizontal eye slit
+    ctx.fillRect(p.x + 13, p.y + 4 + bob, 3, 6);      // Vertical nose slit
 
-    // --- 3. LEGS & SABATONS ---
+    // 3. Sabatons / Iron Boots
     ctx.fillStyle = isHit ? COLORS.playerHit : "#334155";
-    const shoeCapColor = isHit ? COLORS.playerHit : "#94a3b8";
+    const legOffset = isMoving ? Math.sin(Date.now() / 50) * 3 : 0;
+    ctx.fillRect(p.x + 4, p.y + p.h - 4, 5, 4 - legOffset);
+    ctx.fillRect(p.x + p.w - 9, p.y + p.h - 4, 5, 4 + legOffset);
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // Iron toe caps
+    ctx.fillRect(p.x + 4, p.y + p.h - 2, 4, 2);
+    ctx.fillRect(p.x + p.w - 9, p.y + p.h - 2, 4, 2);
 
-    if (animState === 'jump') {
-      ctx.fillRect(-5, 17, 4, 4);
-      ctx.fillRect(1, 17, 4, 4);
-      ctx.fillStyle = shoeCapColor;
-      ctx.fillRect(-5, 19, 4, 2);
-      ctx.fillRect(1, 19, 4, 2);
-    } else if (animState === 'fall') {
-      ctx.fillRect(-6, 20, 4, 4);
-      ctx.fillRect(2, 20, 4, 4);
-      ctx.fillStyle = shoeCapColor;
-      ctx.fillRect(-6, 22, 4, 2);
-      ctx.fillRect(2, 22, 4, 2);
-    } else if (animState === 'walk0') {
-      ctx.fillRect(-6, 19, 4, 4);
-      ctx.fillRect(1, 19, 4, 4);
-      ctx.fillStyle = shoeCapColor;
-      ctx.fillRect(-6, 21, 4, 2);
-      ctx.fillRect(1, 21, 4, 2);
-    } else if (animState === 'walk2') {
-      ctx.fillRect(-2, 19, 4, 4);
-      ctx.fillRect(4, 19, 4, 4);
-      ctx.fillStyle = shoeCapColor;
-      ctx.fillRect(-2, 21, 4, 2);
-      ctx.fillRect(4, 21, 4, 2);
-    } else {
-      ctx.fillRect(-4, 19, 4, 4);
-      ctx.fillRect(1, 19, 4, 4);
-      ctx.fillStyle = shoeCapColor;
-      ctx.fillRect(-4, 21, 4, 2);
-      ctx.fillRect(1, 21, 4, 2);
-    }
-
-    // --- 4. WEAPONS & SHIELD ---
-    const weaponOffsetY = bob;
-
+    // Draw Player Weapon Model / Claws / Shield
     if (p.shieldActive) {
       ctx.save();
       ctx.beginPath();
-      ctx.arc(0, 12 + bob, 22, 0, Math.PI * 2);
+      ctx.arc(p.x + p.w / 2, p.y + p.h / 2 + bob, 22, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(0, 190, 255, 0.22)";
       ctx.fill();
       ctx.lineWidth = 2;
@@ -3409,28 +3355,38 @@ export class GameEngine {
 
     if (p.clawsActive) {
       ctx.fillStyle = "#ff0000";
-      ctx.fillRect(4, 8 + bob, 8, 2);
-      ctx.fillRect(6, 11 + bob, 8, 2);
-      ctx.fillRect(4, 14 + bob, 8, 2);
+      ctx.fillRect(p.x + p.w - 2, p.y + 8 + bob, 8, 2);
+      ctx.fillRect(p.x + p.w, p.y + 11 + bob, 8, 2);
+      ctx.fillRect(p.x + p.w - 2, p.y + 14 + bob, 8, 2);
     } else if (p.weaponEquipped) {
       if (p.weapon === "colossal_sword") {
         ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8";
-        ctx.fillRect(3, -12 + weaponOffsetY, 6, 24);
+        ctx.fillRect(p.x + p.w - 3, p.y - 12 + bob, 6, 24);
         ctx.fillStyle = "#fbbf24";
-        ctx.fillRect(0, 10 + weaponOffsetY, 12, 4);
+        ctx.fillRect(p.x + p.w - 6, p.y + 10 + bob, 12, 4);
         ctx.fillStyle = "#78350f";
-        ctx.fillRect(4, 14 + weaponOffsetY, 4, 6);
+        ctx.fillRect(p.x + p.w - 2, p.y + 14 + bob, 4, 6);
       } else if (p.weapon === "dual_daggers") {
         ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1";
-        ctx.fillRect(-7, 6 + weaponOffsetY, 3, 6);
+        ctx.fillRect(p.x - 4, p.y + 6 + bob, 3, 6);
         ctx.fillStyle = "#ea580c";
-        ctx.fillRect(-8, 12 + weaponOffsetY, 5, 2);
+        ctx.fillRect(p.x - 5, p.y + 12 + bob, 5, 2);
 
         ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1";
-        ctx.fillRect(5, 8 + weaponOffsetY, 3, 6);
+        ctx.fillRect(p.x + p.w - 1, p.y + 8 + bob, 3, 6);
         ctx.fillStyle = "#ea580c";
-        ctx.fillRect(4, 14 + weaponOffsetY, 5, 2);
+        ctx.fillRect(p.x + p.w - 2, p.y + 14 + bob, 5, 2);
       } else if (p.weapon === "bow") {
+        const px = p.x + p.w / 2;
+        const py = p.y + p.h / 2;
+        const dx = this.state.mouse.worldX - px;
+        const dy = this.state.mouse.worldY - py;
+        const angle = Math.atan2(dy, dx);
+
+        ctx.save();
+        ctx.translate(px, py + bob);
+        ctx.rotate(angle);
+
         ctx.fillStyle = "#b45309";
         if (p.isAttacking && p.attackTimer > 0) {
           ctx.fillRect(4, -8, 3, 2);
@@ -3462,9 +3418,13 @@ export class GameEngine {
           ctx.fillStyle = "#cbd5e1";
           ctx.fillRect(2, -8, 2, 18);
         }
+        ctx.restore();
       } else if (p.weapon === "mace") {
+        const maceX = p.x + p.w - 2;
+        const maceY = p.y + 2 + bob;
+        
         ctx.save();
-        ctx.translate(6, 12 + weaponOffsetY);
+        ctx.translate(maceX + 4, maceY + 12);
         if (p.maceChargeTimer > 0) {
           const shake = (Math.random() - 0.5) * (p.maceChargeTimer / 30);
           ctx.translate(shake, shake);
@@ -3486,8 +3446,11 @@ export class GameEngine {
         ctx.fillRect(6, -7, 2, 2);
         ctx.restore();
       } else if (p.weapon === "battle_axe") {
+        const axeX = p.x + p.w - 2;
+        const axeY = p.y + bob;
+        
         ctx.save();
-        ctx.translate(6, 12 + weaponOffsetY);
+        ctx.translate(axeX + 4, axeY + 12);
         if (p.axeSpinTimer > 0) {
           const spinAngle = (25 - p.axeSpinTimer) * Math.PI * 0.4;
           ctx.rotate(spinAngle);
@@ -3501,8 +3464,11 @@ export class GameEngine {
         ctx.fillRect(6, -7, 3, 8);
         ctx.restore();
       } else if (p.weapon === "torch") {
+        const torchX = p.x + p.w - 2;
+        const torchY = p.y + bob;
+        
         ctx.save();
-        ctx.translate(6, 12 + weaponOffsetY);
+        ctx.translate(torchX + 4, torchY + 12);
         ctx.rotate(Math.PI * 0.15);
         ctx.fillStyle = "#78350f";
         ctx.fillRect(-1.5, -4, 3, 14);
@@ -3527,9 +3493,9 @@ export class GameEngine {
       } else {
         // Standard Sword Blade (Behind Hand)
         ctx.fillStyle = isHit ? COLORS.playerHit : "#e2e8f0";
-        ctx.fillRect(4, -2 + weaponOffsetY, 4, 14);
+        ctx.fillRect(p.x + p.w - 2, p.y - 2 + bob, 4, 14);
         ctx.fillStyle = p.playerColor || "#ea580c";
-        ctx.fillRect(2, 10 + weaponOffsetY, 8, 4);
+        ctx.fillRect(p.x + p.w - 4, p.y + 10 + bob, 8, 4);
       }
     }
     ctx.restore();
