@@ -23,7 +23,7 @@ function isTileSolid(tx: number, ty: number, map: number[][]): boolean {
   }
 
   const tile = map[ty][tx];
-  return tile === 1 || tile === 7 || tile === 8 || tile === 11 || tile === 15 || tile === 16 || tile === 17 || tile === 18;
+  return tile === 1 || tile === 7 || tile === 8 || tile === 11 || tile === 15 || tile === 16 || tile === 18;
 }
 
 export function AABBMapCollision(
@@ -123,7 +123,7 @@ export function AABBMapCollision(
            let isPlatformColliding = false;
            const mapHeight = map.length;
            const mapWidth = map[0] ? map[0].length : 0;
-           const isTilePlatform = tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight && map[ty][tx] === 5;
+           const isTilePlatform = tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight && (map[ty][tx] === 5 || map[ty][tx] === 17);
            
            if (isTilePlatform && !isDropping) {
              const platformTop = ty * TILE_SIZE;
@@ -186,7 +186,7 @@ function checkMapCollision(x: number, y: number, w: number, h: number, map: numb
       const mapWidth = map[0] ? map[0].length : 0;
       if (tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight) {
         const tile = map[ty][tx];
-        if (tile === 5) { // 5 is platform
+        if (tile === 5 || tile === 17) { // 5 is platform, 17 is ice sheet
           if (vy > 0 && !isDropping) { // Only collide if falling and not dropping
              const platformTop = ty * TILE_SIZE;
              if (oldBottom <= platformTop + 0.1) {

@@ -321,26 +321,38 @@ export default function Game() {
                 key={save.id}
                 className="p-6 bg-gray-900 border border-gray-700 rounded-lg flex flex-col items-center min-w-[250px] shadow-lg"
               >
-                <div
-                  className="w-16 h-16 mb-4 relative bg-[#a0aab5] p-2 border-b-4 border-[color:var(--player-color)]"
-                  style={{ "--player-color": save.color } as any}
-                >
-                  <div className="absolute inset-x-2 top-3 h-2 bg-slate-800"></div>
-                  <div className="absolute w-2 h-4 bg-slate-800 left-1/2 -translate-x-1/2 top-4"></div>
+                <div className="w-16 h-16 mb-2 relative bg-slate-900 border-2 border-slate-700 rounded-lg flex items-center justify-center p-1">
+                  {/* Legacy Knight Helmet & Plume Preview */}
+                  <div className="relative w-8 h-10 flex flex-col items-center">
+                    {/* Plume */}
+                    <div className="w-2 h-2 rounded-t-sm mb-[1px]" style={{ backgroundColor: save.color }}></div>
+                    {/* Helm */}
+                    <div className="w-7 h-7 bg-slate-300 rounded-t-md relative border border-slate-500 shadow-inner">
+                      {/* T-Visor */}
+                      <div className="absolute top-2 inset-x-1 h-1.5 bg-slate-950 flex items-center justify-center">
+                        <div className="w-2 h-[2px] bg-cyan-400"></div>
+                      </div>
+                      <div className="absolute top-3 left-1/2 -translate-x-1/2 w-1.5 h-3 bg-slate-950"></div>
+                    </div>
+                  </div>
                 </div>
                 <h2 className="text-xl font-bold mb-1">{save.name}</h2>
-                <p className="text-sm text-cyan-400 mb-4">
+                <p className="text-sm text-cyan-400 mb-3">
                   Max Floor: {save.maxFloorReached}
                 </p>
 
-                <div className="flex space-x-2 mb-4">
+                {/* Character Color Customization Swatches */}
+                <p className="text-xs text-gray-400 mb-1">Knight Cape & Plume Color:</p>
+                <div className="flex space-x-1.5 mb-4">
                   {[
-                    "#ea580c",
-                    "#3b82f6",
-                    "#22c55e",
-                    "#a855f7",
-                    "#eab308",
-                    "#ef4444",
+                    "#ea580c", // Orange
+                    "#3b82f6", // Royal Blue
+                    "#22c55e", // Emerald
+                    "#a855f7", // Purple
+                    "#eab308", // Gold
+                    "#ef4444", // Crimson
+                    "#06b6d4", // Cyan
+                    "#64748b", // Steel
                   ].map((color) => (
                     <button
                       key={color}
@@ -350,7 +362,7 @@ export default function Game() {
                         );
                         saveToStorage(updatedSaves);
                       }}
-                      className={`w-6 h-6 rounded-full border-2 ${save.color === color ? "border-white scale-110" : "border-transparent"}`}
+                      className={`w-5 h-5 rounded-full border-2 transition-transform ${save.color === color ? "border-white scale-125 z-10 shadow-md" : "border-transparent opacity-80 hover:opacity-100"}`}
                       style={{ backgroundColor: color }}
                     />
                   ))}

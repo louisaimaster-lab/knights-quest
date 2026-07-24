@@ -240,7 +240,7 @@ export class GameEngine {
 
       let type: EnemyType;
       if (this.state.biome === "ice") {
-        type = Math.random() > 0.5 ? "frost_slime" : "yeti";
+        type = Math.random() < 0.20 ? "yeti" : "frost_slime";
       } else if (this.state.biome === "moss") {
         type = Math.random() > 0.5 ? "bat" : "moss_slime";
       } else {
@@ -1770,13 +1770,13 @@ export class GameEngine {
         e.type === "moss_slime"
       ) {
         e.vy += GRAVITY;
-        if (e.isGrounded && e.stateTimer <= 0 && distToPlayer < 300) {
+        if (e.isGrounded && e.stateTimer <= 0 && distToPlayer < 850) {
           e.vy =
             e.type === "frost_slime" ? -4 : e.type === "moss_slime" ? -4.5 : -3.5;
           e.vx =
             (p.x > e.x ? 1 : -1) *
             (e.type === "frost_slime" ? 6 : e.type === "moss_slime" ? 7.5 : 4.5);
-          e.stateTimer = 60 + Math.random() * 30;
+          e.stateTimer = 50 + Math.random() * 25;
         } else if (e.isGrounded) {
           e.vx *= 0.8;
         }
@@ -1787,7 +1787,7 @@ export class GameEngine {
         const dx = Math.abs(p.x - e.x);
         const dy = Math.abs(p.y - e.y);
 
-        if (dx < TILE_SIZE * 3.5 && dy < TILE_SIZE * 3.5 && e.stateTimer <= 0) {
+        if (dx < TILE_SIZE * 4.5 && dy < TILE_SIZE * 4.5 && e.stateTimer <= 0) {
           let clear = true;
           const steps = 6;
           for (let s = 1; s <= steps; s++) {
@@ -1848,25 +1848,56 @@ export class GameEngine {
         }
       } else if (e.type === "bat") {
         if (e.stateTimer <= 0) {
-          e.stateTimer = 30 + Math.random() * 30;
+          e.stateTimer = 25 + Math.random() * 25;
           e.vx = (Math.random() - 0.5) * 4;
           e.vy = (Math.random() - 0.5) * 4;
-          if (distToPlayer < 200) {
-            e.vx += (p.x > e.x ? 1 : -1) * 2;
-            e.vy += (p.y > e.y ? 1 : -1) * 2;
+          if (distToPlayer < 750) {
+            e.vx += (p.x > e.x ? 1 : -1) * 2.5;
+            e.vy += (p.y > e.y ? 1 : -1) * 2.5;
           }
         }
       } else if (e.type === "yeti") {
         e.vy += GRAVITY;
         if (e.isGrounded) {
-          e.vx *= 0.8;
-          e.aiState = "idle";
-          if (e.stateTimer <= 0 && distToPlayer < 500) {
-            e.stateTimer = Math.round((60 + Math.random() * 60) * 0.65);
-            e.aiState = "leaping";
-            e.vy = -7.5; // slower jump height
-            e.vx = (p.x > e.x ? 1 : -1) * 4.5; // slower leap speed
-            e.facingRight = p.x > e.x;
+          e.facingRight = p.x > e.x;
+          if (e.stateTimer <= 0 && distToPlayer < 900) {
+            const rand = Math.random();
+            if (distToPlayer < 120 || rand < 0.40) {
+              // Ground Smash Attack
+              e.aiState = "smashing";
+              e.stateTimer = 50;
+              e.vx = (p.x > e.x ? 1 : -1) * 2;
+            } else if (rand < 0.75) {
+              // Pounce Leap Attack
+              e.aiState = "leaping";
+              e.stateTimer = 45;
+              e.vy = -7.5;
+              e.vx = (p.x > e.x ? 1 : -1) * 5;
+            } else {
+              // Heavy Chasing Walk
+              e.aiState = "walking";
+              e.stateTimer = 40;
+              e.vx = (p.x > e.x ? 1 : -1) * 3;
+            }
+          } else if (e.aiState === "smashing") {
+            e.vx *= 0.5;
+            // Slam ground shockwave on frame 25
+            if (e.stateTimer === 25) {
+              this.state.shakeTimer = Math.max(this.state.shakeTimer, 12);
+              const slamX = e.x + (e.facingRight ? e.w + 10 : -10);
+              this.spawnParticles(slamX, e.y + e.h, "rgba(180, 220, 255, 0.9)", 15);
+              if (Math.hypot(p.x - slamX, p.y - (e.y + e.h)) < 75 && p.invulnerableTimer <= 0) {
+                const kbDir = p.x > slamX ? 1 : -1;
+                this.damagePlayer(12, kbDir, 12, -7, "#e2e8f0");
+              }
+            }
+          } else {
+            if (e.aiState === "walking") {
+              e.vx = (p.x > e.x ? 1 : -1) * 2.5;
+            } else {
+              e.vx *= 0.8;
+              e.aiState = "idle";
+            }
           }
         }
       } else if (e.type === "boss") {
@@ -2863,32 +2894,69 @@ export class GameEngine {
         e.type === "frost_slime" ||
         e.type === "moss_slime"
       ) {
-        // Pixelated Slime
-        ctx.fillRect(e.x + 4, e.y + e.h - 16, e.w - 8, 16);
-        ctx.fillRect(e.x + 2, e.y + e.h - 12, e.w - 4, 12);
-        ctx.fillRect(e.x, e.y + e.h - 8, e.w, 8);
-        if (e.type === "frost_slime") {
-          ctx.fillStyle = "rgba(255,255,255,0.7)";
-          ctx.fillRect(e.x + 4, e.y + e.h - 12, 6, 4); // ice reflection
-        } else if (e.type === "moss_slime") {
-          ctx.fillStyle = "#2d8d2d"; // moss patches
-          ctx.fillRect(e.x + 6, e.y + e.h - 14, 6, 4);
-          ctx.fillRect(e.x + e.w - 10, e.y + e.h - 10, 4, 4);
-          ctx.fillRect(e.x + 2, e.y + e.h - 6, 4, 4);
+        // Shiny, Immersive Gelatinous Slime Model
+        const isFrost = e.type === "frost_slime";
+        const isMoss = e.type === "moss_slime";
+
+        const baseColor = isFrost ? "#0284c7" : (isMoss ? "#14532d" : "#15803d");
+        const bodyColor = isFrost ? "#38bdf8" : (isMoss ? "#16a34a" : "#22c55e");
+        const coreColor = isFrost ? "#e0f2fe" : (isMoss ? "#bbf7d0" : "#86efac");
+
+        // Dynamic squish/stretch
+        const squish = !e.isGrounded ? -2 : (Math.sin(Date.now() / 150) * 1);
+        const sy = e.y + e.h - 16 - squish;
+        const sh = 16 + squish;
+
+        // Base shadow & outer gel boundary
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        ctx.fillRect(e.x + 2, e.y + e.h - 3, e.w - 4, 3); // Ground shadow
+
+        // Translucent Gel Base
+        ctx.fillStyle = e.invulnerableTimer > 0 ? "#ffffff" : baseColor;
+        ctx.fillRect(e.x + 2, sy + 4, e.w - 4, sh - 4);
+        ctx.fillRect(e.x + 4, sy + 2, e.w - 8, sh - 2);
+
+        // Vibrant Main Gel Body
+        ctx.fillStyle = e.invulnerableTimer > 0 ? "#ffffff" : bodyColor;
+        ctx.fillRect(e.x + 3, sy + 4, e.w - 6, sh - 6);
+        ctx.fillRect(e.x + 5, sy + 3, e.w - 10, sh - 4);
+
+        // Inner Glowing Core / Nucleus
+        ctx.fillStyle = e.invulnerableTimer > 0 ? "#ffffff" : coreColor;
+        ctx.fillRect(e.x + e.w / 2 - 3, sy + sh / 2 - 1, 6, 5);
+
+        // Moss patches for Moss Slime
+        if (isMoss && e.invulnerableTimer <= 0) {
+          ctx.fillStyle = "#15803d";
+          ctx.fillRect(e.x + 4, sy + 3, 5, 3);
+          ctx.fillRect(e.x + e.w - 8, sy + sh - 6, 4, 3);
         }
-        // Slime eyes
-        ctx.fillStyle =
-          e.type === "frost_slime"
-            ? "#003366"
-            : e.type === "moss_slime"
-              ? "#a2f520"
-              : "rgba(0,0,0,0.5)";
-ctx.fillRect(
-          e.x + e.w / 2 + (e.facingRight ? 2 : -4),
-          e.y + e.h - 8,
-          2,
-          2,
-        );
+
+        // Crystalline ice facets for Frost Slime
+        if (isFrost && e.invulnerableTimer <= 0) {
+          ctx.fillStyle = "rgba(255,255,255,0.85)";
+          ctx.fillRect(e.x + e.w - 7, sy + 4, 3, 3);
+        }
+
+        // Shiny Specular Highlight Sheen (Glistening top-left shine)
+        ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+        ctx.fillRect(e.x + 4, sy + 3, 4, 3);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+        ctx.fillRect(e.x + 8, sy + 4, 3, 2);
+
+        // Expressive Slime Eyes with Pupil Shine
+        const eyeOffset = e.facingRight ? 3 : -3;
+        const eyeY = sy + sh / 2 - 2;
+
+        // Eye Socket / Dark Iris
+        ctx.fillStyle = isFrost ? "#0c4a6e" : (isMoss ? "#052e16" : "#064e3b");
+        ctx.fillRect(e.x + e.w / 2 - 4 + eyeOffset, eyeY, 3, 4);
+        ctx.fillRect(e.x + e.w / 2 + 2 + eyeOffset, eyeY, 3, 4);
+
+        // Pupil Shine Spot
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(e.x + e.w / 2 - 4 + eyeOffset, eyeY, 1, 2);
+        ctx.fillRect(e.x + e.w / 2 + 2 + eyeOffset, eyeY, 1, 2);
       } else if (e.type === "flytrap") {
         let stretch = 0;
         if (e.aiState === "tracking") {
@@ -3097,7 +3165,7 @@ ctx.fillRect(
       ctx.restore();
     }
 
-    // Draw Player Miner Model
+    // Draw Legacy Knight Player Model
     ctx.save();
     ctx.translate(
       Math.round(p.x * zoom) / zoom - p.x,
@@ -3105,71 +3173,73 @@ ctx.fillRect(
     ); // ponytail: align player model to integer pixel grid in screen space
     const isMoving = Math.abs(p.vx) > 0.5 && p.isGrounded;
     const bob = isMoving ? Math.round(Math.sin(Date.now() / 50) * 2) : 0;
-
     const isHit =
       p.invulnerableTimer > 0 && Math.floor(Date.now() / 100) % 2 === 0;
 
-    // Red Cape (flowing behind the player)
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#dc2626";
+    const accentColor = p.playerColor || "#ea580c";
+
+    // 1. Flowing Custom Cape (behind knight)
+    ctx.fillStyle = isHit ? COLORS.playerHit : accentColor;
     const capeBob = isMoving ? Math.sin(Date.now() / 70) * 3 : 0;
     if (p.facingRight) {
-      ctx.fillRect(p.x - 1, p.y + 10 + bob, 4, 10);
-      ctx.fillRect(p.x - 3, p.y + 12 + bob, 3, 8 + capeBob);
+      ctx.fillRect(p.x - 2, p.y + 8 + bob, 5, 12);
+      ctx.fillRect(p.x - 4, p.y + 11 + bob, 4, 9 + capeBob);
     } else {
-      ctx.fillRect(p.x + p.w - 3, p.y + 10 + bob, 4, 10);
-      ctx.fillRect(p.x + p.w, p.y + 12 + bob, 3, 8 + capeBob);
+      ctx.fillRect(p.x + p.w - 3, p.y + 8 + bob, 5, 12);
+      ctx.fillRect(p.x + p.w, p.y + 11 + bob, 4, 9 + capeBob);
     }
 
-    // Body Armor (Detailed steel breastplate)
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // steel grey
-    ctx.fillRect(p.x + 4, p.y + 10 + bob, p.w - 8, p.h - 14);
-    // Gold trim on shoulders
+    // 2. Legacy Knight Body Armor (Iron breastplate + gold pauldrons)
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#475569"; // Iron dark base
+    ctx.fillRect(p.x + 3, p.y + 9 + bob, p.w - 6, p.h - 13);
+
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // Polished steel plate
+    ctx.fillRect(p.x + 5, p.y + 10 + bob, p.w - 10, p.h - 16);
+
+    // Gold shoulder pauldrons
     ctx.fillStyle = isHit ? COLORS.playerHit : "#fbbf24";
-    ctx.fillRect(p.x + 3, p.y + 10 + bob, 2, 4);
-    ctx.fillRect(p.x + p.w - 5, p.y + 10 + bob, 2, 4);
+    ctx.fillRect(p.x + 2, p.y + 9 + bob, 3, 4);
+    ctx.fillRect(p.x + p.w - 5, p.y + 9 + bob, 3, 4);
+
     // Leather belt with gold buckle
-    ctx.fillStyle = "#78350f"; // leather brown
+    ctx.fillStyle = "#78350f";
     ctx.fillRect(p.x + 4, p.y + 16 + bob, p.w - 8, 2);
-    ctx.fillStyle = "#fbbf24"; // golden buckle
+    ctx.fillStyle = "#fbbf24";
     ctx.fillRect(p.x + p.w / 2 - 2, p.y + 16 + bob, 4, 2);
 
-    // Helmet (Detailed metal helm with reflections)
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1"; // polished metal
-    ctx.fillRect(p.x + 2, p.y + bob, p.w - 4, 14);
-    // Helmet shadow / outline for 3D feel
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#64748b";
-    ctx.fillRect(p.x + 2, p.y + bob, 2, 14);
-    ctx.fillRect(p.x + p.w - 4, p.y + bob, 2, 14);
-    // Golden crest plume on top of helmet
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#f59e0b";
-    ctx.fillRect(p.x + p.w / 2 - 2, p.y - 3 + bob, 4, 3);
-    ctx.fillRect(p.x + p.w / 2 - 1, p.y - 5 + bob, 2, 2);
+    // 3. Legacy Great-Helm (Classic T-Visor Helmet)
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1"; // Bright steel helm
+    ctx.fillRect(p.x + 2, p.y + bob, p.w - 4, 13);
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#64748b"; // Helm rim shadow
+    ctx.fillRect(p.x + 2, p.y + 11 + bob, p.w - 4, 2);
 
-    // Visor (Glowing blue visor strip)
-    ctx.fillStyle = "#1e293b"; // dark frame
+    // Helmet Plume / Feather Crest (matching custom accentColor)
+    ctx.fillStyle = isHit ? COLORS.playerHit : accentColor;
+    ctx.fillRect(p.x + p.w / 2 - 2, p.y - 4 + bob, 4, 4);
+    ctx.fillRect(p.x + p.w / 2 - 1, p.y - 6 + bob, 2, 2);
+
+    // Classic T-Visor slit
+    ctx.fillStyle = "#0f172a"; // Dark T-slit
     if (p.facingRight) {
-      ctx.fillRect(p.x + 6, p.y + 4 + bob, p.w - 8, 4); 
-      ctx.fillStyle = "#22d3ee"; // glowing cyan center
-      ctx.fillRect(p.x + 10, p.y + 5 + bob, p.w - 12, 2);
+      ctx.fillRect(p.x + 8, p.y + 4 + bob, p.w - 9, 3); // Horizontal eye slit
+      ctx.fillRect(p.x + 13, p.y + 4 + bob, 3, 6);      // Vertical nose slit
     } else {
-      ctx.fillRect(p.x + 2, p.y + 4 + bob, p.w - 8, 4);
-      ctx.fillStyle = "#22d3ee"; // glowing cyan center
-      ctx.fillRect(p.x + 2, p.y + 5 + bob, p.w - 12, 2);
+      ctx.fillRect(p.x + 1, p.y + 4 + bob, p.w - 9, 3);
+      ctx.fillRect(p.x + 8, p.y + 4 + bob, 3, 6);
     }
+    // Visor eye glow (cyan)
+    ctx.fillStyle = "#38bdf8";
+    const visorX = p.facingRight ? p.x + 12 : p.x + 7;
+    ctx.fillRect(visorX, p.y + 5 + bob, 3, 1);
 
-    // Legs (Detailed iron sabatons/boots)
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#475569";
-    const legOffset = isMoving ? Math.sin(Date.now() / 50) * 4 : 0;
-    // Left leg
-    ctx.fillRect(p.x + 4, p.y + p.h - 4, 6, 4 - legOffset);
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // iron shoe tip
+    // 4. Sabatons / Iron Boots
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#334155";
+    const legOffset = isMoving ? Math.sin(Date.now() / 50) * 3 : 0;
+    ctx.fillRect(p.x + 4, p.y + p.h - 4, 5, 4 - legOffset);
+    ctx.fillRect(p.x + p.w - 9, p.y + p.h - 4, 5, 4 + legOffset);
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // Iron toe caps
     ctx.fillRect(p.x + 3 + (p.facingRight ? 1 : -1), p.y + p.h - 2, 4, 2);
-    
-    // Right leg
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#475569";
-    ctx.fillRect(p.x + p.w - 10, p.y + p.h - 4, 6, 4 + legOffset);
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8";
-    ctx.fillRect(p.x + p.w - 11 + (p.facingRight ? 1 : -1), p.y + p.h - 2, 4, 2);
+    ctx.fillRect(p.x + p.w - 10 + (p.facingRight ? 1 : -1), p.y + p.h - 2, 4, 2);
 
     // Draw Player Weapon Model / Claws / Shield
     if (p.shieldActive) {
