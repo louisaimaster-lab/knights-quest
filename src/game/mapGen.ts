@@ -591,7 +591,7 @@ export function generateCave(floor: number, maxFloor: number) {
       }
   }
 
-  // Drop ladders from platforms > 6 tiles high
+  // Drop ladders from platforms > 3 tiles high
   for (let my = 0; my < height; my++) {
       let mx = 0;
       while (mx < width) {
@@ -621,8 +621,8 @@ export function generateCave(floor: number, maxFloor: number) {
                   }
               }
 
-              // Only place ladder if the whole platform structure is far from the ground
-              if (minDist > 6 && bestX !== -1) {
+              // Place ladder if platform is above jump height (> 3 blocks)
+              if (minDist > 3 && bestX !== -1) {
                   for (let i = 1; i < minDist; i++) {
                       const t = map[my + i][bestX];
                       if (t !== 1 && t !== 7 && t !== 8 && t !== 11 && t !== 15 && t !== 16 && t !== 17 && t !== 5 && t !== 6 && t !== 2 && t !== 3) {
@@ -666,6 +666,39 @@ export function generateCave(floor: number, maxFloor: number) {
   // Guarantee start and end positions are passable so player isn't stuck
   if (isSolid(startPos.x, startPos.y)) map[startPos.y][startPos.x] = 0;
   if (isSolid(startPos.x, startPos.y - 1)) map[startPos.y - 1][startPos.x] = 0;
+
+  // Final Pass: Fill all disconnected areas from startPos so no isolated pockets or weird unreachable areas remain
+  let reachableFromStart = new Set<string>();
+  let startQueue = [{ x: startPos.x, y: startPos.y }];
+  reachableFromStart.add(`${startPos.x},${startPos.y}`);
+
+  while (startQueue.length > 0) {
+      let curr = startQueue.shift()!;
+      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (let d of dirs) {
+          let nx = curr.x + d[0];
+          let ny = curr.y + d[1];
+          if (nx > 0 && nx < width - 1 && ny > 0 && ny < height - 1) {
+              let ntile = map[ny][nx];
+              let key = `${nx},${ny}`;
+              // Non-solid / traversable tiles
+              if (!reachableFromStart.has(key) && (ntile === 0 || ntile === 2 || ntile === 3 || ntile === 4 || ntile === 5 || ntile === 6 || ntile === 10 || ntile === 12 || ntile === 13)) {
+                  reachableFromStart.add(key);
+                  startQueue.push({ x: nx, y: ny });
+              }
+          }
+      }
+  }
+
+  // Any non-solid tile not reachable from startPos becomes solid wall
+  for (let my = 1; my < height - 1; my++) {
+      for (let mx = 1; mx < width - 1; mx++) {
+          let tile = map[my][mx];
+          if ((tile === 0 || tile === 4 || tile === 5 || tile === 6 || tile === 10 || tile === 12 || tile === 13) && !reachableFromStart.has(`${mx},${my}`)) {
+              map[my][mx] = 1; // Fill disconnected pocket with solid wall
+          }
+      }
+  }
 
   return { width, height, map, bgMap, openSpaces, startPos, endPos, biome, chests };
 }

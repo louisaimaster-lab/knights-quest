@@ -35,7 +35,7 @@ export class GameEngine {
   getInitialState(): GameState {
     return {
       floor: 1,
-      maxFloor: 15,
+      maxFloor: 25,
       biome: "neutral",
       bgMap: [],
       map: [],
@@ -1582,14 +1582,14 @@ export class GameEngine {
       },
       {
         title: "Workout",
-        desc: "+10% Damage\n+10% HP\n+5% Speed",
+        desc: "+10% Damage\n+10% HP\n+13% Speed",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
           p.damageMulti += 0.10;
           p.maxHealth = Math.round(p.maxHealth * 1.10);
           p.health += Math.round(p.baseMaxHealth * 0.10);
-          p.speedMulti += 0.05;
+          p.speedMulti += 0.13;
         }
       },
       {
@@ -1615,42 +1615,42 @@ export class GameEngine {
       },
       {
         title: "Runner",
-        desc: "+25% Speed",
+        desc: "+63% Speed",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
-          p.speedMulti += 0.25;
+          p.speedMulti += 0.63;
         }
       },
       {
         title: "Sprinter",
-        desc: "+40% Speed\n-20% Jump Height\n-15% HP",
+        desc: "+100% Speed\n-15% Jump Height\n-15% HP",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
-          p.speedMulti += 0.40;
-          p.jumpMulti -= 0.20;
+          p.speedMulti += 1.00;
+          p.jumpMulti -= 0.15;
           p.maxHealth = Math.max(10, Math.round(p.maxHealth * 0.85));
           if (p.health > p.maxHealth) p.health = p.maxHealth;
         }
       },
       {
         title: "Spring Heels",
-        desc: "+25% Jump Height",
+        desc: "+19% Jump Height",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
-          p.jumpMulti += 0.25;
+          p.jumpMulti += 0.19;
         }
       },
       {
         title: "Jumper",
-        desc: "+10% Speed\n+15% Jump Height",
+        desc: "+25% Speed\n+11% Jump Height",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
-          p.speedMulti += 0.10;
-          p.jumpMulti += 0.15;
+          p.speedMulti += 0.25;
+          p.jumpMulti += 0.11;
         }
       }
     ];
@@ -1658,21 +1658,21 @@ export class GameEngine {
     const superPool = [
       {
         title: "MALEVOLENCE",
-        desc: "+120% Damage\n+25% Speed\n+15% HP\n\nRip and Tear Claws\nability on Q (CD 100s)",
+        desc: "+120% Damage\n+63% Speed\n+15% HP\n\nRip and Tear Claws\nability on Q (CD 100s)",
         isSuper: true,
         abilityId: 'malevolence' as const,
         cost: 35,
         effect: (p: any) => {
           p.hasMalevolence = true;
           p.damageMulti += 1.20;
-          p.speedMulti += 0.25;
+          p.speedMulti += 0.63;
           p.maxHealth = Math.round(p.maxHealth * 1.15);
           p.health += Math.round(p.baseMaxHealth * 0.15);
         }
       },
       {
         title: "IMPENETRABLE",
-        desc: "+110% HP\n-15% Speed\n-30% Jump Height\n\nShield of Solidity\nability on Z (CD 110s)",
+        desc: "+110% HP\n-15% Speed\n-23% Jump Height\n\nShield of Solidity\nability on Z (CD 110s)",
         isSuper: true,
         abilityId: 'impenetrable' as const,
         cost: 35,
@@ -1681,19 +1681,19 @@ export class GameEngine {
           p.maxHealth = Math.round(p.maxHealth * 2.10);
           p.health += Math.round(p.baseMaxHealth * 1.10);
           p.speedMulti -= 0.15;
-          p.jumpMulti -= 0.30;
+          p.jumpMulti -= 0.23;
         }
       },
       {
         title: "SUPERSONIC",
-        desc: "+70% Speed\n+45% Jump Height\n\nHyper Perception\nability on X (CD 125s)",
+        desc: "+175% Speed\n+34% Jump Height\n\nHyper Perception\nability on X (CD 125s)",
         isSuper: true,
         abilityId: 'supersonic' as const,
         cost: 35,
         effect: (p: any) => {
           p.hasSupersonic = true;
-          p.speedMulti += 0.70;
-          p.jumpMulti += 0.45;
+          p.speedMulti += 1.75;
+          p.jumpMulti += 0.34;
         }
       }
     ];
