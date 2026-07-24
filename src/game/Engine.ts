@@ -979,14 +979,6 @@ export class GameEngine {
       p.slashFlipped = !p.slashFlipped;
       p.comboResetTimer = 120; // 2 seconds
       
-      if (!p.wallSliding && !isClimbing && !p.onLadder && !inWater) {
-        if (!isBow) {
-          const lungeSpeed = isColossal ? 4 : (isDaggers ? 3 : (isAxe ? 5 : 6));
-          p.vx += p.facingRight ? lungeSpeed * 0.5 : -lungeSpeed * 0.5;
-          p.vy = -1; // slight hop
-        }
-      }
-      
       if (!isBow) {
         this.checkAttackHits();
       }
@@ -3287,7 +3279,7 @@ export class GameEngine {
       ctx.restore();
     }
 
-    // Draw Legacy Knight Player Model (No cape, no helmet plume/hat thing)
+    // Draw Pixel-Art Knight Player Model with Distinct Animation Sprite Poses
     ctx.save();
     ctx.translate(
       Math.round(p.x * zoom) / zoom - p.x,
@@ -3298,70 +3290,111 @@ export class GameEngine {
     const isJumping = !p.isGrounded && p.vy < 0;
     const isFalling = !p.isGrounded && p.vy >= 0;
 
-    // Animations:
-    // - Idle: smooth breathing bob (350ms sine wave)
-    // - Walk: rhythmic stride (50ms sine wave)
-    // - Jump (upwards momentum): legs tuck up (-3px)
-    // - Fall (downwards momentum): legs extend down (+3px)
-    const idleBob = (!isMoving && p.isGrounded) ? Math.round(Math.sin(Date.now() / 350) * 1.5) : 0;
-    const bob = isMoving ? Math.round(Math.sin(Date.now() / 50) * 2) : idleBob;
+    // Sprite Animation States:
+    // 'idle' | 'walk0' | 'walk1' | 'walk2' | 'jump' | 'fall'
+    let animState = 'idle';
+    if (isJumping) {
+      animState = 'jump';
+    } else if (isFalling) {
+      animState = 'fall';
+    } else if (isMoving) {
+      const walkFrame = Math.floor(Date.now() / 90) % 4;
+      animState = walkFrame === 0 ? 'walk0' : (walkFrame === 1 || walkFrame === 3 ? 'walk1' : 'walk2');
+    }
+
+    const idleBob = (animState === 'idle') ? Math.round(Math.sin(Date.now() / 350) * 1) : 0;
+    const bob = (animState === 'walk1') ? 1 : idleBob;
     const isHit = p.invulnerableTimer > 0 && Math.floor(Date.now() / 100) % 2 === 0;
 
     const accentColor = p.playerColor || "#ea580c";
+    const dir = p.facingRight ? 1 : -1;
 
-    // 1. Legacy Knight Body Armor (Iron breastplate + gold pauldrons)
+    // 1. Body Armor (Detailed steel breastplate)
     ctx.fillStyle = isHit ? COLORS.playerHit : "#475569"; // Iron dark base
-    ctx.fillRect(p.x + 3, p.y + 9 + bob, p.w - 6, p.h - 13);
+    ctx.fillRect(p.x + 3, p.y + 8 + bob, p.w - 6, p.h - 12);
 
     ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // Polished steel plate
-    ctx.fillRect(p.x + 5, p.y + 10 + bob, p.w - 10, p.h - 16);
+    ctx.fillRect(p.x + 5, p.y + 9 + bob, p.w - 10, p.h - 15);
 
-    // Shoulder pauldrons with custom accent trim
+    // Shoulder pauldrons (Poses shift based on sprite frame)
     ctx.fillStyle = isHit ? COLORS.playerHit : accentColor;
-    ctx.fillRect(p.x + 2, p.y + 9 + bob, 3, 4);
-    ctx.fillRect(p.x + p.w - 5, p.y + 9 + bob, 3, 4);
+    if (animState === 'jump') {
+      ctx.fillRect(p.x + 1, p.y + 6 + bob, 4, 4); // Raised shoulders in jump
+      ctx.fillRect(p.x + p.w - 5, p.y + 6 + bob, 4, 4);
+    } else if (animState === 'walk0') {
+      ctx.fillRect(p.x + (dir > 0 ? 3 : 1), p.y + 8 + bob, 3, 4);
+      ctx.fillRect(p.x + p.w - (dir > 0 ? 4 : 6), p.y + 8 + bob, 3, 4);
+    } else {
+      ctx.fillRect(p.x + 2, p.y + 8 + bob, 3, 4);
+      ctx.fillRect(p.x + p.w - 5, p.y + 8 + bob, 3, 4);
+    }
 
     // Leather belt with gold buckle
     ctx.fillStyle = "#78350f";
-    ctx.fillRect(p.x + 4, p.y + 16 + bob, p.w - 8, 2);
+    ctx.fillRect(p.x + 4, p.y + 15 + bob, p.w - 8, 2);
     ctx.fillStyle = "#fbbf24";
-    ctx.fillRect(p.x + p.w / 2 - 2, p.y + 16 + bob, 4, 2);
+    ctx.fillRect(p.x + p.w / 2 - 2, p.y + 15 + bob, 4, 2);
 
-    // 2. Legacy Great-Helm (Classic T-Visor Helmet - clean top, NO plume/hat)
+    // 2. Smaller Proportioned Great-Helm (10px high)
     ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1"; // Bright steel helm
-    ctx.fillRect(p.x + 2, p.y + bob, p.w - 4, 13);
+    ctx.fillRect(p.x + 3, p.y - 1 + bob, p.w - 6, 10);
     ctx.fillStyle = isHit ? COLORS.playerHit : "#64748b"; // Helm rim shadow
-    ctx.fillRect(p.x + 2, p.y + 11 + bob, p.w - 4, 2);
+    ctx.fillRect(p.x + 3, p.y + 8 + bob, p.w - 6, 1);
 
-    // Classic T-Visor slit with glowing eye slit
+    // T-Visor eye slit
     ctx.fillStyle = "#0f172a"; // Dark T-slit
     if (p.facingRight) {
-      ctx.fillRect(p.x + 8, p.y + 4 + bob, p.w - 9, 3); // Horizontal eye slit
-      ctx.fillRect(p.x + 13, p.y + 4 + bob, 3, 6);      // Vertical nose slit
+      ctx.fillRect(p.x + 8, p.y + 2 + bob, p.w - 10, 3);
+      ctx.fillRect(p.x + 12, p.y + 2 + bob, 2, 5);
     } else {
-      ctx.fillRect(p.x + 1, p.y + 4 + bob, p.w - 9, 3);
-      ctx.fillRect(p.x + 8, p.y + 4 + bob, 3, 6);
+      ctx.fillRect(p.x + 2, p.y + 2 + bob, p.w - 10, 3);
+      ctx.fillRect(p.x + 6, p.y + 2 + bob, 2, 5);
     }
-    // Visor eye glow (custom accentColor)
+    // Visor eye glow
     ctx.fillStyle = accentColor;
-    const visorX = p.facingRight ? p.x + 12 : p.x + 7;
-    ctx.fillRect(visorX, p.y + 5 + bob, 3, 1);
+    const visorX = p.facingRight ? p.x + 11 : p.x + 6;
+    ctx.fillRect(visorX, p.y + 3 + bob, 3, 1);
 
-    // 3. Sabatons / Iron Boots with Jump/Fall Momentum Stance
+    // 3. Distinct Sprite Poses for Legs & Sabatons
     ctx.fillStyle = isHit ? COLORS.playerHit : "#334155";
-    let legOffset = 0;
-    if (isMoving) {
-      legOffset = Math.sin(Date.now() / 50) * 3.5;
-    } else if (isJumping) {
-      legOffset = -3; // Jump: legs tucked up
-    } else if (isFalling) {
-      legOffset = 3;  // Fall: legs extended down
+    const shoeCapColor = isHit ? COLORS.playerHit : "#94a3b8";
+
+    if (animState === 'jump') {
+      // JUMP SPRITE FRAME: Knees tucked up in mid-air
+      ctx.fillRect(p.x + 3, p.y + p.h - 6, 5, 4);
+      ctx.fillRect(p.x + p.w - 8, p.y + p.h - 6, 5, 4);
+      ctx.fillStyle = shoeCapColor;
+      ctx.fillRect(p.x + 2 + (p.facingRight ? 1 : -1), p.y + p.h - 4, 4, 2);
+      ctx.fillRect(p.x + p.w - 9 + (p.facingRight ? 1 : -1), p.y + p.h - 4, 4, 2);
+    } else if (animState === 'fall') {
+      // FALL SPRITE FRAME: Legs extended down for landing impact
+      ctx.fillRect(p.x + 2, p.y + p.h - 3, 5, 4);
+      ctx.fillRect(p.x + p.w - 7, p.y + p.h - 3, 5, 4);
+      ctx.fillStyle = shoeCapColor;
+      ctx.fillRect(p.x + 1 + (p.facingRight ? 1 : -1), p.y + p.h - 1, 4, 2);
+      ctx.fillRect(p.x + p.w - 8 + (p.facingRight ? 1 : -1), p.y + p.h - 1, 4, 2);
+    } else if (animState === 'walk0') {
+      // WALK FRAME 0: Right foot forward, Left foot back
+      ctx.fillRect(p.x + 1, p.y + p.h - 4, 5, 4); // Back leg
+      ctx.fillRect(p.x + p.w - 6, p.y + p.h - 4, 5, 4); // Front leg
+      ctx.fillStyle = shoeCapColor;
+      ctx.fillRect(p.x + (p.facingRight ? 0 : 2), p.y + p.h - 2, 4, 2);
+      ctx.fillRect(p.x + p.w - 7 + (p.facingRight ? 2 : 0), p.y + p.h - 2, 4, 2);
+    } else if (animState === 'walk2') {
+      // WALK FRAME 2: Left foot forward, Right foot back
+      ctx.fillRect(p.x + 5, p.y + p.h - 4, 5, 4);
+      ctx.fillRect(p.x + p.w - 10, p.y + p.h - 4, 5, 4);
+      ctx.fillStyle = shoeCapColor;
+      ctx.fillRect(p.x + 4 + (p.facingRight ? 1 : -1), p.y + p.h - 2, 4, 2);
+      ctx.fillRect(p.x + p.w - 11 + (p.facingRight ? 1 : -1), p.y + p.h - 2, 4, 2);
+    } else {
+      // IDLE & WALK PASSING FRAME: Stately upright stance
+      ctx.fillRect(p.x + 4, p.y + p.h - 4, 5, 4);
+      ctx.fillRect(p.x + p.w - 9, p.y + p.h - 4, 5, 4);
+      ctx.fillStyle = shoeCapColor;
+      ctx.fillRect(p.x + 3 + (p.facingRight ? 1 : -1), p.y + p.h - 2, 4, 2);
+      ctx.fillRect(p.x + p.w - 10 + (p.facingRight ? 1 : -1), p.y + p.h - 2, 4, 2);
     }
-    ctx.fillRect(p.x + 4, p.y + p.h - 4, 5, Math.max(1, 4 - legOffset));
-    ctx.fillRect(p.x + p.w - 9, p.y + p.h - 4, 5, Math.max(1, 4 + legOffset));
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // Iron toe caps
-    ctx.fillRect(p.x + 3 + (p.facingRight ? 1 : -1), p.y + p.h - 2, 4, 2);
-    ctx.fillRect(p.x + p.w - 10 + (p.facingRight ? 1 : -1), p.y + p.h - 2, 4, 2);
 
     // Draw Player Weapon Model / Claws / Shield
     if (p.shieldActive) {
