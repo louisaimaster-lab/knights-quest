@@ -3345,15 +3345,10 @@ export class GameEngine {
     ctx.fillStyle = isHit ? COLORS.playerHit : "#64748b"; // Helm rim shadow
     ctx.fillRect(headX, headY + 10, p.w - 8, 1);
 
-    // Clean Visor (Wide horizontal bar with front vertical nose slit)
-    ctx.fillStyle = "#0f172a"; // Dark visor slit
-    if (p.facingRight) {
-      ctx.fillRect(headX + 1, headY + 3, 6, 2); // Full horizontal slit
-      ctx.fillRect(headX + 5, headY + 3, 2, 5); // Front vertical nose slit (right)
-    } else {
-      ctx.fillRect(headX + 1, headY + 3, 6, 2); // Full horizontal slit
-      ctx.fillRect(headX + 1, headY + 3, 2, 5); // Front vertical nose slit (left)
-    }
+    // Reverted Classic Legacy Centered T-Visor (Wide horizontal bar with vertical stem in the middle)
+    ctx.fillStyle = "#0f172a"; // Dark T-visor slit
+    ctx.fillRect(headX + 1, headY + 3, 6, 2); // Wide horizontal visor bar
+    ctx.fillRect(headX + 3, headY + 3, 2, 5); // Centered vertical nose stem in the middle
 
     // --- 3. DISTINCT SPRITE POSES FOR LEGS & SABATONS ---
     ctx.fillStyle = isHit ? COLORS.playerHit : "#334155";
