@@ -3313,8 +3313,8 @@ export class GameEngine {
 
     const accentColor = p.playerColor || "#ea580c";
 
-    // --- 1. TORSO & ARMOR (Rendered for Right-Facing; Matrix Flip Handles Left) ---
-    let torsoX = -5;
+    // --- 1. TORSO & ARMOR (Full Heroic Proportions) ---
+    let torsoX = -6;
     let torsoY = 8 + bob;
     if (animState === 'walk0' || animState === 'walk2') {
       torsoX += 1;
@@ -3324,37 +3324,37 @@ export class GameEngine {
       torsoY = 9 + bob;
     }
 
-    // Body Armor (Detailed steel breastplate base)
+    // Body Armor (Detailed steel breastplate base - 12px wide)
     ctx.fillStyle = isHit ? COLORS.playerHit : "#475569"; // Iron dark base
-    ctx.fillRect(torsoX, torsoY, 10, 12);
+    ctx.fillRect(torsoX, torsoY, 12, 12);
 
-    // Polished steel chest plate (Shifted toward front chest)
+    // Polished steel chest plate
     ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8";
-    ctx.fillRect(torsoX + 2, torsoY + 1, 8, 9);
+    ctx.fillRect(torsoX + 2, torsoY + 1, 9, 9);
 
-    // Shoulder pauldrons
+    // Broad Shoulder pauldrons (Spans full 15px across shoulders)
     ctx.fillStyle = isHit ? COLORS.playerHit : accentColor;
-    ctx.fillRect(torsoX - 1, torsoY, 2, 4); // Back shoulder
-    ctx.fillRect(torsoX + 7, torsoY, 4, 4); // Front shoulder
+    ctx.fillRect(torsoX - 2, torsoY, 4, 4); // Back shoulder
+    ctx.fillRect(torsoX + 8, torsoY, 5, 4); // Front shoulder
 
     // Leather belt with gold buckle
     ctx.fillStyle = "#78350f";
-    ctx.fillRect(torsoX, torsoY + 7, 10, 2);
+    ctx.fillRect(torsoX, torsoY + 7, 12, 2);
     ctx.fillStyle = "#fbbf24";
-    ctx.fillRect(torsoX + 4, torsoY + 7, 4, 2);
+    ctx.fillRect(torsoX + 5, torsoY + 7, 4, 2);
 
-    // --- 2. GREAT-HELMET & TALLER WIDER VISOR ---
-    const headX = -5;
+    // --- 2. FULL GREAT-HELMET & VISOR (12px wide helm, NOT skinny) ---
+    const headX = -6;
     const headY = torsoY - 9;
     ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1"; // Bright steel helm
-    ctx.fillRect(headX, headY, 10, 11);
+    ctx.fillRect(headX, headY, 12, 11);
     ctx.fillStyle = isHit ? COLORS.playerHit : "#64748b"; // Helm rim shadow
-    ctx.fillRect(headX, headY + 10, 10, 1);
+    ctx.fillRect(headX, headY + 10, 12, 1);
 
-    // Taller & Wider Visor (3px height horizontal slit, fits head width)
+    // Classic Wide T-Visor
     ctx.fillStyle = "#0f172a"; // Dark visor slit
-    ctx.fillRect(headX + 1, headY + 3, 9, 3); // 3px tall, 9px wide horizontal slit
-    ctx.fillRect(headX + 4, headY + 3, 2, 6); // Centered vertical stem
+    ctx.fillRect(headX + 1, headY + 3, 10, 3); // 3px tall, 10px wide horizontal slit
+    ctx.fillRect(headX + 5, headY + 3, 2, 6); // Centered vertical stem
 
     // --- 3. LEGS & SABATONS ---
     ctx.fillStyle = isHit ? COLORS.playerHit : "#334155";
