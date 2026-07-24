@@ -3308,36 +3308,45 @@ export class GameEngine {
     const accentColor = p.playerColor || "#ea580c";
     const dir = p.facingRight ? 1 : -1;
 
-    // --- 1. TORSO & ARMOR ---
-    let torsoX = p.x + 3;
+    // --- 1. TORSO & ARMOR (Directional Facing with Player) ---
+    // Shift torso base in facing direction
+    let torsoX = p.facingRight ? p.x + 4 : p.x + 2;
     let torsoY = p.y + 8 + bob;
     if (animState === 'walk0' || animState === 'walk2') {
-      torsoX = p.x + 3 + (dir > 0 ? 1 : -1);
+      torsoX += dir * 1;
     } else if (animState === 'jump') {
       torsoY = p.y + 6 + bob;
     } else if (animState === 'fall') {
       torsoY = p.y + 9 + bob;
     }
 
-    // Body Armor (Detailed steel breastplate)
+    // Body Armor (Detailed steel breastplate with directional perspective)
     ctx.fillStyle = isHit ? COLORS.playerHit : "#475569"; // Iron dark base
     ctx.fillRect(torsoX, torsoY, p.w - 6, p.h - 12);
 
-    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8"; // Polished steel plate
-    ctx.fillRect(torsoX + 1, torsoY + 1, p.w - 8, p.h - 15);
+    // Polished steel chest plate shifted toward front chest
+    ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8";
+    const chestX = p.facingRight ? torsoX + 2 : torsoX;
+    ctx.fillRect(chestX, torsoY + 1, p.w - 8, p.h - 15);
 
-    // Shoulder pauldrons (Flush with torso - no back protrusion)
+    // Shoulder pauldrons (Front pauldron larger than back pauldron)
     ctx.fillStyle = isHit ? COLORS.playerHit : accentColor;
-    ctx.fillRect(torsoX, torsoY, 2, 4);
-    ctx.fillRect(torsoX + p.w - 8, torsoY, 2, 4);
+    if (p.facingRight) {
+      ctx.fillRect(torsoX - 1, torsoY, 2, 4); // Compact back shoulder
+      ctx.fillRect(torsoX + p.w - 8, torsoY, 3, 4); // Prominent front shoulder
+    } else {
+      ctx.fillRect(torsoX, torsoY, 3, 4); // Prominent front shoulder
+      ctx.fillRect(torsoX + p.w - 7, torsoY, 2, 4); // Compact back shoulder
+    }
 
-    // Leather belt with gold buckle
+    // Leather belt with gold buckle shifted to front chest
     ctx.fillStyle = "#78350f";
-    ctx.fillRect(torsoX + 1, torsoY + 7, p.w - 8, 2);
+    ctx.fillRect(torsoX, torsoY + 7, p.w - 6, 2);
     ctx.fillStyle = "#fbbf24";
-    ctx.fillRect(torsoX + p.w / 2 - 3, torsoY + 7, 4, 2);
+    const buckleX = p.facingRight ? torsoX + 5 : torsoX + 1;
+    ctx.fillRect(buckleX, torsoY + 7, 4, 2);
 
-    // --- 2. RESCULPTED GREAT-HELMET (8px wide, 11px high, clean T-visor, NO eye glow) ---
+    // --- 2. GREAT-HELMET & WIDER VISOR (Fits Head Width) ---
     const headX = p.x + 4; // 8px wide, centered
     const headY = torsoY - 9; // 11px height
     ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1"; // Bright steel helm
@@ -3345,10 +3354,10 @@ export class GameEngine {
     ctx.fillStyle = isHit ? COLORS.playerHit : "#64748b"; // Helm rim shadow
     ctx.fillRect(headX, headY + 10, p.w - 8, 1);
 
-    // Reverted Classic Legacy Centered T-Visor (Wide horizontal bar with vertical stem in the middle)
+    // Wider Classic T-Visor (Spans full head width with centered vertical stem)
     ctx.fillStyle = "#0f172a"; // Dark T-visor slit
-    ctx.fillRect(headX + 1, headY + 3, 6, 2); // Wide horizontal visor bar
-    ctx.fillRect(headX + 3, headY + 3, 2, 5); // Centered vertical nose stem in the middle
+    ctx.fillRect(headX, headY + 3, 8, 2); // Wider horizontal visor bar (spans full 8px head)
+    ctx.fillRect(headX + 3, headY + 3, 2, 5); // Centered vertical stem in the middle
 
     // --- 3. DISTINCT SPRITE POSES FOR LEGS & SABATONS ---
     ctx.fillStyle = isHit ? COLORS.playerHit : "#334155";
