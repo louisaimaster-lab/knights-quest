@@ -180,7 +180,7 @@ export class GameEngine {
     this.state.droppedWeapons = [];
     this.state.chests = gen.chests ? gen.chests.map((c, idx) => {
       let chestItem: WeaponType;
-      if (Math.random() < 0.60) {
+      if (Math.random() < 0.55) {
         chestItem = 'torch';
       } else {
         const weaponPool: WeaponType[] = ['sword', 'bow', 'colossal_sword', 'dual_daggers', 'mace', 'battle_axe'];
@@ -946,13 +946,15 @@ export class GameEngine {
       p.axeSpinCooldown--;
     }
 
-    // Attack (only when weapon equipped - click/normal attack)
+    // Attack (only when valid weapon equipped or claws active - click/normal attack)
+    const canAttackWithWeapon = p.clawsActive || (p.weaponEquipped && p.weapon && p.weapon !== 'torch');
+
     if (
       this.state.mouse.down &&
       p.attackTimer <= 0 &&
       p.attackCooldown <= 0 &&
       p.weapon !== 'mace' && // Mace uses charge release
-      p.weaponEquipped &&
+      canAttackWithWeapon &&
       p.axeSpinTimer <= 0 && // Cannot attack while spinning
       this.state.floorTitleState === "none" &&
       this.state.transitionState === "none"
@@ -1280,7 +1282,7 @@ export class GameEngine {
 
   checkAttackHits() {
     const p = this.state.player;
-    if (p.weapon === 'bow' && !p.clawsActive) return;
+    if (!p.clawsActive && (!p.weapon || p.weapon === 'torch' || p.weapon === 'bow')) return;
 
     // Spin attack: check hits in a circle around the player
     if (p.weapon === 'battle_axe' && p.axeSpinTimer > 0) {
@@ -3906,7 +3908,7 @@ ctx.fillRect(
         };
 
         // Draw Player light (higher radius if holding torch)
-        const pLightRad = (p.weapon === 'torch' && p.weaponEquipped) ? 275.0 : 175.5;
+        const pLightRad = (p.weapon === 'torch' && p.weaponEquipped) ? 330.0 : 175.5;
         drawLight(p.x + p.w / 2, p.y + p.h / 2, pLightRad);
 
         // Draw Torches light
@@ -3918,9 +3920,9 @@ ctx.fillRect(
         for (let y = startRowLight; y < endRowLight; y++) {
           for (let x = startColLight; x < endColLight; x++) {
             if (this.state.map[y] && this.state.map[y][x] === 10) {
-              drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 162.5 + Math.random() * 15);
+              drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 195 + Math.random() * 18);
             } else if (this.state.map[y] && this.state.map[y][x] === 12) {
-              drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 130 + Math.random() * 25);
+              drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 156 + Math.random() * 30);
             }
           }
         }
@@ -4100,7 +4102,7 @@ ctx.fillRect(
     }
 
     if (this.state.isFloorComplete) {
-      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.fillStyle = "#000000";
       ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
       ctx.fillStyle = COLORS.diamond;
       ctx.font = "bold 36px 'Courier New', Courier, monospace";
@@ -4455,9 +4457,9 @@ ctx.fillRect(
       ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
       ctx.fillRect(slotX, hotbarY, slotW, slotH);
 
-      // Border style: highlighted if active
-      if (isActive) {
-        ctx.strokeStyle = p.weaponEquipped ? "#fbbf24" : "#9ca3af";
+      // Border style: highlighted gold if active AND weapon equipped
+      if (isActive && p.weaponEquipped) {
+        ctx.strokeStyle = "#fbbf24";
         ctx.lineWidth = 3;
       } else {
         ctx.strokeStyle = "#4b5563";

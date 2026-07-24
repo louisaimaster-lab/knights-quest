@@ -121,12 +121,46 @@ export function generateCave(floor: number, maxFloor: number) {
   // 7. Structures (small rooms)
   let chests: { x: number, y: number }[] = [];
   let numStructures = Math.floor(floor * 0.75) + 1;
+  let structureBoxes: { x: number, y: number, w: number, h: number }[] = [];
+
   for(let i=0; i<numStructures; i++) {
-      let sx = Math.floor(2 + Math.random() * (width - 15));
-      let sy = Math.floor(5 + Math.random() * (height - 20));
-      let sw = Math.floor(5 + Math.random() * 6);
-      let sh = Math.floor(4 + Math.random() * 4);
-      
+      let placed = false;
+      let sx = 0, sy = 0, sw = 0, sh = 0;
+
+      for (let attempt = 0; attempt < 50; attempt++) {
+          let testSx = Math.floor(2 + Math.random() * (width - 15));
+          let testSy = Math.floor(5 + Math.random() * (height - 20));
+          let testSw = Math.floor(5 + Math.random() * 6);
+          let testSh = Math.floor(4 + Math.random() * 4);
+
+          // Bounding box with 2-tile padding to prevent merging structures
+          let box = {
+              x: testSx - 2,
+              y: testSy - 2,
+              w: testSw + 4,
+              h: testSh + 4
+          };
+
+          let overlaps = structureBoxes.some(b =>
+              box.x < b.x + b.w &&
+              box.x + box.w > b.x &&
+              box.y < b.y + b.h &&
+              box.y + box.h > b.y
+          );
+
+          if (!overlaps) {
+              sx = testSx;
+              sy = testSy;
+              sw = testSw;
+              sh = testSh;
+              structureBoxes.push(box);
+              placed = true;
+              break;
+          }
+      }
+
+      if (!placed) continue;
+
       // Carve out a perimeter around the structure so it doesn't get embedded completely
       for (let y = sy - 1; y <= sy + sh; y++) {
           for (let x = sx - 1; x <= sx + sw; x++) {
@@ -170,8 +204,8 @@ export function generateCave(floor: number, maxFloor: number) {
       // Add a torch
       map[sy+1][sx+Math.floor(sw/2)] = 10;
 
-      // 60% chance to spawn chest inside the structure
-      if (Math.random() < 0.60) {
+      // 90% chance to spawn chest inside the structure
+      if (Math.random() < 0.90) {
           let cx = sx + Math.floor(sw / 2);
           const cy = sy + sh - 2; // Bottom inside row
           // Avoid platforms
@@ -663,9 +697,7 @@ export function generateCave(floor: number, maxFloor: number) {
       }
   }
 
-  // Guarantee start and end positions are passable so player isn't stuck
-  if (isSolid(startPos.x, startPos.y)) map[startPos.y][startPos.x] = 0;
-  if (isSolid(startPos.x, startPos.y - 1)) map[startPos.y - 1][startPos.x] = 0;
+  // Player spawn does not replace current block (including water)
 
   // Final Pass: Fill all disconnected areas from startPos so no isolated pockets or weird unreachable areas remain
   let reachableFromStart = new Set<string>();

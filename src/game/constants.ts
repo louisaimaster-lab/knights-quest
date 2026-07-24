@@ -3,7 +3,7 @@ export const GRAVITY = 0.5;
 export const FRICTION = 0.8;
 export const PLAYER_SPEED = 4;
 export const JUMP_POWER = -10;
-export const MAX_FALL_SPEED = 12;
+export const MAX_FALL_SPEED = 19.8;
 
 export const COLORS = {
   bg: '#0a0502', // Dark background
