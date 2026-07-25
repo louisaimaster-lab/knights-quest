@@ -1642,14 +1642,14 @@ export class GameEngine {
       },
       {
         title: "Workout",
-        desc: "+10% Damage\n+10% HP\n+13% Speed",
+        desc: "+10% Damage\n+10% HP\n+10% Speed",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
           p.damageMulti += 0.10;
           p.maxHealth = Math.round(p.maxHealth * 1.10);
           p.health += Math.round(p.baseMaxHealth * 0.10);
-          p.speedMulti += 0.13;
+          p.speedMulti += 0.10;
         }
       },
       {
@@ -1664,31 +1664,31 @@ export class GameEngine {
       },
       {
         title: "Heavy",
-        desc: "+30% HP\n-15% Speed",
+        desc: "+30% HP\n-10% Speed",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
           p.maxHealth = Math.round(p.maxHealth * 1.30);
           p.health += Math.round(p.baseMaxHealth * 0.30);
-          p.speedMulti -= 0.15;
+          p.speedMulti -= 0.10;
         }
       },
       {
         title: "Runner",
-        desc: "+63% Speed",
+        desc: "+50% Speed",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
-          p.speedMulti += 0.63;
+          p.speedMulti += 0.50;
         }
       },
       {
         title: "Sprinter",
-        desc: "+100% Speed\n-15% Jump Height\n-15% HP",
+        desc: "+80% Speed\n-15% Jump Height\n-15% HP",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
-          p.speedMulti += 1.00;
+          p.speedMulti += 0.80;
           p.jumpMulti -= 0.15;
           p.maxHealth = Math.max(10, Math.round(p.maxHealth * 0.85));
           if (p.health > p.maxHealth) p.health = p.maxHealth;
@@ -1696,21 +1696,21 @@ export class GameEngine {
       },
       {
         title: "Spring Heels",
-        desc: "+19% Jump Height",
+        desc: "+20% Jump Height",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
-          p.jumpMulti += 0.19;
+          p.jumpMulti += 0.20;
         }
       },
       {
         title: "Jumper",
-        desc: "+25% Speed\n+11% Jump Height",
+        desc: "+20% Speed\n+10% Jump Height",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
-          p.speedMulti += 0.25;
-          p.jumpMulti += 0.11;
+          p.speedMulti += 0.20;
+          p.jumpMulti += 0.10;
         }
       }
     ];
@@ -1718,21 +1718,21 @@ export class GameEngine {
     const superPool = [
       {
         title: "MALEVOLENCE",
-        desc: "+120% Damage\n+63% Speed\n+15% HP\n\nRip and Tear Claws\nability on Q (CD 100s)",
+        desc: "+120% Damage\n+50% Speed\n+15% HP\n\nRip and Tear Claws\nability on Q (CD 100s)",
         isSuper: true,
         abilityId: 'malevolence' as const,
         cost: 35,
         effect: (p: any) => {
           p.hasMalevolence = true;
           p.damageMulti += 1.20;
-          p.speedMulti += 0.63;
+          p.speedMulti += 0.50;
           p.maxHealth = Math.round(p.maxHealth * 1.15);
           p.health += Math.round(p.baseMaxHealth * 0.15);
         }
       },
       {
         title: "IMPENETRABLE",
-        desc: "+110% HP\n-15% Speed\n-23% Jump Height\n\nShield of Solidity\nability on Z (CD 110s)",
+        desc: "+110% HP\n-10% Speed\n-25% Jump Height\n\nShield of Solidity\nability on Z (CD 110s)",
         isSuper: true,
         abilityId: 'impenetrable' as const,
         cost: 35,
@@ -1740,20 +1740,20 @@ export class GameEngine {
           p.hasImpenetrable = true;
           p.maxHealth = Math.round(p.maxHealth * 2.10);
           p.health += Math.round(p.baseMaxHealth * 1.10);
-          p.speedMulti -= 0.15;
-          p.jumpMulti -= 0.23;
+          p.speedMulti -= 0.10;
+          p.jumpMulti -= 0.25;
         }
       },
       {
         title: "SUPERSONIC",
-        desc: "+250% Speed\n+34% Jump Height\n\nHyper Perception\nability on X (CD 125s)",
+        desc: "+200% Speed\n+35% Jump Height\n\nHyper Perception\nability on X (CD 125s)",
         isSuper: true,
         abilityId: 'supersonic' as const,
         cost: 35,
         effect: (p: any) => {
           p.hasSupersonic = true;
-          p.speedMulti += 2.50;
-          p.jumpMulti += 0.34;
+          p.speedMulti += 2.00;
+          p.jumpMulti += 0.35;
         }
       }
     ];
@@ -1828,11 +1828,14 @@ export class GameEngine {
         e.type === "moss_slime"
       ) {
         e.vy += GRAVITY;
-        if (e.isGrounded && e.stateTimer <= 0 && distToPlayer < 850) {
+        if (e.isGrounded && e.stateTimer <= 0) {
+          // If player in sight, target player; otherwise stroll left/right randomly
+          const dir = distToPlayer < 850 ? (p.x > e.x ? 1 : -1) : (Math.random() < 0.5 ? 1 : -1);
+          e.facingRight = dir > 0;
           e.vy =
             e.type === "frost_slime" ? -4 : e.type === "moss_slime" ? -4.5 : -3.5;
           e.vx =
-            (p.x > e.x ? 1 : -1) *
+            dir *
             (e.type === "frost_slime" ? 6 : e.type === "moss_slime" ? 7.5 : 4.5);
           e.stateTimer = 50 + Math.random() * 25;
         } else if (e.isGrounded) {
@@ -1917,26 +1920,35 @@ export class GameEngine {
       } else if (e.type === "yeti") {
         e.vy += GRAVITY;
         if (e.isGrounded) {
-          e.facingRight = p.x > e.x;
-          if (e.stateTimer <= 0 && distToPlayer < 900) {
-            const rand = Math.random();
-            if (distToPlayer < 120 || rand < 0.40) {
-              // Ground Smash Attack
-              e.aiState = "smashing";
-              e.stateTimer = 50;
-              e.vx = (p.x > e.x ? 1 : -1) * 2;
-            } else if (rand < 0.75) {
-              // Pounce Leap Attack
-              e.aiState = "leaping";
-              e.stateTimer = 45;
-              e.vy = -7.5;
-              e.vx = (p.x > e.x ? 1 : -1) * 5;
-            } else {
-              // Heavy Chasing Walk
-              e.aiState = "walking";
-              e.stateTimer = 40;
-              e.vx = (p.x > e.x ? 1 : -1) * 3;
+          if (distToPlayer < 900) {
+            e.facingRight = p.x > e.x;
+            if (e.stateTimer <= 0) {
+              const rand = Math.random();
+              if (distToPlayer < 120 || rand < 0.40) {
+                // Ground Smash Attack
+                e.aiState = "smashing";
+                e.stateTimer = 50;
+                e.vx = (p.x > e.x ? 1 : -1) * 2;
+              } else if (rand < 0.75) {
+                // Pounce Leap Attack
+                e.aiState = "leaping";
+                e.stateTimer = 45;
+                e.vy = -7.5;
+                e.vx = (p.x > e.x ? 1 : -1) * 5;
+              } else {
+                // Heavy Chasing Walk
+                e.aiState = "walking";
+                e.stateTimer = 40;
+                e.vx = (p.x > e.x ? 1 : -1) * 3;
+              }
             }
+          } else if (e.stateTimer <= 0) {
+            // Stroll left or right randomly when player is not in sight
+            e.aiState = "walking";
+            const dir = Math.random() < 0.5 ? 1 : -1;
+            e.facingRight = dir > 0;
+            e.vx = dir * 2;
+            e.stateTimer = 60 + Math.floor(Math.random() * 40);
           } else if (e.aiState === "smashing") {
             e.vx *= 0.5;
             // Slam ground shockwave on frame 25 (NO SHAKE, readable Ice Spike Shockwave VFX)
@@ -1965,7 +1977,7 @@ export class GameEngine {
             }
           } else {
             if (e.aiState === "walking") {
-              e.vx = (p.x > e.x ? 1 : -1) * 2.5;
+              e.vx = (e.facingRight ? 1 : -1) * 2.0;
             } else {
               e.vx *= 0.8;
               e.aiState = "idle";
@@ -3556,19 +3568,30 @@ export class GameEngine {
       const spread = p.clawsActive ? 6 : (p.weapon === "colossal_sword" ? 10 : (p.weapon === "dual_daggers" ? 2 : 5));
       const maxThick = p.clawsActive ? 28 : (p.weapon === "colossal_sword" ? 36 : (p.weapon === "dual_daggers" ? 14 : 24));
       
-      // Draw 3 layers for beautiful neon glow and pointy edges
-      // Outer glow
-      drawPixelCrescent(rBase, spread, maxThick + 4, tailAngle - 0.04, headAngle + 0.04, purple);
-      // Middle glow
-      drawPixelCrescent(rBase, spread, maxThick, tailAngle - 0.02, headAngle + 0.02, pink);
-      // Inner core
-      drawPixelCrescent(rBase, spread, Math.max(2, maxThick - 6), tailAngle, headAngle, white);
+      if (p.clawsActive) {
+        // Custom 3-Claw Slash Effect (3 parallel fiery claw swipes following the crescent arc)
+        const clawOffsets = [-7, 0, 7];
+        for (let c = 0; c < 3; c++) {
+          const cR = rBase + clawOffsets[c];
+          // Fiery crimson glow outer layer
+          drawPixelCrescent(cR, spread, 8, tailAngle - 0.03, headAngle + 0.03, "#ff3300");
+          // Inner white-hot claw core
+          drawPixelCrescent(cR, spread, 3, tailAngle, headAngle, "#ffffff");
+        }
+        if (progress > 0.1 && progress < 0.9) {
+          drawSparks(headAngle + 0.1, rBase + 12, 8);
+        }
+      } else {
+        // Standard 3-layer weapon crescent slash
+        drawPixelCrescent(rBase, spread, maxThick + 4, tailAngle - 0.04, headAngle + 0.04, purple);
+        drawPixelCrescent(rBase, spread, maxThick, tailAngle - 0.02, headAngle + 0.02, pink);
+        drawPixelCrescent(rBase, spread, Math.max(2, maxThick - 6), tailAngle, headAngle, white);
 
-      // Sparks in front of the blade
-      if (progress > 0.1 && progress < 0.9) {
-        const sparkCount = p.clawsActive ? Math.floor(trailProgress * 8) : (p.weapon === "colossal_sword" ? Math.floor(trailProgress * 12) : (p.weapon === "dual_daggers" ? Math.floor(trailProgress * 3) : Math.floor(trailProgress * 6)));
-        const sparkRad = p.clawsActive ? 32 : (p.weapon === "colossal_sword" ? 40 : (p.weapon === "dual_daggers" ? 16 : 26));
-        drawSparks(headAngle + 0.1, sparkRad, sparkCount);
+        if (progress > 0.1 && progress < 0.9) {
+          const sparkCount = p.weapon === "colossal_sword" ? Math.floor(trailProgress * 12) : (p.weapon === "dual_daggers" ? Math.floor(trailProgress * 3) : Math.floor(trailProgress * 6));
+          const sparkRad = p.weapon === "colossal_sword" ? 40 : (p.weapon === "dual_daggers" ? 16 : 26);
+          drawSparks(headAngle + 0.1, sparkRad, sparkCount);
+        }
       }
 
       ctx.restore();

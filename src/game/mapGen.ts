@@ -1,8 +1,13 @@
 export function generateCave(floor: number, maxFloor: number) {
-  // Biome assignment
+  // Biome assignment (Equal 33.3% chance for neutral, ice, and moss biomes)
+  const randBiome = Math.random();
   let biome: 'neutral' | 'ice' | 'moss' = 'neutral';
-  if (Math.random() < 0.20) {
-      biome = Math.random() < 0.5 ? 'ice' : 'moss';
+  if (randBiome < 0.333) {
+      biome = 'neutral';
+  } else if (randBiome < 0.666) {
+      biome = 'ice';
+  } else {
+      biome = 'moss';
   }
 
   // Decreased vastness (-10%), Increased deepness (+45%), 2x width
@@ -118,7 +123,7 @@ export function generateCave(floor: number, maxFloor: number) {
       }
   }
 
-  // 7. Structures (small rooms)
+  // 7. Structures (3 Types: Small, Medium, Large 2-3 Rooms)
   let chests: { x: number, y: number }[] = [];
   let numStructures = Math.floor(floor * 0.75) + 1;
   let structureBoxes: { x: number, y: number, w: number, h: number }[] = [];
@@ -126,12 +131,27 @@ export function generateCave(floor: number, maxFloor: number) {
   for(let i=0; i<numStructures; i++) {
       let placed = false;
       let sx = 0, sy = 0, sw = 0, sh = 0;
+      let structType: 'small' | 'medium' | 'large' = 'small';
 
       for (let attempt = 0; attempt < 50; attempt++) {
-          let testSx = Math.floor(2 + Math.random() * (width - 15));
-          let testSy = Math.floor(5 + Math.random() * (height - 20));
-          let testSw = Math.floor(5 + Math.random() * 6);
-          let testSh = Math.floor(4 + Math.random() * 4);
+          let testSw = 0, testSh = 0;
+          const randType = Math.random();
+          if (randType < 0.35) {
+              structType = 'small';
+              testSw = 5 + Math.floor(Math.random() * 2);
+              testSh = 4 + Math.floor(Math.random() * 2);
+          } else if (randType < 0.70) {
+              structType = 'medium';
+              testSw = 8 + Math.floor(Math.random() * 3);
+              testSh = 6 + Math.floor(Math.random() * 2);
+          } else {
+              structType = 'large';
+              testSw = 15 + Math.floor(Math.random() * 4);
+              testSh = 7 + Math.floor(Math.random() * 3);
+          }
+
+          let testSx = Math.floor(2 + Math.random() * (width - testSw - 3));
+          let testSy = Math.floor(5 + Math.random() * (height - testSh - 5));
 
           // Bounding box with 2-tile padding to prevent merging structures
           let box = {
@@ -165,7 +185,6 @@ export function generateCave(floor: number, maxFloor: number) {
       for (let y = sy - 1; y <= sy + sh; y++) {
           for (let x = sx - 1; x <= sx + sw; x++) {
               if (y > 0 && y < height - 1 && x > 0 && x < width - 1) {
-                  // If it's not the structure itself, clear it
                   if (y < sy || y >= sy + sh || x < sx || x >= sx + sw) {
                       if (map[y][x] !== 12 && map[y][x] !== 2 && map[y][x] !== 3) {
                           map[y][x] = 0;
@@ -178,16 +197,42 @@ export function generateCave(floor: number, maxFloor: number) {
       // Carve out inside and add walls
       for(let y=sy; y<sy+sh; y++) {
           for(let x=sx; x<sx+sw; x++) {
-               bgMap[y][x] = 9; // Structure background everywhere
-               if (y === sy || y === sy+sh-1 || x === sx || x === sx+sw-1) {
-                    map[y][x] = 11; // Structure solid block
-               } else {
+                bgMap[y][x] = 9; // Structure background everywhere
+                if (y === sy || y === sy+sh-1 || x === sx || x === sx+sw-1) {
+                     map[y][x] = 11; // Structure solid block
+                } else {
                      map[y][x] = 0;
-               }
+                }
           }
       }
       
-      // Make doors
+      // If Large Structure (2 - 3 rooms), add interior wall partitions with connecting doorways!
+      if (structType === 'large') {
+          const room1Width = Math.floor(sw / 3);
+          const room2Width = Math.floor(sw / 3);
+
+          // Partition 1
+          const p1X = sx + room1Width;
+          for (let y = sy + 1; y < sy + sh - 1; y++) {
+              map[y][p1X] = 11;
+          }
+          // Doorway 1
+          map[sy + sh - 2][p1X] = 0;
+          map[sy + sh - 3][p1X] = 0;
+
+          // Partition 2 (if wide enough for 3 rooms)
+          const p2X = sx + room1Width + room2Width;
+          if (p2X < sx + sw - 3) {
+              for (let y = sy + 1; y < sy + sh - 1; y++) {
+                  map[y][p2X] = 11;
+              }
+              // Doorway 2
+              map[sy + 2][p2X] = 0;
+              map[sy + 3][p2X] = 0;
+          }
+      }
+
+      // Make doors on outer walls
       bgMap[sy+sh-2][sx] = 9; map[sy+sh-2][sx] = 0;
       bgMap[sy+sh-2][sx+sw-1] = 9; map[sy+sh-2][sx+sw-1] = 0;
       
@@ -201,14 +246,17 @@ export function generateCave(floor: number, maxFloor: number) {
       map[sy+sh-1][doorX] = 5; // platform on floor
       map[sy+sh-1][doorX+1] = 5; 
       
-      // Add a torch
+      // Add torches in structure
       map[sy+1][sx+Math.floor(sw/2)] = 10;
+      if (structType === 'large') {
+          map[sy+1][sx+3] = 10;
+          map[sy+1][sx+sw-4] = 10;
+      }
 
-      // 90% chance to spawn chest inside the structure
+      // Spawn chest inside structure
       if (Math.random() < 0.90) {
           let cx = sx + Math.floor(sw / 2);
           const cy = sy + sh - 2; // Bottom inside row
-          // Avoid platforms
           if (cx === doorX || cx === doorX + 1) {
               cx = sx + 1;
           }
