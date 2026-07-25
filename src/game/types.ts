@@ -25,6 +25,16 @@ export interface Entity extends Rect {
 export type WeaponType = 'sword' | 'bow' | 'colossal_sword' | 'dual_daggers' | 'mace' | 'battle_axe' | 'torch';
 export type SuperAbilityType = 'malevolence' | 'impenetrable' | 'supersonic';
 
+export interface Afterimage {
+  x: number;
+  y: number;
+  facingRight: boolean;
+  alpha: number;
+  bob: number;
+  weapon?: WeaponType;
+  weaponEquipped: boolean;
+}
+
 export interface Player extends Entity {
   attackTimer: number;
   attackCooldown: number;
@@ -75,6 +85,7 @@ export interface Player extends Entity {
   supersonicCooldown: number;
   supersonicActive: boolean;
   supersonicTimer: number;
+  afterimages?: Afterimage[];
 }
 
 export interface UpgradeChoice {

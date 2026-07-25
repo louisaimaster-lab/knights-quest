@@ -523,11 +523,14 @@ export class GameEngine {
       return;
     }
 
-    // Time slow accumulator logic (SUPERSONIC)
+    // Always update player movement & controls at full 100% time scale!
+    this.updatePlayer();
+
+    // Time slow accumulator logic (SUPERSONIC Hyper Perception slows everything EXCEPT player!)
     if (this.state.timeScale && this.state.timeScale < 1.0) {
       this.state.timeAccumulator = (this.state.timeAccumulator || 0) + this.state.timeScale;
       if (this.state.timeAccumulator < 1.0) {
-        // Only update camera and particles/texts for smooth render flow, skip physics/AI/player movement!
+        // Render flow update camera and particles, skip enemy AI, projectiles, and hazards!
         this.updateCamera();
         this.updateParticlesAndTexts();
         
@@ -602,7 +605,6 @@ export class GameEngine {
       }
     }
 
-    this.updatePlayer();
     this.updateEnemies();
     this.updateProjectiles();
     this.updateParticlesAndTexts();
@@ -672,45 +674,7 @@ export class GameEngine {
       this.state.transitionState !== "none" ||
       this.state.gateEntered;
 
-    // Compute weapon jump multiplier early (needed for jump code)
-    let earlyWeaponJumpMult = 1;
-    if (p.weaponEquipped && !p.clawsActive) {
-      if (p.weapon === 'colossal_sword') earlyWeaponJumpMult = 0.90;
-      else if (p.weapon === 'bow') earlyWeaponJumpMult = 1.20;
-      else if (p.weapon === 'dual_daggers') earlyWeaponJumpMult = 1.10;
-    }
-    if (p.superAbilityActive && p.superAbility === 'supersonic') earlyWeaponJumpMult *= 1.15;
-
-    if (this.state.floorTitleState === "none") {
-      p.facingRight = this.state.mouse.worldX > p.x + p.w / 2;
-    }
-
-    if (!isStunned) {
-      if (keys["a"] || keys["ArrowLeft"]) {
-        p.vx -= 1;
-      }
-      if (keys["d"] || keys["ArrowRight"]) {
-        p.vx += 1;
-      }
-
-      if (keys["s"] || keys["ArrowDown"]) {
-        isDropping = true;
-      }
-
-      if (p.onLadder) {
-        if (keys["w"] || keys["ArrowUp"]) {
-          p.vy = -3;
-          isClimbing = true;
-        } else if (keys["s"] || keys["ArrowDown"]) {
-          p.vy = 3;
-          isClimbing = true;
-        } else {
-          p.vy = 0; // hang on ladder
-          isClimbing = true;
-        }
-      }
-    }
-
+    // Check if player is in water or on ladder
     let inWater = false;
     let hitIcicle = false;
     let icicleX = 0;
@@ -727,6 +691,59 @@ export class GameEngine {
         if (this.state.biome === "ice" && t === 13) {
           hitIcicle = true;
           icicleX = tx * TILE_SIZE + TILE_SIZE / 2;
+        }
+      }
+    }
+
+    // Weapon & Super stat multipliers
+    let weaponSpeedMult = 1;
+    let weaponJumpMult = 1;
+    if (p.weaponEquipped && !p.clawsActive) {
+      if (p.weapon === 'colossal_sword') { weaponSpeedMult = 0.80; weaponJumpMult = 0.90; }
+      else if (p.weapon === 'bow') { weaponSpeedMult = 1.05; weaponJumpMult = 1.20; }
+      else if (p.weapon === 'dual_daggers') { weaponSpeedMult = 1.15; weaponJumpMult = 1.10; }
+      else if (p.weapon === 'battle_axe') { weaponSpeedMult = 0.90; weaponJumpMult = 0.95; }
+      else if (p.weapon === 'mace') { weaponSpeedMult = 0.85; weaponJumpMult = 0.90; }
+    }
+
+    // SUPERSONIC active boost (+250% speed active during Hyper Perception)
+    let superSpeedMult = 1;
+    let superJumpMult = 1;
+    if (p.supersonicActive) {
+      superSpeedMult = 3.50;
+      superJumpMult = 1.25;
+    }
+
+    const effectiveSpeedMulti = p.speedMulti * weaponSpeedMult * superSpeedMult;
+    const effectiveJumpMulti = p.jumpMulti * weaponJumpMult * superJumpMult;
+
+    if (this.state.floorTitleState === "none") {
+      p.facingRight = this.state.mouse.worldX > p.x + p.w / 2;
+    }
+
+    if (!isStunned) {
+      const accel = (inWater ? 0.8 : 1.5) * effectiveSpeedMulti;
+      if (keys["a"] || keys["ArrowLeft"]) {
+        p.vx -= accel;
+      }
+      if (keys["d"] || keys["ArrowRight"]) {
+        p.vx += accel;
+      }
+
+      if (keys["s"] || keys["ArrowDown"]) {
+        isDropping = true;
+      }
+
+      if (p.onLadder) {
+        if (keys["w"] || keys["ArrowUp"]) {
+          p.vy = -3;
+          isClimbing = true;
+        } else if (keys["s"] || keys["ArrowDown"]) {
+          p.vy = 3;
+          isClimbing = true;
+        } else {
+          p.vy = 0; // hang on ladder
+          isClimbing = true;
         }
       }
     }
@@ -751,7 +768,7 @@ export class GameEngine {
       const isJumpHeld = keys["w"] || keys["ArrowUp"] || keys[" "];
 
       if (justPressedJump) {
-        const scaledJump = JUMP_POWER * p.jumpMulti * earlyWeaponJumpMult;
+        const scaledJump = JUMP_POWER * effectiveJumpMulti;
         if (p.isGrounded || (p.onLadder && p.vy > scaledJump + 2)) {
           p.vy = scaledJump;
           p.isGrounded = false;
@@ -778,7 +795,7 @@ export class GameEngine {
       }
 
       if (inWater && isJumpHeld) {
-        const scaledJump = JUMP_POWER * p.jumpMulti * earlyWeaponJumpMult;
+        const scaledJump = JUMP_POWER * effectiveJumpMulti;
         p.vy -= 0.5; // Swim up
         if (p.vy < scaledJump * 0.7) p.vy = scaledJump * 0.7;
         isClimbing = false;
@@ -838,7 +855,7 @@ export class GameEngine {
         p.supersonicActive = true;
         p.supersonicTimer = 600; // 10s
         p.timeSlowActive = true;
-        this.state.timeScale = 0.3;
+        this.state.timeScale = 0.20; // Slow everything except player to 0.2x speed
       }
     }
 
@@ -897,7 +914,7 @@ export class GameEngine {
           p.maceChargeTimer++;
         }
         // Slowly slide forward
-        p.vx = (p.facingRight ? 0.6 : -0.6) * p.speedMulti;
+        p.vx = (p.facingRight ? 0.6 : -0.6) * effectiveSpeedMulti;
       } else if (p.maceChargeTimer > 0 && !this.state.mouse.down) {
         // Release Mace Smash!
         const ratio = Math.max(0.2, p.maceChargeTimer / 180);
@@ -1000,28 +1017,32 @@ export class GameEngine {
       }
     }
 
-    // Weapon stat effects
-    let weaponSpeedMult = 1;
-    let weaponJumpMult = 1;
-    if (p.weaponEquipped && !p.clawsActive) {
-      if (p.weapon === 'colossal_sword') { weaponSpeedMult = 0.80; weaponJumpMult = 0.90; }
-      else if (p.weapon === 'bow') { weaponSpeedMult = 1.05; weaponJumpMult = 1.20; }
-      else if (p.weapon === 'dual_daggers') { weaponSpeedMult = 1.15; weaponJumpMult = 1.10; }
-      else if (p.weapon === 'battle_axe') { weaponSpeedMult = 0.90; weaponJumpMult = 0.95; }
-      else if (p.weapon === 'mace') { weaponSpeedMult = 0.85; weaponJumpMult = 0.90; }
+    // Afterimage ghost trail generation (Hyper Perception / High Speed movement)
+    if (!p.afterimages) p.afterimages = [];
+    for (let i = p.afterimages.length - 1; i >= 0; i--) {
+      p.afterimages[i].alpha -= 0.08;
+      if (p.afterimages[i].alpha <= 0) {
+        p.afterimages.splice(i, 1);
+      }
     }
 
-    // SUPERSONIC active boost
-    let superSpeedMult = 1;
-    let superJumpMult = 1;
-    if (p.supersonicActive) {
-      superSpeedMult = 1.20;
-      superJumpMult = 1.15;
+    const isMoving = Math.abs(p.vx) > 0.5 && p.isGrounded;
+    if ((p.supersonicActive || Math.abs(p.vx) > 4.5 || effectiveSpeedMulti >= 1.8) && Math.abs(p.vx) > 0.5) {
+      if (this.state.frameCounter % 2 === 0) {
+        p.afterimages.push({
+          x: p.x,
+          y: p.y,
+          facingRight: p.facingRight,
+          alpha: 0.8,
+          bob: isMoving ? Math.round(Math.sin(Date.now() / 50) * 2) : 0,
+          weapon: p.weapon,
+          weaponEquipped: p.weaponEquipped,
+        });
+        if (p.afterimages.length > 10) {
+          p.afterimages.shift();
+        }
+      }
     }
-
-    // Apply effective multipliers
-    const effectiveSpeedMulti = p.speedMulti * weaponSpeedMult * superSpeedMult;
-    const effectiveJumpMulti = p.jumpMulti * weaponJumpMult * superJumpMult;
 
     // physics
     p.vx *= inWater ? 0.8 : FRICTION;
@@ -1723,13 +1744,13 @@ export class GameEngine {
       },
       {
         title: "SUPERSONIC",
-        desc: "+175% Speed\n+34% Jump Height\n\nHyper Perception\nability on X (CD 125s)",
+        desc: "+250% Speed\n+34% Jump Height\n\nHyper Perception\nability on X (CD 125s)",
         isSuper: true,
         abilityId: 'supersonic' as const,
         cost: 35,
         effect: (p: any) => {
           p.hasSupersonic = true;
-          p.speedMulti += 1.75;
+          p.speedMulti += 2.50;
           p.jumpMulti += 0.34;
         }
       }
@@ -3279,6 +3300,9 @@ export class GameEngine {
       ctx.restore();
     }
 
+    // Render player afterimage trail
+    this.drawAfterimages();
+
     // Draw Legacy Knight Player Model
     ctx.save();
     ctx.translate(
@@ -4614,5 +4638,84 @@ export class GameEngine {
     ctx.fillStyle = "#9ca3af";
     ctx.font = "bold 9px 'Courier New', Courier, monospace";
     ctx.fillText("HOTBAR", midX, hotbarY - 6);
+  }
+
+  drawAfterimages() {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const p = this.state.player;
+    const zoom = this.state.camera.zoom;
+    if (!p.afterimages || p.afterimages.length === 0) return;
+
+    for (let i = 0; i < p.afterimages.length; i++) {
+      const img = p.afterimages[i];
+      if (img.alpha <= 0) continue;
+
+      ctx.save();
+      ctx.globalAlpha = img.alpha * 0.65;
+
+      const cx = img.x + p.w / 2;
+      const cy = img.y + p.h / 2;
+
+      ctx.translate(
+        Math.round(img.x * zoom) / zoom - img.x,
+        Math.round(img.y * zoom) / zoom - img.y,
+      );
+
+      ctx.translate(cx, cy);
+      if (!img.facingRight) {
+        ctx.scale(-1, 1);
+      }
+      ctx.translate(-cx, -cy);
+
+      // Ethereal Cyan / Blue Hyper Perception Afterimage Trail (matching reference image!)
+      const ghostColor = p.supersonicActive ? "#00f0ff" : "#38bdf8";
+      ctx.shadowColor = "#00f0ff";
+      ctx.shadowBlur = 10;
+
+      // Iron body armor
+      ctx.fillStyle = ghostColor;
+      ctx.fillRect(img.x + 3, img.y + 9 + img.bob, p.w - 6, p.h - 13);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(img.x + 5, img.y + 10 + img.bob, p.w - 10, p.h - 16);
+
+      // Gold shoulder pauldrons
+      ctx.fillStyle = ghostColor;
+      ctx.fillRect(img.x + 2, img.y + 9 + img.bob, 3, 4);
+      ctx.fillRect(img.x + p.w - 5, img.y + 9 + img.bob, 3, 4);
+
+      // Leather belt with gold buckle
+      ctx.fillStyle = "#78350f";
+      ctx.fillRect(img.x + 4, img.y + 16 + img.bob, p.w - 8, 2);
+      ctx.fillStyle = "#fbbf24";
+      ctx.fillRect(img.x + p.w / 2 - 2, img.y + 16 + img.bob, 4, 2);
+
+      // Great helm
+      ctx.fillStyle = ghostColor;
+      ctx.fillRect(img.x + 2, img.y + img.bob, p.w - 4, 13);
+      ctx.fillStyle = "#0f172a";
+      ctx.fillRect(img.x + 8, img.y + 4 + img.bob, p.w - 9, 3);
+      ctx.fillRect(img.x + 13, img.y + 4 + img.bob, 3, 6);
+
+      // Boots
+      ctx.fillStyle = ghostColor;
+      ctx.fillRect(img.x + 4, img.y + p.h - 4, 5, 4);
+      ctx.fillRect(img.x + p.w - 9, img.y + p.h - 4, 5, 4);
+
+      // Trailing weapon silhouette
+      if (img.weaponEquipped && img.weapon) {
+        ctx.fillStyle = ghostColor;
+        if (img.weapon === "colossal_sword") {
+          ctx.fillRect(img.x + p.w - 3, img.y - 12 + img.bob, 6, 24);
+        } else if (img.weapon === "dual_daggers") {
+          ctx.fillRect(img.x - 4, img.y + 6 + img.bob, 3, 6);
+          ctx.fillRect(img.x + p.w - 1, img.y + 8 + img.bob, 3, 6);
+        } else {
+          ctx.fillRect(img.x + p.w - 2, img.y - 2 + img.bob, 4, 14);
+        }
+      }
+
+      ctx.restore();
+    }
   }
 }
