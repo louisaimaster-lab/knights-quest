@@ -1017,18 +1017,20 @@ export class GameEngine {
       }
     }
 
-    // Afterimage ghost trail generation (Hyper Perception / High Speed movement)
+    // Afterimage ghost trail generation (ONLY during Supersonic Hyper Perception)
     if (!p.afterimages) p.afterimages = [];
     for (let i = p.afterimages.length - 1; i >= 0; i--) {
-      p.afterimages[i].alpha -= 0.08;
+      p.afterimages[i].alpha -= 0.05;
       if (p.afterimages[i].alpha <= 0) {
         p.afterimages.splice(i, 1);
       }
     }
 
     const isMoving = Math.abs(p.vx) > 0.5 && p.isGrounded;
-    if ((p.supersonicActive || Math.abs(p.vx) > 4.5 || effectiveSpeedMulti >= 1.8) && Math.abs(p.vx) > 0.5) {
-      if (this.state.frameCounter % 2 === 0) {
+    if (p.supersonicActive && Math.abs(p.vx) > 0.5) {
+      const lastImg = p.afterimages[p.afterimages.length - 1];
+      const dist = lastImg ? Math.hypot(p.x - lastImg.x, p.y - lastImg.y) : 999;
+      if (dist >= 16) {
         p.afterimages.push({
           x: p.x,
           y: p.y,
@@ -1038,7 +1040,7 @@ export class GameEngine {
           weapon: p.weapon,
           weaponEquipped: p.weaponEquipped,
         });
-        if (p.afterimages.length > 10) {
+        if (p.afterimages.length > 8) {
           p.afterimages.shift();
         }
       }
@@ -1338,7 +1340,7 @@ export class GameEngine {
         if (e.invulnerableTimer > 0) continue;
         const ex = e.x + e.w / 2;
         const ey = e.y + e.h / 2;
-        if (Math.hypot(px - ex, py - ey) < 55) {
+        if (Math.hypot(px - ex, py - ey) < 57) { // 2px radius extension
           const finalDamage = 45 * p.damageMulti;
           e.health -= finalDamage;
           e.invulnerableTimer = 10;
@@ -1401,17 +1403,17 @@ export class GameEngine {
     if (p.isAirAttacking) {
       const scaleHeight = p.clawsActive ? 3.0 : (p.weapon === 'colossal_sword' ? 4.5 : (p.weapon === 'dual_daggers' ? 1.5 : 3.0));
       attackRect = {
-        x: p.x - 10,
-        y: p.y + p.h,
-        w: p.w + 20,
-        h: TILE_SIZE * scaleHeight,
+        x: p.x - 10 - 2, // 2px outside left
+        y: p.y + p.h - 2, // 2px outside top
+        w: p.w + 20 + 4, // 2px outside left & right (+4)
+        h: TILE_SIZE * scaleHeight + 4, // 2px outside top & bottom (+4)
       };
     } else {
       attackRect = {
-        x: p.facingRight ? p.x + p.w : p.x - attackWidth,
-        y: p.y + attackYOffset,
-        w: attackWidth,
-        h: attackHeight,
+        x: (p.facingRight ? p.x + p.w : p.x - attackWidth) - 2, // 2px outside left
+        y: p.y + attackYOffset - 2, // 2px outside top
+        w: attackWidth + 4, // 2px outside left & right (+4)
+        h: attackHeight + 4, // 2px outside top & bottom (+4)
       };
     }
 
@@ -1937,11 +1939,25 @@ export class GameEngine {
             }
           } else if (e.aiState === "smashing") {
             e.vx *= 0.5;
-            // Slam ground shockwave on frame 25
+            // Slam ground shockwave on frame 25 (NO SHAKE, readable Ice Spike Shockwave VFX)
             if (e.stateTimer === 25) {
-              this.state.shakeTimer = Math.max(this.state.shakeTimer, 12);
               const slamX = e.x + (e.facingRight ? e.w + 10 : -10);
-              this.spawnParticles(slamX, e.y + e.h, "rgba(180, 220, 255, 0.9)", 15);
+              
+              // Clear, highly readable Ice Spike Ground Wave VFX
+              for (let i = -3; i <= 3; i++) {
+                const spikeX = slamX + i * 14;
+                const spikeH = 18 - Math.abs(i) * 3;
+                this.spawnParticles(spikeX, e.y + e.h - 10, "#38bdf8", 4);
+                this.spawnParticles(spikeX, e.y + e.h - 5, "#e0f2fe", 4);
+                this.state.texts.push({
+                  x: spikeX,
+                  y: e.y + e.h - spikeH,
+                  text: "▲",
+                  life: 25,
+                  maxLife: 25
+                });
+              }
+
               if (Math.hypot(p.x - slamX, p.y - (e.y + e.h)) < 75 && p.invulnerableTimer <= 0) {
                 const kbDir = p.x > slamX ? 1 : -1;
                 this.damagePlayer(12, kbDir, 12, -7, "#e2e8f0");
@@ -3003,22 +3019,22 @@ export class GameEngine {
         e.type === "frost_slime" ||
         e.type === "moss_slime"
       ) {
-        // Shiny, Immersive Gelatinous Slime Model
+        // Clean, Sleek Gelatinous Slime Model (NO EYES, Vibrant Colors)
         const isFrost = e.type === "frost_slime";
         const isMoss = e.type === "moss_slime";
 
-        const baseColor = isFrost ? "#0284c7" : (isMoss ? "#14532d" : "#15803d");
-        const bodyColor = isFrost ? "#38bdf8" : (isMoss ? "#16a34a" : "#22c55e");
-        const coreColor = isFrost ? "#e0f2fe" : (isMoss ? "#bbf7d0" : "#86efac");
+        const baseColor = isFrost ? "#0284c7" : (isMoss ? "#14532d" : "#6b21a8");
+        const bodyColor = isFrost ? "#38bdf8" : (isMoss ? "#16a34a" : "#a855f7");
+        const coreColor = isFrost ? "#e0f2fe" : (isMoss ? "#bbf7d0" : "#e9d5ff");
 
         // Dynamic squish/stretch
         const squish = !e.isGrounded ? -2 : (Math.sin(Date.now() / 150) * 1);
         const sy = e.y + e.h - 16 - squish;
         const sh = 16 + squish;
 
-        // Base shadow & outer gel boundary
+        // Ground shadow
         ctx.fillStyle = "rgba(0,0,0,0.25)";
-        ctx.fillRect(e.x + 2, e.y + e.h - 3, e.w - 4, 3); // Ground shadow
+        ctx.fillRect(e.x + 2, e.y + e.h - 3, e.w - 4, 3);
 
         // Translucent Gel Base
         ctx.fillStyle = e.invulnerableTimer > 0 ? "#ffffff" : baseColor;
@@ -3047,35 +3063,18 @@ export class GameEngine {
           ctx.fillRect(e.x + e.w - 7, sy + 4, 3, 3);
         }
 
-        // Shiny Specular Highlight Sheen (Glistening top-left shine)
+        // Shiny Specular Highlight Sheen
         ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
         ctx.fillRect(e.x + 4, sy + 3, 4, 3);
         ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
         ctx.fillRect(e.x + 8, sy + 4, 3, 2);
-
-        // Expressive Slime Eyes with Pupil Shine
-        const eyeOffset = e.facingRight ? 3 : -3;
-        const eyeY = sy + sh / 2 - 2;
-
-        // Eye Socket / Dark Iris
-        ctx.fillStyle = isFrost ? "#0c4a6e" : (isMoss ? "#052e16" : "#064e3b");
-        ctx.fillRect(e.x + e.w / 2 - 4 + eyeOffset, eyeY, 3, 4);
-        ctx.fillRect(e.x + e.w / 2 + 2 + eyeOffset, eyeY, 3, 4);
-
-        // Pupil Shine Spot
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(e.x + e.w / 2 - 4 + eyeOffset, eyeY, 1, 2);
-        ctx.fillRect(e.x + e.w / 2 + 2 + eyeOffset, eyeY, 1, 2);
       } else if (e.type === "flytrap") {
+        // Clean, Sleek Flytrap Plant Model
         let stretch = 0;
         if (e.aiState === "tracking") {
           stretch = (1 - (e.trackTimer || 45) / 45) * 45;
         } else if (e.aiState === "attacking") {
-          if (e.stateTimer > 70) {
-            stretch = 90;
-          } else {
-            stretch = (e.stateTimer / 70) * 90;
-          }
+          stretch = e.stateTimer > 70 ? 90 : (e.stateTimer / 70) * 90;
         }
 
         const baseX = e.x + 12;
@@ -3084,153 +3083,89 @@ export class GameEngine {
         const headX = baseX + Math.cos(targetAngle) * stretch;
         const headY = baseY + Math.sin(targetAngle) * stretch;
 
-        // Draw segmented stretching vine neck
-        ctx.fillStyle = "#1e3c1a";
-        const joints = 7;
-        for (let j = 0; j <= joints; j++) {
-          const t = j / joints;
-          const jx = baseX + (headX - baseX) * t;
-          const jy = baseY + (headY - baseY) * t;
-          ctx.beginPath();
-          ctx.arc(jx, jy, 4, 0, Math.PI * 2);
-          ctx.fill();
-          if (j > 0 && j < joints) {
-            ctx.fillStyle = "#2d8d2d";
-            ctx.fillRect(jx + (j % 2 === 0 ? 3 : -5), jy - 2, 2, 2);
-            ctx.fillStyle = "#1e3c1a";
-          }
-        }
+        // Clean Vine Stem
+        ctx.fillStyle = "#15803d";
+        ctx.fillRect(baseX - 3, baseY - 4, 6, 8);
+        ctx.fillStyle = "#166534";
+        ctx.beginPath();
+        ctx.arc(headX, headY, 5, 0, Math.PI * 2);
+        ctx.fill();
 
-        // Head (rotates toward player if tracking/attacking)
+        // Plant Head
         ctx.save();
         ctx.translate(headX, headY);
-        
         let trackAngle = 0;
         if (e.aiState === "tracking" || e.aiState === "attacking") {
           trackAngle = targetAngle;
           e.facingRight = (p.x + p.w / 2 > headX);
-          
-          if (e.facingRight) {
-            trackAngle = Math.max(-Math.PI * 0.4, Math.min(Math.PI * 0.4, trackAngle));
-          } else {
+          if (!e.facingRight) {
             trackAngle = Math.atan2(-(p.y + p.h / 2 - headY), -(p.x + p.w / 2 - headX));
-            trackAngle = -Math.max(-Math.PI * 0.4, Math.min(Math.PI * 0.4, trackAngle));
           }
         }
-        
-        if (!e.facingRight) {
-          ctx.scale(-1, 1);
-        }
+        if (!e.facingRight) ctx.scale(-1, 1);
         ctx.rotate(trackAngle);
 
-        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#1e801e";
         const jawOffset = e.aiState === "attacking" ? 6 : (e.aiState === "tracking" ? 2 : 0);
-        
-        // Upper jaw (red inner mouth details)
-        ctx.fillRect(-10, -14 - jawOffset, 20, 8);
-        ctx.fillStyle = "#991b1b"; // red mouth interior
-        ctx.fillRect(-8, -8 - jawOffset, 16, 2);
+        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#16a34a";
+        ctx.fillRect(-10, -12 - jawOffset, 20, 7);
+        ctx.fillRect(-10, -5 + jawOffset, 20, 6);
 
-        // Lower jaw
-        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#166534";
-        ctx.fillRect(-10, -6 + jawOffset, 20, 6);
-        ctx.fillStyle = "#991b1b"; // red mouth interior
-        ctx.fillRect(-8, -6 + jawOffset, 16, 2);
-
-        // Teeth
-        ctx.fillStyle = "#fff";
+        ctx.fillStyle = "#ffffff";
         for (let i = 0; i < 4; i++) {
-          ctx.fillRect(-8 + i * 4, -6 - jawOffset, 2, 2);
-          ctx.fillRect(-6 + i * 4, -8 + jawOffset, 2, 2);
+          ctx.fillRect(-8 + i * 4, -5 - jawOffset, 2, 2);
+          ctx.fillRect(-6 + i * 4, -7 + jawOffset, 2, 2);
         }
-        
-        // Eye (yellow tracking / red attacking)
-        ctx.fillStyle = e.aiState === "tracking" ? "#ffcc00" : "#ff0000";
-        ctx.fillRect(2, -11, 3, 3);
-        
         ctx.restore();
 
-        // Leaf at bottom
-        ctx.fillStyle = "#2d8d2d";
-        ctx.fillRect(e.x + 4, e.y + e.h - 4, 6, 4);
-        ctx.fillRect(e.x + 14, e.y + e.h - 4, 6, 4);
+        // Sleek base leaves
+        ctx.fillStyle = "#166534";
+        ctx.fillRect(e.x + 3, e.y + e.h - 4, 7, 4);
+        ctx.fillRect(e.x + 14, e.y + e.h - 4, 7, 4);
       } else if (e.type === "yeti") {
+        // Clean, Sleek Yeti Model
         const isHitColor = e.invulnerableTimer > 0;
         
-        // Fur Body (roundish fluffy shape)
-        ctx.fillStyle = isHitColor ? "#fff" : "#cbd5e1"; // shadow fur base
-        ctx.fillRect(e.x + 2, e.y + 6, e.w - 4, e.h - 8);
-        ctx.fillStyle = isHitColor ? "#fff" : "#e2e8f0"; // highlight fur top
-        ctx.fillRect(e.x + 4, e.y + 2, e.w - 8, e.h - 10);
-        
-        // Fluffy fur texture patches
-        ctx.fillStyle = isHitColor ? "#fff" : "#94a3b8"; // dark fur tuft shadows
-        ctx.fillRect(e.x + 6, e.y + 12, 3, 3);
-        ctx.fillRect(e.x + 18, e.y + 16, 3, 3);
-        ctx.fillRect(e.x + 10, e.y + 22, 4, 2);
-
-        // Yeti head / face region
-        ctx.fillStyle = isHitColor ? "#fff" : "#7aa8b8"; // blue skin face
-        ctx.fillRect(e.x + 8, e.y + 6, e.w - 16, 10);
-        
-        // Eyes (glowing ice-yellow/red eyes)
-        ctx.fillStyle = isHitColor ? "#fff" : (e.aiState === "leaping" ? "#ef4444" : "#fbbf24");
-        const eyeX = e.facingRight ? e.x + 14 : e.x + 10;
-        ctx.fillRect(eyeX, e.y + 8, 3, 3);
-        ctx.fillRect(eyeX + (e.facingRight ? 6 : -6), e.y + 8, 3, 3);
-
-        // Horns (detailed curved white horns on head)
-        ctx.fillStyle = isHitColor ? "#fff" : "#ffffff";
-        // Left horn
-        ctx.fillRect(e.x + 2, e.y, 3, 3);
-        ctx.fillRect(e.x, e.y - 2, 3, 3);
-        // Right horn
-        ctx.fillRect(e.x + e.w - 5, e.y, 3, 3);
-        ctx.fillRect(e.x + e.w - 3, e.y - 2, 3, 3);
-
-        // Yeti big arms (raised high if leaping, otherwise hanging low)
+        // Crisp White Body
         ctx.fillStyle = isHitColor ? "#fff" : "#e2e8f0";
-        if (e.aiState === "leaping") {
-          // Arms raised up
-          ctx.fillRect(e.x - 5, e.y - 4, 5, 16); // Left arm
-          ctx.fillRect(e.x + e.w, e.y - 4, 5, 16);  // Right arm
-          ctx.fillStyle = isHitColor ? "#fff" : "#7aa8b8"; // blue hands
-          ctx.fillRect(e.x - 5, e.y - 8, 5, 4);
-          ctx.fillRect(e.x + e.w, e.y - 8, 5, 4);
-        } else {
-          // Arms hanging down
-          const walkBob = Math.sin(Date.now() / 80) * 2;
-          ctx.fillRect(e.x - 3, e.y + 8 + walkBob, 4, 16);
-          ctx.fillRect(e.x + e.w - 1, e.y + 8 - walkBob, 4, 16);
-          ctx.fillStyle = isHitColor ? "#fff" : "#7aa8b8";
-          ctx.fillRect(e.x - 3, e.y + 24 + walkBob, 4, 4);
-          ctx.fillRect(e.x + e.w - 1, e.y + 24 - walkBob, 4, 4);
-        }
+        ctx.fillRect(e.x + 3, e.y + 4, e.w - 6, e.h - 6);
+        ctx.fillStyle = isHitColor ? "#fff" : "#f8fafc";
+        ctx.fillRect(e.x + 5, e.y + 2, e.w - 10, e.h - 8);
 
-        // Fluffy legs & feet
+        // Smooth Horn Silhouettes
+        ctx.fillStyle = isHitColor ? "#fff" : "#38bdf8";
+        ctx.fillRect(e.x + 2, e.y - 2, 4, 5);
+        ctx.fillRect(e.x + e.w - 6, e.y - 2, 4, 5);
+
+        // Face Visor / Eyes
+        ctx.fillStyle = isHitColor ? "#fff" : "#0f172a";
+        ctx.fillRect(e.x + 8, e.y + 6, e.w - 16, 6);
+        ctx.fillStyle = isHitColor ? "#fff" : "#fbbf24";
+        const eyeX = e.facingRight ? e.x + 14 : e.x + 10;
+        ctx.fillRect(eyeX, e.y + 7, 3, 3);
+        ctx.fillRect(eyeX + (e.facingRight ? 5 : -5), e.y + 7, 3, 3);
+
+        // Sleek Arms
         ctx.fillStyle = isHitColor ? "#fff" : "#cbd5e1";
-        ctx.fillRect(e.x + 4, e.y + e.h - 4, 6, 4);
-        ctx.fillRect(e.x + e.w - 10, e.y + e.h - 4, 6, 4);
-        ctx.fillStyle = isHitColor ? "#fff" : "#7aa8b8"; // blue feet
-        ctx.fillRect(e.x + 2, e.y + e.h - 2, 6, 2);
-        ctx.fillRect(e.x + e.w - 8, e.y + e.h - 2, 6, 2);
+        if (e.aiState === "leaping") {
+          ctx.fillRect(e.x - 4, e.y - 6, 5, 18);
+          ctx.fillRect(e.x + e.w - 1, e.y - 6, 5, 18);
+        } else {
+          ctx.fillRect(e.x - 3, e.y + 8, 4, 16);
+          ctx.fillRect(e.x + e.w - 1, e.y + 8, 4, 16);
+        }
       } else if (e.type === "bat") {
+        // Clean, Sleek Bat Model
+        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#581c87";
         ctx.fillRect(e.x + e.w / 2 - 4, e.y + e.h / 2 - 4, 8, 8);
 
-        // Wings anim
+        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#7e22ce";
         if (Math.floor(Date.now() / 150) % 2 === 0) {
-          ctx.fillRect(e.x + e.w / 2 - 12, e.y + e.h / 2 + 2, 8, 4);
-          ctx.fillRect(e.x + e.w / 2 - 16, e.y + e.h / 2 + 4, 4, 8);
-          ctx.fillRect(e.x + e.w / 2 + 4, e.y + e.h / 2 + 2, 8, 4);
-          ctx.fillRect(e.x + e.w / 2 + 12, e.y + e.h / 2 + 4, 4, 8);
+          ctx.fillRect(e.x + e.w / 2 - 12, e.y + e.h / 2, 8, 4);
+          ctx.fillRect(e.x + e.w / 2 + 4, e.y + e.h / 2, 8, 4);
         } else {
-          ctx.fillRect(e.x + e.w / 2 - 12, e.y + e.h / 2 - 6, 8, 4);
-          ctx.fillRect(e.x + e.w / 2 - 16, e.y + e.h / 2 - 12, 4, 8);
-          ctx.fillRect(e.x + e.w / 2 + 4, e.y + e.h / 2 - 6, 8, 4);
-          ctx.fillRect(e.x + e.w / 2 + 12, e.y + e.h / 2 - 12, 4, 8);
+          ctx.fillRect(e.x + e.w / 2 - 12, e.y + e.h / 2 - 4, 8, 4);
+          ctx.fillRect(e.x + e.w / 2 + 4, e.y + e.h / 2 - 4, 8, 4);
         }
-        ctx.fillStyle = "red";
-        ctx.fillRect(e.x + e.w / 2 + (e.facingRight ? 2 : -4), e.y + e.h / 2 - 2, 2, 2);
       } else if (e.type === "boss") {
         // Pixelated Cavern Titan Golem Model (80x80)
         const isHitColor = e.invulnerableTimer > 0;
@@ -3634,6 +3569,60 @@ export class GameEngine {
         const sparkCount = p.clawsActive ? Math.floor(trailProgress * 8) : (p.weapon === "colossal_sword" ? Math.floor(trailProgress * 12) : (p.weapon === "dual_daggers" ? Math.floor(trailProgress * 3) : Math.floor(trailProgress * 6)));
         const sparkRad = p.clawsActive ? 32 : (p.weapon === "colossal_sword" ? 40 : (p.weapon === "dual_daggers" ? 16 : 26));
         drawSparks(headAngle + 0.1, sparkRad, sparkCount);
+      }
+
+      ctx.restore();
+    }
+
+    // 360 Saturn-Ring Horizontal Wind Effect for Battle Axe Spin
+    if (p.weapon === "battle_axe" && p.axeSpinTimer > 0) {
+      const cx = p.x + p.w / 2;
+      const cy = p.y + p.h / 2 + 4;
+      const spinProgress = (25 - p.axeSpinTimer) / 25;
+      const baseAngle = spinProgress * Math.PI * 4;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+
+      // Saturn Ring flattening: wide horizontal X, flattened Y
+      ctx.scale(2.2, 0.55);
+
+      const ringRadius = 24;
+      const ringThick = 6;
+
+      // Outer wind aura
+      ctx.fillStyle = "rgba(226, 232, 240, 0.35)";
+      ctx.beginPath();
+      ctx.arc(0, 0, ringRadius + 5, 0, Math.PI * 2);
+      ctx.arc(0, 0, Math.max(1, ringRadius - 5), 0, Math.PI * 2, true);
+      ctx.fill();
+
+      // Glowing Saturn Wind Ring Slashes (360 degrees horizontal loop around waist)
+      ctx.fillStyle = "#ffffff";
+      for (let arc = 0; arc < 3; arc++) {
+        const aStart = baseAngle + (arc * Math.PI * 2) / 3;
+        const aEnd = aStart + Math.PI * 0.9;
+
+        const PIX = 3;
+        const steps = 30;
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const angle = aStart + (aEnd - aStart) * t;
+          const thick = Math.sin(t * Math.PI) * ringThick;
+          const px = Math.cos(angle) * ringRadius;
+          const py = Math.sin(angle) * ringRadius;
+
+          ctx.fillRect(px - thick / 2, py - thick / 2, thick + PIX, thick + PIX);
+        }
+      }
+
+      // Wind dust / spark particles along the 360 ring
+      ctx.fillStyle = "#cbd5e1";
+      for (let s = 0; s < 6; s++) {
+        const sa = baseAngle + s * 1.05;
+        const sx = Math.cos(sa) * (ringRadius + (s % 2 === 0 ? 4 : -4));
+        const sy = Math.sin(sa) * (ringRadius + (s % 2 === 0 ? 4 : -4));
+        ctx.fillRect(sx, sy, 3, 3);
       }
 
       ctx.restore();
