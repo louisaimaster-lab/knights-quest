@@ -86,6 +86,8 @@ export interface Player extends Entity {
   supersonicActive: boolean;
   supersonicTimer: number;
   afterimages?: Afterimage[];
+  bowChargeTimer?: number;
+  attackAngle?: number;
 }
 
 export interface UpgradeChoice {
@@ -162,7 +164,7 @@ export interface DroppedWeapon extends Rect {
 export interface GameState {
   floor: number;
   maxFloor: number;
-  biome: 'neutral' | 'ice' | 'moss';
+  biome: 'neutral' | 'ice' | 'moss' | 'ice_fortress';
   bgMap: number[][];  // holds background details like wood walls (9), etc.
   map: number[][];    // 0 = empty, 1 = wall, 2 = exit/hole, 3 = diamond
   width: number;
@@ -201,5 +203,6 @@ export interface GameState {
   timeAccumulator?: number;
   bossCutsceneTriggered?: boolean;
   bossCutsceneTimer?: number;
+  bossSpawned?: boolean;
   letterboxHeight?: number;
 }

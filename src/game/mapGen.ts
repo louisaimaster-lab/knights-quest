@@ -1,4 +1,68 @@
 export function generateCave(floor: number, maxFloor: number) {
+  // Floor 25: Fixed Custom Ice Fortress Biome
+  if (floor === maxFloor) {
+    const width = 44;
+    const height = 50;
+    const biome: 'ice_fortress' = 'ice_fortress';
+    let map = Array(height).fill(0).map(() => Array(width).fill(16)); // Dark Fortress Bricks
+    let bgMap = Array(height).fill(0).map(() => Array(width).fill(9));
+
+    // Carve out majestic grand fortress hall
+    for (let y = 2; y < height - 2; y++) {
+      for (let x = 2; x < width - 2; x++) {
+        map[y][x] = 0;
+      }
+    }
+
+    // Outer fortress walls
+    for (let y = 0; y < height; y++) {
+      map[y][0] = 16; map[y][1] = 16;
+      map[y][width - 1] = 16; map[y][width - 2] = 16;
+    }
+    for (let x = 0; x < width; x++) {
+      map[0][x] = 16; map[1][x] = 16;
+      map[height - 1][x] = 16; map[height - 2][x] = 16;
+    }
+
+    // Entrance spawn platform at top
+    for (let x = 16; x <= 27; x++) {
+      map[5][x] = 16;
+    }
+    const startPos = { x: 22, y: 4 };
+
+    // Terraced platforms and torches going down the fortress
+    const platY = [11, 17, 23, 29, 35];
+    for (const py of platY) {
+      for (let x = 4; x <= 16; x++) map[py][x] = 5; // Left platform
+      for (let x = 27; x <= 39; x++) map[py][x] = 5; // Right platform
+      map[py - 2][5] = 10; map[py - 2][38] = 10; // Wall torches
+    }
+
+    // Bottom arena floor
+    for (let x = 2; x < width - 2; x++) {
+      map[height - 3][x] = 16;
+    }
+
+    // Center bottom Stone Pedestal with Diamond on top!
+    map[height - 4][21] = 16; map[height - 4][22] = 16;
+    map[height - 5][21] = 16; map[height - 5][22] = 16;
+    map[height - 6][21] = 3;  // Diamond on Pedestal!
+
+    const endPos = { x: 21, y: height - 6 };
+    const chests: { x: number; y: number }[] = [
+      { x: 5, y: height - 4 },
+      { x: 38, y: height - 4 },
+    ];
+    const openSpaces: { x: number; y: number }[] = [];
+    for (let y = 38; y <= 46; y++) {
+      for (let x = 4; x <= 39; x++) {
+        openSpaces.push({ x, y });
+      }
+    }
+
+    return { width, height, map, bgMap, openSpaces, startPos, endPos, biome, chests };
+  }
+
   // Biome assignment (Equal 33.3% chance for neutral, ice, and moss biomes)
   const randBiome = Math.random();
   let biome: 'neutral' | 'ice' | 'moss' = 'neutral';

@@ -230,7 +230,10 @@ export class GameEngine {
     // (Floating floor number text will be spawned after the title is fully gone)
 
     // Spawn enemies
-    const enemyCount = floor * 5 + Math.floor(Math.random() * 5);
+    let enemyCount = floor * 5 + Math.floor(Math.random() * 5);
+    if (this.state.biome === "ice" || this.state.biome === "ice_fortress") {
+      enemyCount = Math.floor(enemyCount * 0.65); // Reduced enemy count in ice pathways
+    }
     for (let i = 0; i < enemyCount; i++) {
       const spot =
         gen.openSpaces[Math.floor(Math.random() * gen.openSpaces.length)];
@@ -242,7 +245,7 @@ export class GameEngine {
         continue;
 
       let type: EnemyType;
-      if (this.state.biome === "ice") {
+      if (this.state.biome === "ice" || this.state.biome === "ice_fortress") {
         type = Math.random() < 0.20 ? "yeti" : "frost_slime";
       } else if (this.state.biome === "moss") {
         type = Math.random() > 0.5 ? "bat" : "moss_slime";
@@ -270,28 +273,6 @@ export class GameEngine {
         invulnerableTimer: 0,
         stateTimer: 0,
         onLadder: false,
-        aiState: "idle",
-      });
-    }
-
-    if (floor === this.state.maxFloor) {
-      // Spawn Cavern Titan Boss near endPos
-      this.state.enemies.push({
-        id: "boss",
-        type: "boss",
-        x: gen.endPos.x * TILE_SIZE - TILE_SIZE * 1.5,
-        y: gen.endPos.y * TILE_SIZE - TILE_SIZE * 2,
-        w: 80,
-        h: 80,
-        vx: 0,
-        vy: 0,
-        health: 500,
-        maxHealth: 500,
-        facingRight: false,
-        isGrounded: false,
-        invulnerableTimer: 0,
-        onLadder: false,
-        stateTimer: 0,
         aiState: "idle",
       });
     }
@@ -966,6 +947,68 @@ export class GameEngine {
       p.axeSpinCooldown--;
     }
 
+    // Floor 25 (Boss Floor): Remove screen shake & trigger Golem awakening cutscene near pedestal
+    if (this.state.floor === this.state.maxFloor) {
+      this.state.shakeTimer = 0; // Remove screen shake on boss floor
+
+      if (!this.state.bossSpawned && p.y > 34 * TILE_SIZE) {
+        this.state.bossSpawned = true;
+        this.state.bossCutsceneTriggered = true;
+        this.state.bossCutsceneTimer = 90;
+
+        // Spawn Cavern Titan Boss during cutscene
+        this.state.enemies.push({
+          id: "boss",
+          type: "boss",
+          x: 18 * TILE_SIZE,
+          y: 36 * TILE_SIZE,
+          w: 80,
+          h: 80,
+          vx: 0,
+          vy: 0,
+          health: 500,
+          maxHealth: 500,
+          facingRight: false,
+          isGrounded: true,
+          invulnerableTimer: 0,
+          onLadder: false,
+          stateTimer: 0,
+          aiState: "idle",
+        });
+
+        this.spawnParticles(20 * TILE_SIZE, 40 * TILE_SIZE, "#38bdf8", 30);
+        this.state.texts.push({
+          x: 20 * TILE_SIZE,
+          y: 36 * TILE_SIZE,
+          text: "CAVERN TITAN AWAKENS!",
+          life: 90,
+          maxLife: 90
+        });
+      }
+    }
+
+    // Cutscene timer tick
+    if (this.state.bossCutsceneTimer && this.state.bossCutsceneTimer > 0) {
+      this.state.bossCutsceneTimer--;
+    }
+
+    // Bow Charging System (Holding Left Click charges, releasing shoots!)
+    if (p.weapon === 'bow' && p.weaponEquipped && !p.clawsActive && this.state.floorTitleState === "none" && this.state.transitionState === "none") {
+      if (this.state.mouse.down && p.attackCooldown <= 0) {
+        p.bowChargeTimer = Math.min(30, (p.bowChargeTimer || 0) + 1);
+        if (p.bowChargeTimer % 5 === 0) {
+          this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, "#f59e0b", 2);
+        }
+      } else if (!this.state.mouse.down && (p.bowChargeTimer || 0) > 0) {
+        const ratio = Math.max(0.3, (p.bowChargeTimer || 0) / 30);
+        this.fireArrow(ratio);
+        p.bowChargeTimer = 0;
+        p.isAttacking = true;
+        p.attackTimer = 10;
+        p.attackCooldown = 12;
+      }
+    }
+
     // Attack (only when valid weapon equipped or claws active - click/normal attack)
     const canAttackWithWeapon = p.clawsActive || (p.weaponEquipped && p.weapon && p.weapon !== 'torch');
 
@@ -974,38 +1017,32 @@ export class GameEngine {
       p.attackTimer <= 0 &&
       p.attackCooldown <= 0 &&
       p.weapon !== 'mace' && // Mace uses charge release
+      p.weapon !== 'bow' &&  // Bow uses charge release
       canAttackWithWeapon &&
       p.axeSpinTimer <= 0 && // Cannot attack while spinning
       this.state.floorTitleState === "none" &&
       this.state.transitionState === "none"
     ) {
-      const isBow = p.clawsActive ? false : p.weapon === 'bow';
       const isColossal = p.clawsActive ? false : p.weapon === 'colossal_sword';
       const isDaggers = p.clawsActive ? false : p.weapon === 'dual_daggers';
       const isAxe = p.clawsActive ? false : p.weapon === 'battle_axe';
 
       p.isAttacking = true;
       p.isAirAttacking = false;
+      p.attackAngle = Math.atan2(this.state.mouse.worldY - (p.y + p.h / 2), this.state.mouse.worldX - (p.x + p.w / 2));
 
       if (p.clawsActive) {
-        // Claws: 70% of daggers speed (6 * 0.7 ≈ 4 frames)
         p.attackTimer = 4;
       } else {
-        p.attackTimer = isBow ? 15 : (isColossal ? 20 : (isDaggers ? 6 : (isAxe ? 12 : 10)));
+        p.attackTimer = isColossal ? 20 : (isDaggers ? 6 : (isAxe ? 12 : 10));
       }
       p.slashFlipped = !p.slashFlipped;
       p.comboResetTimer = 120; // 2 seconds
       
-      if (!isBow) {
-        this.checkAttackHits();
-      }
+      this.checkAttackHits();
     }
 
     if (p.attackTimer > 0) {
-      if (p.weapon === 'bow' && !p.clawsActive && p.attackTimer === 1) {
-        this.fireArrow();
-      }
-
       p.attackTimer--;
       if (p.attackTimer === 0) {
         p.isAttacking = false;
@@ -1381,11 +1418,11 @@ export class GameEngine {
       damage = 45;
       knockback = 12;
     } else if (p.weapon === 'dual_daggers') {
-      attackWidth = 35;
-      attackHeight = p.h + 10;
-      attackYOffset = -5;
-      damage = 8;
-      knockback = 2.5;
+      attackWidth = 55;
+      attackHeight = p.h + 20;
+      attackYOffset = -10;
+      damage = 12;
+      knockback = 3.0;
     } else if (p.weapon === 'mace') {
       attackWidth = 70;
       attackHeight = p.h + 50;
@@ -1479,7 +1516,7 @@ export class GameEngine {
     }
 
     p.health -= finalDamage;
-    p.invulnerableTimer = 30;
+    p.invulnerableTimer = 45; // 0.75s immunity time (45 frames at 60fps)
 
     if (kbDir !== undefined) {
       p.vx = kbDir * kbForceX;
@@ -1504,21 +1541,41 @@ export class GameEngine {
     return true;
   }
 
-  fireArrow() {
+  fireArrow(chargeRatio: number = 1.0) {
     const p = this.state.player;
-    const arrowSpeed = 14;
+    const arrowSpeed = 16 * (0.8 + 0.4 * chargeRatio); // Faster, smoother arrow velocity
 
     const px = p.x + p.w / 2;
     const py = p.y + p.h / 2;
-    const dx = this.state.mouse.worldX - px;
-    const dy = this.state.mouse.worldY - py;
+    
+    // Semi Aim Assist: Snap to enemy center if cursor is near (within 140px)
+    let targetX = this.state.mouse.worldX;
+    let targetY = this.state.mouse.worldY;
+    let closestDist = 140;
+
+    for (const e of this.state.enemies) {
+      if (e.health <= 0) continue;
+      const ex = e.x + e.w / 2;
+      const ey = e.y + e.h / 2;
+      const cursorDist = Math.hypot(this.state.mouse.worldX - ex, this.state.mouse.worldY - ey);
+      if (cursorDist < closestDist) {
+        closestDist = cursorDist;
+        targetX = ex;
+        targetY = ey;
+      }
+    }
+
+    const dx = targetX - px;
+    const dy = targetY - py;
     const angle = Math.atan2(dy, dx);
 
     const vx = Math.cos(angle) * arrowSpeed;
     const vy = Math.sin(angle) * arrowSpeed;
 
-    const w = 16;
+    const w = 20; // Bigger 20x8 arrow!
     const h = 8;
+
+    const baseDmg = Math.round(35 * chargeRatio);
 
     this.state.projectiles.push({
       id: `arrow_${Date.now()}_${Math.random()}`,
@@ -1529,11 +1586,11 @@ export class GameEngine {
       vx,
       vy,
       type: 'arrow',
-      damage: 12,
+      damage: baseDmg,
       facingRight: Math.cos(angle) >= 0
     });
 
-    this.spawnParticles(px, py, "rgba(255, 255, 255, 0.5)", 4);
+    this.spawnParticles(px, py, "#f59e0b", 6);
   }
 
   updateProjectiles() {
@@ -2463,10 +2520,17 @@ export class GameEngine {
               highlightColor = `#4fa1d6`;
               strokeColor = `#0a1526`;
             } else if (isSnow) {
-              baseColor = `#11223d`; // very dark icy rock
-              darkColor = `#07101f`; // nearly black
-              highlightColor = `#2e5885`; // frosty edge
-              strokeColor = `#030810`;
+              if (this.state.biome === "ice_fortress") {
+                baseColor = "#1e293b";      // Dark slate fortress brick
+                darkColor = "#0f172a";      // Deep void slate
+                highlightColor = "#38bdf8"; // Cyan icy glow accent
+                strokeColor = "#020617";
+              } else {
+                baseColor = `#11223d`; // very dark icy rock
+                darkColor = `#07101f`; // nearly black
+                highlightColor = `#2e5885`; // frosty edge
+                strokeColor = `#030810`;
+              }
             } else {
               // Dirt / Cavern base for 1, 7, 15
               baseColor = `hsl(${hue}, 15%, 28%)`;
@@ -3302,6 +3366,19 @@ export class GameEngine {
     ctx.fillRect(p.x + 8, p.y + 4 + bob, p.w - 9, 3); // Horizontal eye slit
     ctx.fillRect(p.x + 13, p.y + 4 + bob, 3, 6);      // Vertical nose slit
 
+    // Bow Charge Progress Bar / Glowing Indicator
+    if (p.weapon === 'bow' && (p.bowChargeTimer || 0) > 0) {
+      const chargeRatio = Math.min(1.0, (p.bowChargeTimer || 0) / 30);
+      const cx = p.x + p.w / 2;
+      const cy = p.y - 14;
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+      ctx.fillRect(cx - 16, cy, 32, 6);
+
+      ctx.fillStyle = chargeRatio >= 1.0 ? "#f59e0b" : "#38bdf8";
+      ctx.fillRect(cx - 15, cy + 1, Math.round(30 * chargeRatio), 4);
+    }
+
     // 3. Sabatons / Iron Boots
     ctx.fillStyle = isHit ? COLORS.playerHit : "#334155";
     const legOffset = isMoving ? Math.sin(Date.now() / 50) * 3 : 0;
@@ -3485,17 +3562,22 @@ export class GameEngine {
       ctx.save();
       ctx.translate(ox, oy);
 
-      if (dir === -1) {
+      // Rotate slash directly toward cursor angle if available
+      if (p.attackAngle !== undefined) {
+        ctx.rotate(p.attackAngle);
+      } else if (dir === -1) {
         ctx.scale(-1, 1);
       }
+
       if (p.slashFlipped) {
         ctx.scale(1, -1);
       }
-      let scaleX = p.weapon === "colossal_sword" ? 3.8 : (p.weapon === "dual_daggers" ? 1.4 : 2.4);
-      let scaleY = p.weapon === "colossal_sword" ? 0.7 : (p.weapon === "dual_daggers" ? 0.25 : 0.45);
+      // +15% slash size for all weapons; dual daggers enlarged & centered
+      let scaleX = p.weapon === "colossal_sword" ? 4.37 : (p.weapon === "dual_daggers" ? 2.53 : 2.76);
+      let scaleY = p.weapon === "colossal_sword" ? 0.80 : (p.weapon === "dual_daggers" ? 0.46 : 0.52);
       if (p.clawsActive) {
-        scaleX = 3.2;
-        scaleY = 0.6;
+        scaleX = 3.68;
+        scaleY = 0.69;
       }
       ctx.scale(scaleX, scaleY);
       ctx.rotate(Math.PI * 0.1); // tilt the whole oval a bit
