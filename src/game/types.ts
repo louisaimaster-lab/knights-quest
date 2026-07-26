@@ -22,7 +22,7 @@ export interface Entity extends Rect {
   onLadder: boolean;
 }
 
-export type WeaponType = 'sword' | 'bow' | 'colossal_sword' | 'dual_daggers' | 'mace' | 'battle_axe' | 'torch' | 'health_potion' | 'speed_potion' | 'bomb' | 'shield';
+export type WeaponType = 'sword' | 'bow' | 'colossal_sword' | 'dual_daggers' | 'mace' | 'battle_axe' | 'torch' | 'health_potion' | 'speed_potion' | 'bomb' | 'shield' | 'frozen_sword' | 'molten_axe';
 export type SuperAbilityType = 'malevolence' | 'impenetrable' | 'supersonic' | 'pulsar' | 'supernova';
 
 export interface Afterimage {
@@ -63,6 +63,10 @@ export interface Player extends Entity {
   shieldTimer?: number;
   timeSlowActive?: boolean;
   poisonTimer: number;
+  burnTimer: number;
+  oxygen: number;
+  maxOxygen: number;
+  hasWaterResistance?: boolean;
   baseDamageMulti: number;
   baseSpeedMulti: number;
   baseJumpMulti: number;
@@ -111,13 +115,16 @@ export interface UpgradeChoice {
   effect: (p: Player) => void;
 }
 
-export type EnemyType = 'bat' | 'slime' | 'boss' | 'frost_slime' | 'yeti' | 'moss_slime' | 'flytrap';
+export type EnemyType = 'bat' | 'slime' | 'boss' | 'frost_slime' | 'yeti' | 'moss_slime' | 'flytrap' | 'frost_knight' | 'inferno_knight';
 
 export interface Enemy extends Entity {
   type: EnemyType;
   stateTimer: number;
   aiState: string;
   trackTimer?: number;
+  burnTimer?: number;
+  isFrozen?: boolean;
+  frozenTimer?: number;
 }
 
 export interface Particle {
@@ -156,13 +163,14 @@ export interface Chest extends Rect {
   id: string;
   isOpen: boolean;
   weapon: WeaponType;
+  isCastleChest?: boolean;
 }
 
 export interface Projectile extends Rect {
   id: string;
   vx: number;
   vy: number;
-  type: 'arrow' | 'magma' | 'bomb';
+  type: 'arrow' | 'magma' | 'bomb' | 'lava_wave';
   damage: number;
   facingRight: boolean;
   timer?: number;
@@ -185,7 +193,7 @@ export interface SupernovaStar {
 export interface GameState {
   floor: number;
   maxFloor: number;
-  biome: 'neutral' | 'ice' | 'moss' | 'ice_fortress';
+  biome: 'neutral' | 'ice' | 'moss' | 'volcanic' | 'ice_fortress';
   bgMap: number[][];  // holds background details like wood walls (9), etc.
   map: number[][];    // 0 = empty, 1 = wall, 2 = exit/hole, 3 = diamond
   width: number;
@@ -231,7 +239,7 @@ export interface GameState {
 
 export interface SavedRunState {
   floor: number;
-  biome: 'neutral' | 'ice' | 'moss' | 'ice_fortress';
+  biome: 'neutral' | 'ice' | 'moss' | 'volcanic' | 'ice_fortress';
   player: {
     x: number;
     y: number;

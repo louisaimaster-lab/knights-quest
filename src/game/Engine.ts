@@ -23,7 +23,7 @@ import {
 
 export function isWeapon(type: WeaponType | null): boolean {
   if (!type) return false;
-  return ['sword', 'bow', 'colossal_sword', 'dual_daggers', 'mace', 'battle_axe'].includes(type);
+  return ['sword', 'bow', 'colossal_sword', 'dual_daggers', 'mace', 'battle_axe', 'frozen_sword', 'molten_axe'].includes(type);
 }
 
 export class GameEngine {
@@ -178,6 +178,10 @@ export class GameEngine {
         superAbilityActive: false,
         superAbilityTimer: 0,
         poisonTimer: 0,
+        burnTimer: 0,
+        oxygen: 100,
+        maxOxygen: 100,
+        hasWaterResistance: false,
         baseDamageMulti: 1,
         baseSpeedMulti: 1,
         baseJumpMulti: 1,
@@ -297,7 +301,9 @@ export class GameEngine {
     }
     this.state.chests = gen.chests ? gen.chests.map((c, idx) => {
       let chestItem: WeaponType;
-      if (Math.random() < 0.55) {
+      if (c.weapon) {
+        chestItem = c.weapon as WeaponType;
+      } else if (Math.random() < 0.55) {
         const itemPool: WeaponType[] = ['torch', 'health_potion', 'speed_potion', 'bomb', 'shield'];
         chestItem = itemPool[Math.floor(Math.random() * itemPool.length)];
       } else {
@@ -311,7 +317,8 @@ export class GameEngine {
         w: 24,
         h: 18,
         isOpen: false,
-        weapon: chestItem
+        weapon: chestItem,
+        isCastleChest: c.isCastleChest
       };
     }) : [];
     this.state.fallingIcicles = [];
@@ -3885,6 +3892,34 @@ export class GameEngine {
         const eyeX = e.facingRight ? e.x + e.w / 2 + 6 : e.x + e.w / 2 - 14;
         ctx.fillRect(eyeX, e.y + 14, 8, 4);
         ctx.fillRect(eyeX + (e.facingRight ? 12 : -12), e.y + 14, 8, 4);
+      } else if (e.type === "frost_knight") {
+        // Frost Knight Castle Guard (Solid Ice Armor, Cyan Shield, Frost Spear)
+        const isHitColor = e.invulnerableTimer > 0;
+        ctx.fillStyle = isHitColor ? "#fff" : "#0284c7"; // Ice Plate Armor
+        ctx.fillRect(e.x + 2, e.y + 4, e.w - 4, e.h - 4);
+        ctx.fillStyle = isHitColor ? "#fff" : "#38bdf8"; // Cyan Runes
+        ctx.fillRect(e.x + 6, e.y + 8, e.w - 12, 4);
+        ctx.fillStyle = isHitColor ? "#fff" : "#e0f2fe"; // Helm Visor
+        const eyeX = e.facingRight ? e.x + e.w - 10 : e.x + 4;
+        ctx.fillRect(eyeX, e.y + 6, 6, 2);
+      } else if (e.type === "inferno_knight") {
+        // Inferno Knight Castle Guard (Heated Magma Armor & Fiery Blade)
+        const isHitColor = e.invulnerableTimer > 0;
+        ctx.fillStyle = isHitColor ? "#fff" : "#7f1d1d"; // Dark Magma Plate
+        ctx.fillRect(e.x + 2, e.y + 4, e.w - 4, e.h - 4);
+        ctx.fillStyle = isHitColor ? "#fff" : "#ea580c"; // Burning Core
+        ctx.fillRect(e.x + 6, e.y + 8, e.w - 12, 4);
+        ctx.fillStyle = isHitColor ? "#fff" : "#fef08a"; // Visor
+        const eyeX = e.facingRight ? e.x + e.w - 10 : e.x + 4;
+        ctx.fillRect(eyeX, e.y + 6, 6, 2);
+      }
+
+      if (e.isFrozen) {
+        ctx.fillStyle = "rgba(56, 189, 248, 0.45)";
+        ctx.fillRect(e.x - 2, e.y - 2, e.w + 4, e.h + 4);
+        ctx.strokeStyle = "#e0f2fe";
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(e.x - 2, e.y - 2, e.w + 4, e.h + 4);
       }
 
       // Draw Enemy Health Bar (for all enemies)
@@ -5423,6 +5458,23 @@ export class GameEngine {
     }
     ctx.fillText(`ACTIVE: ${displayItemName}`, hudX, activeBadgeY + 18);
 
+    // Oxygen Meter (When submerged underwater/liquid)
+    if (p.oxygen < p.maxOxygen) {
+      const oxBarW = 160;
+      const oxBarH = 10;
+      const oxRatio = Math.max(0, p.oxygen / p.maxOxygen);
+      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+      ctx.fillRect(hudX, activeBadgeY + 26, oxBarW, oxBarH);
+      ctx.fillStyle = oxRatio < 0.25 ? "#ef4444" : "#38bdf8";
+      ctx.fillRect(hudX + 2, activeBadgeY + 28, (oxBarW - 4) * oxRatio, oxBarH - 4);
+      ctx.strokeStyle = "#7dd3fc";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(hudX, activeBadgeY + 26, oxBarW, oxBarH);
+      ctx.fillStyle = "#e0f2fe";
+      ctx.font = "bold 12px 'Courier New', Courier, monospace";
+      ctx.fillText(`O2: ${Math.ceil(p.oxygen)}%`, hudX + oxBarW + 8, activeBadgeY + 35);
+    }
+
     let nextHUDY = activeBadgeY + 48;
 
     // Super Abilities & Buff Status (1.5x Scale)
@@ -5533,55 +5585,174 @@ export class GameEngine {
         ctx.fillStyle = gemColor;
         ctx.fillRect(-1, 14, 2, 2);
       } else if (type === 'bow') {
-        ctx.strokeStyle = "#78716c";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(0, 0, 14, -Math.PI * 0.4, Math.PI * 0.4);
-        ctx.stroke();
-        ctx.strokeStyle = "#cbd5e1";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(8, -12);
-        ctx.lineTo(8, 12);
-        ctx.stroke();
-      } else if (type === 'colossal_sword') {
-        ctx.fillStyle = "#94a3b8";
-        ctx.fillRect(-4, -16, 8, 22);
-        ctx.fillStyle = "#475569";
-        ctx.fillRect(-8, 6, 16, 4);
-      } else if (type === 'dual_daggers') {
+        // High-Detail Polished Oak Bow & Silver String
+        ctx.fillStyle = "#451a03";
+        ctx.fillRect(-2, -2, 4, 4);
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-6, -14, 3, 28);
+        ctx.fillStyle = "#b45309";
+        ctx.fillRect(-5, -12, 2, 24);
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillRect(-6, -15, 3, 2);
+        ctx.fillRect(-6, 13, 3, 2);
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(-4, -14, 1, 28);
+        // Arrow
         ctx.fillStyle = "#e2e8f0";
-        ctx.fillRect(-8, -10, 3, 12);
-        ctx.fillRect(5, -10, 3, 12);
-      } else if (type === 'mace') {
+        ctx.fillRect(0, -2, 4, 4);
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-12, -1, 12, 2);
+        ctx.fillStyle = "#10b981";
+        ctx.fillRect(-14, -2, 3, 4);
+      } else if (type === 'colossal_sword') {
+        // High-Detail Chiseled Colossal Greatsword
+        ctx.fillStyle = "#f8fafc";
+        ctx.fillRect(-4, -18, 2, 22);
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(-2, -18, 4, 22);
         ctx.fillStyle = "#475569";
-        ctx.fillRect(-6, -14, 12, 12);
-      } else if (type === 'battle_axe') {
-        ctx.fillStyle = "#475569";
-        ctx.fillRect(-10, -14, 20, 10);
-      } else if (type === 'torch') {
-        ctx.fillStyle = "#78716c";
-        ctx.fillRect(-2, -4, 4, 16);
-        ctx.fillStyle = "#f59e0b";
-        ctx.fillRect(-4, -14, 8, 10);
-      } else if (type === 'health_potion') {
-        ctx.fillStyle = "#f87171";
-        ctx.fillRect(-6, -6, 12, 14);
+        ctx.fillRect(2, -18, 2, 22);
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillRect(-8, 4, 16, 4);
+        ctx.fillStyle = "#b45309";
+        ctx.fillRect(-8, 7, 16, 1);
+        ctx.fillStyle = "#451a03";
+        ctx.fillRect(-2, 8, 4, 8);
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(-3, 16, 6, 3);
+      } else if (type === 'dual_daggers') {
+        // High-Detail Serrated Assassin Daggers
+        ctx.fillStyle = "#f1f5f9";
+        ctx.fillRect(-8, -12, 2, 12);
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillRect(-6, -12, 2, 12);
         ctx.fillStyle = "#ef4444";
-        ctx.fillRect(-4, -4, 8, 10);
-      } else if (type === 'speed_potion') {
-        ctx.fillStyle = "#38bdf8";
-        ctx.fillRect(-6, -6, 12, 14);
-      } else if (type === 'bomb') {
+        ctx.fillRect(-8, 0, 4, 2);
+        ctx.fillStyle = "#451a03";
+        ctx.fillRect(-7, 2, 2, 4);
+
+        ctx.fillStyle = "#f1f5f9";
+        ctx.fillRect(4, -12, 2, 12);
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillRect(6, -12, 2, 12);
+        ctx.fillStyle = "#ef4444";
+        ctx.fillRect(4, 0, 4, 2);
+        ctx.fillStyle = "#451a03";
+        ctx.fillRect(5, 2, 2, 4);
+      } else if (type === 'mace') {
+        // High-Detail Spiked Iron Morningstar Mace
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-2, -4, 4, 18);
         ctx.fillStyle = "#1e293b";
+        ctx.fillRect(-6, -14, 12, 10);
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(-4, -14, 8, 10);
+        ctx.fillStyle = "#f8fafc";
+        ctx.fillRect(-8, -11, 2, 4);
+        ctx.fillRect(6, -11, 2, 4);
+        ctx.fillRect(-2, -16, 4, 2);
+      } else if (type === 'battle_axe') {
+        // High-Detail Double-Bitted Steel Battle Axe
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-2, -10, 4, 26);
+        ctx.fillStyle = "#f8fafc";
+        ctx.fillRect(-10, -12, 3, 12);
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(-7, -10, 5, 8);
+        ctx.fillStyle = "#f8fafc";
+        ctx.fillRect(7, -12, 3, 12);
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(2, -10, 5, 8);
+        ctx.fillStyle = "#d97706";
+        ctx.fillRect(-1, -8, 2, 4);
+      } else if (type === 'torch') {
+        // High-Detail Torch & Animated 3-Tone Flame
+        ctx.fillStyle = "#451a03";
+        ctx.fillRect(-2, -4, 4, 18);
+        ctx.fillStyle = "#475569";
+        ctx.fillRect(-4, -4, 8, 3);
+        const fCycle = Math.floor(Date.now() / 100) % 3;
+        ctx.fillStyle = "#ef4444";
+        ctx.fillRect(-5, -13, 10, 9);
+        ctx.fillStyle = "#f97316";
+        ctx.fillRect(-3, -11, 6, 7);
+        ctx.fillStyle = "#fcd34d";
+        ctx.fillRect(-1, -9, 2, 4);
+      } else if (type === 'health_potion') {
+        // High-Detail Glass Flask & Ruby Health Elixir
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-2, -14, 4, 3);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+        ctx.fillRect(-3, -11, 6, 4);
+        ctx.fillStyle = "#991b1b";
+        ctx.fillRect(-7, -7, 14, 14);
+        ctx.fillStyle = "#ef4444";
+        ctx.fillRect(-6, -6, 12, 12);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+        ctx.fillRect(-5, -5, 2, 5);
+      } else if (type === 'speed_potion') {
+        // High-Detail Glass Flask & Electric Blue Speed Elixir
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-2, -14, 4, 3);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+        ctx.fillRect(-3, -11, 6, 4);
+        ctx.fillStyle = "#0284c7";
+        ctx.fillRect(-7, -7, 14, 14);
+        ctx.fillStyle = "#38bdf8";
+        ctx.fillRect(-6, -6, 12, 12);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+        ctx.fillRect(-5, -5, 2, 5);
+      } else if (type === 'bomb') {
+        // High-Detail Cast Iron Bomb & Sparking Fuse
+        ctx.fillStyle = "#d97706";
+        ctx.fillRect(-2, -10, 4, 3);
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-1, -14, 2, 4);
+        ctx.fillStyle = "#f97316";
+        ctx.fillRect(-2, -16, 4, 2);
+        ctx.fillStyle = "#0f172a";
         ctx.beginPath();
         ctx.arc(0, 2, 9, 0, Math.PI * 2);
         ctx.fill();
+        ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+        ctx.beginPath();
+        ctx.arc(-3, -2, 3, 0, Math.PI * 2);
+        ctx.fill();
       } else if (type === 'shield') {
-        ctx.fillStyle = "#475569";
-        ctx.fillRect(-9, -11, 18, 20);
-        ctx.fillStyle = "#94a3b8";
-        ctx.fillRect(-7, -9, 14, 16);
+        // High-Detail Reinforced Steel Kite Shield
+        ctx.fillStyle = "#334155";
+        ctx.beginPath();
+        ctx.moveTo(0, 12);
+        ctx.lineTo(-9, -10);
+        ctx.lineTo(9, -10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#cbd5e1";
+        ctx.strokeRect(-9, -10, 18, 20);
+        ctx.fillStyle = "#38bdf8";
+        ctx.fillRect(-2, -6, 4, 12);
+        ctx.fillRect(-6, -2, 12, 4);
+      } else if (type === 'frozen_sword') {
+        // Legendary Frozen Sword
+        ctx.fillStyle = "#e0f2fe";
+        ctx.fillRect(-1, -17, 2, 3);
+        ctx.fillStyle = "#38bdf8";
+        ctx.fillRect(-3, -14, 6, 16);
+        ctx.fillStyle = "#7dd3fc";
+        ctx.fillRect(-1, -14, 2, 16);
+        ctx.fillStyle = "#0284c7";
+        ctx.fillRect(-8, 2, 16, 3);
+        ctx.fillStyle = "#e0f2fe";
+        ctx.fillRect(-3, 12, 6, 3);
+      } else if (type === 'molten_axe') {
+        // Legendary Molten Axe
+        ctx.fillStyle = "#451a03";
+        ctx.fillRect(-2, -10, 4, 26);
+        ctx.fillStyle = "#fef08a";
+        ctx.fillRect(-10, -12, 3, 12);
+        ctx.fillRect(7, -12, 3, 12);
+        ctx.fillStyle = "#ea580c";
+        ctx.fillRect(-7, -10, 14, 8);
       }
 
       ctx.restore();

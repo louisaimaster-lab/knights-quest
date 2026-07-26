@@ -63,20 +63,22 @@ export function generateCave(floor: number, maxFloor: number) {
     return { width, height, map, bgMap, openSpaces, startPos, endPos, biome, chests };
   }
 
-  // Biome assignment (Equal 33.3% chance for neutral, ice, and moss biomes)
+  // Biome assignment (Equal 25% chance for neutral, ice, moss, and volcanic biomes)
   const randBiome = Math.random();
-  let biome: 'neutral' | 'ice' | 'moss' = 'neutral';
-  if (randBiome < 0.333) {
+  let biome: 'neutral' | 'ice' | 'moss' | 'volcanic' = 'neutral';
+  if (randBiome < 0.25) {
       biome = 'neutral';
-  } else if (randBiome < 0.666) {
+  } else if (randBiome < 0.50) {
       biome = 'ice';
-  } else {
+  } else if (randBiome < 0.75) {
       biome = 'moss';
+  } else {
+      biome = 'volcanic';
   }
 
-  // Decreased vastness (-10%), Increased deepness (+45%), 2x width
-  const width = Math.floor(Math.min(24 + floor * 2, 48) * 1.8);
-  const height = Math.floor(Math.min(80 + floor * 10, 180) * 1.45);
+  // Expanded cave map scale by 1.5x
+  const width = Math.floor(Math.min(24 + floor * 2, 48) * 1.8 * 1.5);
+  const height = Math.floor(Math.min(80 + floor * 10, 180) * 1.45 * 1.5);
   
   // 1 = solid wall, 0 = empty, 2 = exit, 3 = diamond, 4 = ladder, 5 = platform
   let map = Array(height).fill(0).map(() => Array(width).fill(1));
@@ -188,7 +190,7 @@ export function generateCave(floor: number, maxFloor: number) {
   }
 
   // 7. Structures (3 Types: Small, Medium, Large 2-3 Rooms)
-  let chests: { x: number, y: number }[] = [];
+  let chests: { x: number; y: number; weapon?: string; isCastleChest?: boolean }[] = [];
   let numStructures = Math.floor(floor * 0.75) + 1;
   let structureBoxes: { x: number, y: number, w: number, h: number }[] = [];
 
@@ -807,9 +809,61 @@ export function generateCave(floor: number, maxFloor: number) {
               }
           }
       }
+  } else if (biome === 'volcanic') {
+      for (let my = 0; my < height; my++) {
+          for (let mx = 0; mx < width; mx++) {
+              if (map[my][mx] === 1) map[my][mx] = 19; // Basalt
+              if (map[my][mx] === 8) map[my][mx] = 20; // Heated Magma Block
+              if (map[my][mx] === 7 || map[my][mx] === 15) map[my][mx] = 19; // Basalt
+              if (map[my][mx] === 6) map[my][mx] = 21; // Lava Liquid!
+          }
+      }
   }
 
-  // Player spawn does not replace current block (including water)
+  // 1% Chance for Legendary Castle Structure in Ice Pathways or Volcanic Caverns
+  if ((biome === 'ice' || biome === 'volcanic') && Math.random() < 0.01) {
+      const castleW = 22;
+      const castleH = 14;
+      const castleX = Math.floor(width / 2 - castleW / 2);
+      const castleY = Math.floor(height / 2 - castleH / 2);
+      const brickTile = biome === 'ice' ? 16 : 20;
+
+      // Carve out 2x size Castle interior and build themed brick walls
+      for (let cy = castleY; cy < castleY + castleH; cy++) {
+          for (let cx = castleX; cx < castleX + castleW; cx++) {
+              if (cy === castleY || cy === castleY + castleH - 1 || cx === castleX || cx === castleX + castleW - 1) {
+                  map[cy][cx] = brickTile;
+              } else {
+                  map[cy][cx] = 0; // Empty interior
+                  bgMap[cy][cx] = 9; // Wood background
+              }
+          }
+      }
+
+      // Add Legendary Castle Chest
+      const chestWeapon = biome === 'ice' ? 'frozen_sword' : 'molten_axe';
+      const chestX = castleX + Math.floor(castleW / 2);
+      const chestY = castleY + castleH - 2;
+      chests.push({
+          x: chestX,
+          y: chestY,
+          weapon: chestWeapon,
+          isCastleChest: true
+      });
+  }
+
+  // Descend gate rule: endPos CANNOT spawn inside lava (tile 21)
+  if (map[endPos.y] && map[endPos.y][endPos.x] === 21) {
+      for (let spot of openSpaces) {
+          if (map[spot.y] && map[spot.y][spot.x] !== 21 && map[spot.y][spot.x] !== 1) {
+              endPos = spot;
+              map[endPos.y][endPos.x] = 2;
+              break;
+          }
+      }
+  }
+
+  // Player spawn does not replace current block (including water/lava)
 
   // Final Pass: Fill all disconnected areas from startPos so no isolated pockets or weird unreachable areas remain
   let reachableFromStart = new Set<string>();
@@ -826,7 +880,7 @@ export function generateCave(floor: number, maxFloor: number) {
               let ntile = map[ny][nx];
               let key = `${nx},${ny}`;
               // Non-solid / traversable tiles
-              if (!reachableFromStart.has(key) && (ntile === 0 || ntile === 2 || ntile === 3 || ntile === 4 || ntile === 5 || ntile === 6 || ntile === 10 || ntile === 12 || ntile === 13)) {
+              if (!reachableFromStart.has(key) && (ntile === 0 || ntile === 2 || ntile === 3 || ntile === 4 || ntile === 5 || ntile === 6 || ntile === 10 || ntile === 12 || ntile === 13 || ntile === 21)) {
                   reachableFromStart.add(key);
                   startQueue.push({ x: nx, y: ny });
               }
@@ -838,7 +892,7 @@ export function generateCave(floor: number, maxFloor: number) {
   for (let my = 1; my < height - 1; my++) {
       for (let mx = 1; mx < width - 1; mx++) {
           let tile = map[my][mx];
-          if ((tile === 0 || tile === 4 || tile === 5 || tile === 6 || tile === 10 || tile === 12 || tile === 13) && !reachableFromStart.has(`${mx},${my}`)) {
+          if ((tile === 0 || tile === 4 || tile === 5 || tile === 6 || tile === 10 || tile === 12 || tile === 13 || tile === 21) && !reachableFromStart.has(`${mx},${my}`)) {
               map[my][mx] = 1; // Fill disconnected pocket with solid wall
           }
       }

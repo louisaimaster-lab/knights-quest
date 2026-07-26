@@ -23,7 +23,7 @@ function isTileSolid(tx: number, ty: number, map: number[][]): boolean {
   }
 
   const tile = map[ty][tx];
-  return tile === 1 || tile === 7 || tile === 8 || tile === 11 || tile === 15 || tile === 16 || tile === 17 || tile === 18;
+  return tile === 1 || tile === 7 || tile === 8 || tile === 11 || tile === 15 || tile === 16 || tile === 17 || tile === 18 || tile === 19 || tile === 20;
 }
 
 export function AABBMapCollision(
