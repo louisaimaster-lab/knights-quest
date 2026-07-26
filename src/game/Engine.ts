@@ -272,6 +272,9 @@ export class GameEngine {
     this.state.particles = [];
     this.state.projectiles = [];
     this.state.droppedWeapons = [];
+    if (this.state.player) {
+      this.state.player.afterimages = [];
+    }
     this.state.chests = gen.chests ? gen.chests.map((c, idx) => {
       let chestItem: WeaponType;
       if (Math.random() < 0.55) {
@@ -609,13 +612,14 @@ export class GameEngine {
         (this.state.mouse.y - this.canvasHeight / 2) / this.state.camera.zoom +
         this.state.camera.y;
 
-      // Handle Upgrade Clicks
+      // Handle Upgrade Clicks (320px x 460px)
       if (this.state.mouse.clicked) {
-        const cardWidth = 200;
-        const cardHeight = 280;
+        const cardWidth = 320;
+        const cardHeight = 460;
         const gap = 40;
-        const startX = this.canvasWidth / 2 - (cardWidth * 1.5 + gap);
-        const startY = this.canvasHeight / 2 - cardHeight / 2;
+        const totalWidth = 3 * cardWidth + 2 * gap;
+        const startX = this.canvasWidth / 2 - totalWidth / 2;
+        const startY = this.canvasHeight / 2 - cardHeight / 2 + 30;
 
         for (let i = 0; i < this.state.upgrades.length; i++) {
           const u = this.state.upgrades[i];
@@ -4342,17 +4346,37 @@ export class GameEngine {
 
         const type = dw.type;
         if (type === 'sword') {
-          // Grey blade
-          ctx.strokeStyle = "#9ca3af";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(-6, 6);
-          ctx.lineTo(6, -6);
-          ctx.stroke();
-          // Gold hilt
-          ctx.fillStyle = "#fbbf24";
-          ctx.fillRect(-8, 4, 3, 3);
-          ctx.fillRect(-6, 6, 2, 2);
+          const gemColor = this.state.player ? (this.state.player.playerColor || "#ea580c") : "#ea580c";
+          ctx.save();
+          ctx.rotate(-Math.PI / 4);
+
+          // Blade
+          ctx.fillStyle = "#f8fafc";
+          ctx.fillRect(-1, -12, 2, 2);
+          ctx.fillStyle = "#f1f5f9";
+          ctx.fillRect(-2, -10, 2, 11);
+          ctx.fillStyle = "#cbd5e1";
+          ctx.fillRect(0, -10, 1, 11);
+          ctx.fillStyle = "#94a3b8";
+          ctx.fillRect(1, -10, 1, 11);
+
+          // Winged Crossguard
+          ctx.fillStyle = "#e2e8f0";
+          ctx.fillRect(-6, 1, 12, 2);
+
+          // Gem emblem
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(-2, 0, 4, 3);
+          ctx.fillStyle = gemColor;
+          ctx.fillRect(-1, 1, 2, 2);
+
+          // Leather Handle & Pommel
+          ctx.fillStyle = "#78350f";
+          ctx.fillRect(-1, 3, 2, 4);
+          ctx.fillStyle = "#cbd5e1";
+          ctx.fillRect(-2, 7, 4, 2);
+
+          ctx.restore();
         } else if (type === 'bow') {
           // Curved wooden bow
           ctx.strokeStyle = "#b45309";
@@ -4598,7 +4622,7 @@ export class GameEngine {
       const centerTy = Math.floor((p.y + p.h / 2) / TILE_SIZE);      // 1. Draw standard cave lighting (if structureOverlayAlpha < 1)
       if (this.state.structureOverlayAlpha < 1.0) {
         lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-        lctx.fillStyle = "rgba(0, 0, 0, 1.0)"; // Pitch black outside
+        lctx.fillStyle = "rgba(0, 0, 0, 0.25)"; // 25% darkness effect outside (terrain visible without torches!)
         lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
         lctx.globalCompositeOperation = "destination-out";
@@ -4667,7 +4691,7 @@ export class GameEngine {
       // 2. Draw structure mask (if structureOverlayAlpha > 0)
       if (this.state.structureOverlayAlpha > 0.0) {
         lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-        lctx.fillStyle = "rgba(0, 0, 0, 0.85)"; // 85% dark outside when inside structure
+        lctx.fillStyle = "rgba(0, 0, 0, 0.25)"; // 25% darkness inside structure
         lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
         lctx.globalCompositeOperation = "destination-out";
@@ -5266,12 +5290,49 @@ export class GameEngine {
       ctx.scale(1.5, 1.5); // 1.5x Item Icon Scale!
 
       if (type === 'sword') {
-        ctx.fillStyle = "#cbd5e1";
-        ctx.fillRect(-2, -14, 4, 18);
+        const gemColor = p.playerColor || "#ea580c";
+
+        // Double-edged silver broadsword blade
+        ctx.fillStyle = "#f8fafc"; // Tip highlight
+        ctx.fillRect(-1, -17, 2, 3);
+
+        ctx.fillStyle = "#f1f5f9"; // Left blade highlight
+        ctx.fillRect(-3, -14, 3, 16);
+
+        ctx.fillStyle = "#cbd5e1"; // Fuller ridge
+        ctx.fillRect(0, -14, 1, 16);
+
+        ctx.fillStyle = "#94a3b8"; // Right blade shadow
+        ctx.fillRect(1, -14, 2, 16);
+
+        // Silver winged crossguard
+        ctx.fillStyle = "#e2e8f0";
+        ctx.fillRect(-8, 2, 16, 3);
         ctx.fillStyle = "#64748b";
-        ctx.fillRect(-6, 4, 12, 3);
-        ctx.fillStyle = "#78716c";
-        ctx.fillRect(-2, 7, 4, 7);
+        ctx.fillRect(-8, 5, 16, 1);
+
+        // Center Gem Housing (White/Silver Frame)
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(-3, 0, 6, 6);
+
+        // Player Color Gem Core (Cross Shape)
+        ctx.fillStyle = gemColor;
+        ctx.fillRect(-2, 1, 4, 4);
+        ctx.fillStyle = "#ffffff"; // Top-left specular dot
+        ctx.fillRect(-2, 1, 1, 1);
+
+        // Wrapped Leather Handle / Grip
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-2, 6, 4, 7);
+        ctx.fillStyle = "#451a03";
+        ctx.fillRect(0, 6, 2, 7);
+
+        // Diamond Steel Pommel with Gem Dot
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(-3, 13, 6, 3);
+        ctx.fillRect(-2, 16, 4, 2);
+        ctx.fillStyle = gemColor;
+        ctx.fillRect(-1, 14, 2, 2);
       } else if (type === 'bow') {
         ctx.strokeStyle = "#78716c";
         ctx.lineWidth = 3;

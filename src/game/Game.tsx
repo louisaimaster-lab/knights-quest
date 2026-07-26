@@ -318,7 +318,7 @@ export default function Game() {
       />
 
       {appState === "playing" && showInfo && (
-        <div className="absolute top-20 right-6 bg-slate-900/90 border border-slate-700 p-4 w-60 backdrop-blur-sm z-20 shadow-2xl rounded-md">
+        <div className="absolute top-20 right-6 bg-slate-900/90 border border-slate-700 p-4 w-60 backdrop-blur-none z-20 shadow-2xl rounded-md">
           <div className="absolute inset-1 border border-cyan-500/20 rounded pointer-events-none"></div>
           <button
             className="absolute top-2 right-2 text-slate-400 hover:text-white text-sm font-bold"
@@ -344,7 +344,7 @@ export default function Game() {
 
       {appState === "playing" && !showInfo && (
         <button
-          className="absolute top-20 right-6 bg-slate-900/90 border border-slate-700 text-cyan-400 px-3 py-1.5 text-xs backdrop-blur-sm z-20 hover:bg-slate-800 font-bold rounded shadow-lg flex items-center gap-1"
+          className="absolute top-20 right-6 bg-slate-900/90 border border-slate-700 text-cyan-400 px-3 py-1.5 text-xs backdrop-blur-none z-20 hover:bg-slate-800 font-bold rounded shadow-lg flex items-center gap-1"
           onClick={(e) => {
             e.stopPropagation();
             setShowInfo(true);
@@ -360,7 +360,7 @@ export default function Game() {
       </div>
 
       {appState === "menu" && (
-        <div className="absolute inset-0 bg-slate-950/20 z-30 flex flex-col items-center justify-center p-8 backdrop-blur-[1px]">
+        <div className="absolute inset-0 bg-slate-950/20 z-30 flex flex-col items-center justify-center p-8 backdrop-blur-none">
           <div className="p-8 bg-slate-900/50 border-2 border-cyan-500/60 rounded-xl flex flex-col items-center max-w-md w-full shadow-[0_0_30px_rgba(6,182,212,0.25)] relative">
             <div className="absolute inset-1 border border-cyan-400/30 rounded-lg pointer-events-none"></div>
             <h1 className="text-5xl text-white font-bold mb-2 tracking-widest text-center drop-shadow-md">
@@ -380,7 +380,7 @@ export default function Game() {
       )}
 
       {appState === "selectSave" && (
-        <div className="absolute inset-0 bg-slate-950/60 z-30 flex flex-col items-center p-8 backdrop-blur-[1px] overflow-y-auto">
+        <div className="absolute inset-0 bg-slate-950/40 z-30 flex flex-col items-center p-8 backdrop-blur-none overflow-y-auto">
           <h1 className="text-4xl text-cyan-400 font-bold mt-8 mb-6 drop-shadow-md tracking-wider">
             SELECT KNIGHT SAVE
           </h1>
