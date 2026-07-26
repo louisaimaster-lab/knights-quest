@@ -4941,87 +4941,88 @@ export class GameEngine {
 
     ctx.imageSmoothingEnabled = false;
     ctx.textAlign = "left";
-
     ctx.save();
     ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
     ctx.shadowBlur = 0; // Crisp pixel shadow (no blur)
     ctx.shadowOffsetX = 2;
     ctx.shadowOffsetY = 2;
 
-    // --- 1. FREELY FLOATING FLOOR TEXT (Top Center - 2.0x Scale) ---
+    // --- 1. FREELY FLOATING FLOOR TEXT (Top Center - Scaled 50% bigger = 3px blocks) ---
     ctx.fillStyle = "#94a3b8"; // Faded slate-silver
-    ctx.font = "bold 30px 'Courier New', Courier, monospace";
+    ctx.font = "bold 24px 'Courier New', Courier, monospace";
     ctx.textAlign = "center";
-    ctx.fillText(`FLOOR ${this.state.floor} / ${this.state.maxFloor}`, Math.floor(this.canvasWidth / 2), 44);
+    ctx.fillText(`FLOOR ${this.state.floor} / ${this.state.maxFloor}`, Math.floor(this.canvasWidth / 2), 36);
     ctx.textAlign = "left";
 
-    // --- 2. FREELY FLOATING 10 HEARTS (Top Left - 2.0x Scale) ---
+    // --- 2. FREELY FLOATING 10 HEARTS (Clean 11x9 Pixel Grid, 3px blocks = 50% bigger than 2px) ---
     const hudX = 20;
     const hudY = 20;
     const hpPerHeart = 10; // 100 HP = 10 Hearts total
     const totalHearts = Math.ceil(p.maxHealth / hpPerHeart);
+    const pSize = 3; // 3px per pixel block (50% bigger than 2px legacy)
 
-    const drawHeart = (x: number, y: number, state: 'full' | 'half' | 'empty') => {
-      ctx.save();
-      ctx.translate(Math.floor(x), Math.floor(y));
-      ctx.scale(2.0, 2.0); // 2.0x Heart Scaling!
+    const drawPixelHeart = (startX: number, startY: number, state: 'full' | 'half' | 'empty') => {
+      const heartMatrix = [
+        [0,0,1,1,0,0,0,1,1,0,0],
+        [0,1,1,1,1,0,1,1,1,1,0],
+        [1,1,1,1,1,1,1,1,1,1,1],
+        [1,1,1,1,1,1,1,1,1,1,1],
+        [0,1,1,1,1,1,1,1,1,1,0],
+        [0,0,1,1,1,1,1,1,1,0,0],
+        [0,0,0,1,1,1,1,1,0,0,0],
+        [0,0,0,0,1,1,1,0,0,0,0],
+        [0,0,0,0,0,1,0,0,0,0,0],
+      ];
 
-      // Dark Heart Outline
+      const sx = Math.floor(startX);
+      const sy = Math.floor(startY);
+
+      // Outer 1-block dark border outline
       ctx.fillStyle = "#1e1b1e";
-      ctx.beginPath();
-      ctx.moveTo(8, 3);
-      ctx.bezierCurveTo(8, 0, 4, 0, 2, 2.5);
-      ctx.bezierCurveTo(0, 0, -4, 0, -4, 3);
-      ctx.bezierCurveTo(-4, 7, 0, 10, 2, 13);
-      ctx.bezierCurveTo(4, 10, 8, 7, 8, 3);
-      ctx.fill();
-
-      if (state === 'full') {
-        // Soft Muted Ruby Heart
-        ctx.fillStyle = "#dc2626";
-        ctx.beginPath();
-        ctx.arc(-2, 3, 3, 0, Math.PI * 2);
-        ctx.arc(2, 3, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(-4, 4);
-        ctx.lineTo(0, 11);
-        ctx.lineTo(4, 4);
-        ctx.fill();
-        ctx.fillStyle = "#f87171";
-        ctx.fillRect(-3, 2, 1.5, 1.5);
-      } else if (state === 'half') {
-        ctx.fillStyle = "#dc2626";
-        ctx.beginPath();
-        ctx.arc(-2, 3, 3, Math.PI * 0.5, Math.PI * 1.5);
-        ctx.fill();
-        ctx.fillRect(-4, 3, 4, 4);
-        ctx.beginPath();
-        ctx.moveTo(-4, 4);
-        ctx.lineTo(0, 11);
-        ctx.lineTo(0, 4);
-        ctx.fill();
-        ctx.fillStyle = "#2d1618";
-        ctx.beginPath();
-        ctx.arc(2, 3, 2.5, -Math.PI * 0.5, Math.PI * 0.5);
-        ctx.fill();
-      } else {
-        ctx.fillStyle = "#2d1618";
-        ctx.beginPath();
-        ctx.arc(-2, 3, 2.5, 0, Math.PI * 2);
-        ctx.arc(2, 3, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(-3, 4);
-        ctx.lineTo(0, 10);
-        ctx.lineTo(3, 4);
-        ctx.fill();
+      for (let r = 0; r < heartMatrix.length; r++) {
+        for (let c = 0; c < heartMatrix[r].length; c++) {
+          if (heartMatrix[r][c] === 1) {
+            const offsets = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+            for (const [dx, dy] of offsets) {
+              const nr = r + dy;
+              const nc = c + dx;
+              if (nr < 0 || nr >= heartMatrix.length || nc < 0 || nc >= heartMatrix[0].length || heartMatrix[nr][nc] === 0) {
+                ctx.fillRect(sx + nc * pSize, sy + nr * pSize, pSize, pSize);
+              }
+            }
+          }
+        }
       }
-      ctx.restore();
+
+      // Heart Fill Blocks
+      for (let r = 0; r < heartMatrix.length; r++) {
+        for (let c = 0; c < heartMatrix[r].length; c++) {
+          if (heartMatrix[r][c] === 1) {
+            const isLeftHalf = c < 5;
+            let cellColor = "#2d1618"; // Dark empty
+
+            if (state === 'full') {
+              cellColor = "#dc2626"; // Full ruby red
+            } else if (state === 'half') {
+              cellColor = isLeftHalf ? "#dc2626" : "#2d1618";
+            }
+
+            ctx.fillStyle = cellColor;
+            ctx.fillRect(sx + c * pSize, sy + r * pSize, pSize, pSize);
+
+            // Glossy Pixel Specular Highlight at (col 2, row 1)
+            if ((state === 'full' || (state === 'half' && isLeftHalf)) && r === 1 && c === 2) {
+              ctx.fillStyle = "#f87171";
+              ctx.fillRect(sx + c * pSize, sy + r * pSize, pSize, pSize);
+            }
+          }
+        }
+      }
     };
 
+    const heartSpacing = 11 * pSize + 6; // 39px spacing
     for (let i = 0; i < totalHearts; i++) {
-      const hx = hudX + i * 38;
+      const hx = hudX + i * heartSpacing;
       const hy = hudY;
       const hpInHeart = p.health - i * hpPerHeart;
 
@@ -5029,13 +5030,13 @@ export class GameEngine {
       if (hpInHeart >= hpPerHeart) state = 'full';
       else if (hpInHeart >= hpPerHeart / 2) state = 'half';
 
-      drawHeart(hx, hy, state);
+      drawPixelHeart(hx, hy, state);
     }
 
-    // Exact Numeric HP Readout (2.0x Scale)
+    // Exact Numeric HP Readout
     ctx.fillStyle = "#f87171";
-    ctx.font = "bold 24px 'Courier New', Courier, monospace";
-    ctx.fillText(`${Math.max(0, p.health)} / ${p.maxHealth} HP`, hudX + totalHearts * 38 + 16, hudY + 22);
+    ctx.font = "bold 18px 'Courier New', Courier, monospace";
+    ctx.fillText(`${Math.max(0, p.health)} / ${p.maxHealth} HP`, hudX + totalHearts * heartSpacing + 12, hudY + 22);
 
     // --- 3. FREELY FLOATING ACTIVE ITEM TEXT (1.5x Scale) ---
     const activeBadgeY = hudY + 46;
