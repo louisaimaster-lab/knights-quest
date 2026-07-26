@@ -297,12 +297,12 @@ export default function Game() {
     <div
       ref={containerRef}
       tabIndex={0}
-      className="w-full h-screen bg-gradient-to-b from-[#3b2314] via-[#1e130c] to-[#0d0906] text-white font-mono overflow-hidden relative border-8 border-[#5c3716] select-none flex flex-col focus:outline-none shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]"
+      className="w-full h-screen bg-[#090d16] text-white font-mono overflow-hidden relative select-none flex flex-col focus:outline-none"
     >
       <div
-        className="absolute inset-0 opacity-15 pointer-events-none z-0"
+        className="absolute inset-0 opacity-10 pointer-events-none z-0"
         style={{
-          backgroundImage: "radial-gradient(#d4af37 1px, transparent 1px)",
+          backgroundImage: "radial-gradient(#38bdf8 1px, transparent 1px)",
           backgroundSize: "32px 32px",
         }}
       ></div>
@@ -318,10 +318,10 @@ export default function Game() {
       />
 
       {appState === "playing" && showInfo && (
-        <div className="absolute top-20 right-6 bg-[#181224]/90 border-2 border-[#7c4a1e] p-4 w-60 backdrop-blur-md z-20 shadow-2xl rounded-md">
-          <div className="absolute inset-1 border border-[#eab308]/40 pointer-events-none"></div>
+        <div className="absolute top-20 right-6 bg-slate-900/90 border border-slate-700 p-4 w-60 backdrop-blur-sm z-20 shadow-2xl rounded-md">
+          <div className="absolute inset-1 border border-cyan-500/20 rounded pointer-events-none"></div>
           <button
-            className="absolute top-2 right-2 text-yellow-500/70 hover:text-yellow-400 text-sm font-bold"
+            className="absolute top-2 right-2 text-slate-400 hover:text-white text-sm font-bold"
             onClick={(e) => {
               e.stopPropagation();
               setShowInfo(false);
@@ -329,22 +329,22 @@ export default function Game() {
           >
             ✕
           </button>
-          <div className="text-xs text-amber-300 mb-2 font-bold tracking-wider pointer-events-none flex items-center gap-1">
-            <span className="text-yellow-400">⚔</span> CONTROLS & INFO
+          <div className="text-xs text-cyan-400 mb-2 font-bold tracking-wider pointer-events-none flex items-center gap-1">
+            <span>⚔</span> CONTROLS & INFO
           </div>
-          <ul className="text-xs space-y-1.5 opacity-90 pointer-events-none text-amber-100">
+          <ul className="text-xs space-y-1.5 opacity-90 pointer-events-none text-slate-300">
             <li>• W/A/S/D or Arrows to Move</li>
             <li>• Click to Attack / Use Item</li>
             <li>• Keys 1, 2, 3 to Switch Hotbar</li>
             <li>• F to Pick Up / Swap Items</li>
-            <li className="text-yellow-300 font-bold">• Find the purple exit gate</li>
+            <li className="text-cyan-300 font-bold">• Find the purple exit gate</li>
           </ul>
         </div>
       )}
 
       {appState === "playing" && !showInfo && (
         <button
-          className="absolute top-20 right-6 bg-[#181224]/90 border-2 border-[#7c4a1e] text-amber-300 px-3 py-1.5 text-xs backdrop-blur-md z-20 hover:bg-[#2a1e3d] font-bold rounded shadow-lg flex items-center gap-1"
+          className="absolute top-20 right-6 bg-slate-900/90 border border-slate-700 text-cyan-400 px-3 py-1.5 text-xs backdrop-blur-sm z-20 hover:bg-slate-800 font-bold rounded shadow-lg flex items-center gap-1"
           onClick={(e) => {
             e.stopPropagation();
             setShowInfo(true);
