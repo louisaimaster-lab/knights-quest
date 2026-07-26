@@ -360,8 +360,8 @@ export default function Game() {
       </div>
 
       {appState === "menu" && (
-        <div className="absolute inset-0 bg-slate-950/50 z-30 flex flex-col items-center justify-center p-8 backdrop-blur-[1px]">
-          <div className="p-8 bg-slate-900/90 border-2 border-cyan-500/60 rounded-xl flex flex-col items-center max-w-md w-full shadow-[0_0_30px_rgba(6,182,212,0.25)] relative">
+        <div className="absolute inset-0 bg-slate-950/20 z-30 flex flex-col items-center justify-center p-8 backdrop-blur-[1px]">
+          <div className="p-8 bg-slate-900/50 border-2 border-cyan-500/60 rounded-xl flex flex-col items-center max-w-md w-full shadow-[0_0_30px_rgba(6,182,212,0.25)] relative">
             <div className="absolute inset-1 border border-cyan-400/30 rounded-lg pointer-events-none"></div>
             <h1 className="text-5xl text-white font-bold mb-2 tracking-widest text-center drop-shadow-md">
               KNIGHT'S <span className="text-cyan-400">QUEST</span>

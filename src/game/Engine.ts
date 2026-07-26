@@ -4841,48 +4841,41 @@ export class GameEngine {
     }
 
     if (this.state.isFloorComplete) {
-      // Main menu style backdrop overlay
-      ctx.fillStyle = "rgba(9, 13, 22, 0.85)";
+      // Pan camera continuously across world generation pane behind card choices
+      this.state.camera.x += 1.2;
+
+      // 60% lighter backdrop overlay (darkness lifted by 60%: 0.25 opacity)
+      ctx.fillStyle = "rgba(9, 13, 22, 0.25)";
       ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
-      // Main Menu Style Container Panel
-      const panelW = Math.min(this.canvasWidth - 60, 1120);
-      const panelH = Math.min(this.canvasHeight - 60, 640);
-      const panelX = (this.canvasWidth - panelW) / 2;
-      const panelY = (this.canvasHeight - panelH) / 2;
-
-      ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
-      ctx.fillRect(panelX, panelY, panelW, panelH);
-      ctx.strokeStyle = "rgba(6, 182, 212, 0.60)";
-      ctx.lineWidth = 3;
-      ctx.strokeRect(panelX, panelY, panelW, panelH);
-      ctx.strokeStyle = "rgba(6, 182, 212, 0.30)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(panelX + 4, panelY + 4, panelW - 8, panelH - 8);
-
-      ctx.fillStyle = "#38bdf8";
-      ctx.font = "bold 32px 'Courier New', Courier, monospace";
+      // Freely floating header text (NO box container)
+      ctx.fillStyle = COLORS.diamond;
+      ctx.font = "bold 34px 'Courier New', Courier, monospace";
       ctx.textAlign = "center";
+      ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
       ctx.fillText(
-        `FLOOR ${this.state.floor} CLEARED`,
+        `FLOOR ${this.state.floor} CLEARED - SELECT UPGRADE`,
         this.canvasWidth / 2,
-        panelY + 48,
+        65,
       );
       ctx.fillStyle = "#fbbf24";
-      ctx.font = "bold 20px 'Courier New', Courier, monospace";
+      ctx.font = "bold 22px 'Courier New', Courier, monospace";
       ctx.fillText(
         `YOUR COINS: ${this.state.player.coins}`,
         this.canvasWidth / 2,
-        panelY + 80,
+        100,
       );
 
-      // Draw Screen-Filling Legacy Upgrades (320px x 460px)
-      const cardWidth = Math.min(320, Math.floor((panelW - 120) / 3));
-      const cardHeight = Math.min(460, panelH - 160);
-      const gap = 24;
+      // Draw EXACT Legacy Cards (Bigger: 320px x 460px)
+      const cardWidth = 320;
+      const cardHeight = 460;
+      const gap = 40;
       const totalWidth = 3 * cardWidth + 2 * gap;
       const startX = this.canvasWidth / 2 - totalWidth / 2;
-      const startY = panelY + 110;
+      const startY = this.canvasHeight / 2 - cardHeight / 2 + 30;
 
       for (let i = 0; i < this.state.upgrades.length; i++) {
         const u = this.state.upgrades[i];
@@ -4895,101 +4888,66 @@ export class GameEngine {
           this.state.mouse.y >= cy &&
           this.state.mouse.y <= cy + cardHeight;
 
-        // Legacy Card Background & Borders
-        let fillStyle = isHover ? "rgba(30, 20, 12, 0.98)" : "rgba(20, 14, 8, 0.95)";
-        let strokeColor = isHover ? "#f59e0b" : "#b45309";
-        let innerColor = "#78350f";
-        let titleColor = "#fbbf24";
+        // EXACT Legacy Card Styling
+        let strokeColor = "#ffffff";
+        let fillStyle = isHover ? "#2a2a35" : "#13131e";
 
         if (u.isUltimate) {
           const timeCycle = Date.now() / 200;
           const hue = Math.floor((timeCycle * 50) % 360);
           strokeColor = `hsl(${hue}, 100%, 60%)`;
-          fillStyle = isHover ? "rgba(45, 10, 35, 0.98)" : "rgba(25, 5, 20, 0.95)";
-          innerColor = "#ec4899";
-          titleColor = "#f472b6";
+          fillStyle = isHover ? "#350f25" : "#1e0815";
         } else if (u.isSuper) {
-          strokeColor = isHover ? "#fbbf24" : "#d97706";
-          fillStyle = isHover ? "rgba(35, 25, 10, 0.98)" : "rgba(22, 16, 6, 0.95)";
-          innerColor = "#ca8a04";
-          titleColor = "#fef08a";
+          const timeCycle = Date.now() / 250;
+          const hue = Math.floor(45 + Math.sin(timeCycle) * 15);
+          strokeColor = `hsl(${hue}, 100%, 50%)`;
+          fillStyle = isHover ? "#322510" : "#1a150b";
+        } else {
+          strokeColor = isHover ? "#fbbf24" : "#4b5563";
         }
 
         ctx.fillStyle = fillStyle;
-        ctx.fillRect(cx, cy, cardWidth, cardHeight);
-
-        // Classic Legacy Card Double Border
         ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = u.isSuper || u.isUltimate ? 4 : 3;
+        ctx.lineWidth = u.isSuper || u.isUltimate ? 3 : 2;
+        ctx.fillRect(cx, cy, cardWidth, cardHeight);
         ctx.strokeRect(cx, cy, cardWidth, cardHeight);
-
-        ctx.strokeStyle = innerColor;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(cx + 6, cy + 6, cardWidth - 12, cardHeight - 12);
-
-        // Card Header Banner
-        ctx.fillStyle = u.isUltimate ? "#831843" : (u.isSuper ? "#78350f" : "#451a03");
-        ctx.fillRect(cx + 8, cy + 8, cardWidth - 16, 60);
 
         // Title
         ctx.textAlign = "center";
-        ctx.font = "bold 20px 'Courier New', Courier, monospace";
-        ctx.fillStyle = titleColor;
-        ctx.fillText(u.title, cx + cardWidth / 2, cy + 36);
+        ctx.font = "bold 26px 'Courier New', Courier, monospace";
+        ctx.fillStyle = u.isUltimate ? "#f472b6" : (u.isSuper ? "#fbbf24" : "#ffffff");
+        ctx.fillText(u.title, cx + cardWidth / 2, cy + 45);
 
-        // Sub-Label Banner
-        ctx.font = "bold 12px 'Courier New', Courier, monospace";
-        ctx.fillStyle = u.isUltimate ? "#f472b6" : (u.isSuper ? "#fef08a" : "#fde047");
-        let subText = "LEGACY UPGRADE";
+        // Sub-Label
+        ctx.font = "bold 15px 'Courier New', Courier, monospace";
+        ctx.fillStyle = u.isUltimate ? "#ec4899" : (u.isSuper ? "#f59e0b" : "#9ca3af");
+        let subText = "NORMAL UPGRADE";
         if (u.isUltimate) subText = "★ ULTIMATE CARD ★";
         else if (u.isSuper) subText = "★ SUPER CARD ★";
-        ctx.fillText(subText, cx + cardWidth / 2, cy + 56);
+        ctx.fillText(subText, cx + cardWidth / 2, cy + 82);
 
-        // Gold Banner Divider
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(cx + 12, cy + 68);
-        ctx.lineTo(cx + cardWidth - 12, cy + 68);
-        ctx.stroke();
-
-        // Desc lines (green for +, red for -, cyan for abilities)
-        ctx.font = "bold 15px 'Courier New', Courier, monospace";
+        // Desc lines
+        ctx.fillStyle = "#e5e7eb";
+        ctx.font = "17px 'Courier New', Courier, monospace";
         const lines = u.desc.split("\n");
         for (let j = 0; j < lines.length; j++) {
-          const line = lines[j];
-          if (line.startsWith("+")) {
-            ctx.fillStyle = "#4ade80"; // Green bonus
-          } else if (line.startsWith("-")) {
-            ctx.fillStyle = "#f87171"; // Red penalty
-          } else if (line.includes("ability")) {
-            ctx.fillStyle = "#38bdf8"; // Cyan ability
-          } else {
-            ctx.fillStyle = "#fef08a";
-          }
-          ctx.fillText(line, cx + cardWidth / 2, cy + 104 + j * 24);
+          ctx.fillText(lines[j], cx + cardWidth / 2, cy + 135 + j * 26);
         }
 
-        // Card cost badge button
+        // Card cost
         const affordable = this.state.player.coins >= u.cost;
-        ctx.fillStyle = affordable ? (isHover ? "#15803d" : "#166534") : "#7f1d1d";
-        ctx.fillRect(cx + 16, cy + cardHeight - 56, cardWidth - 32, 40);
-        ctx.strokeStyle = affordable ? "#4ade80" : "#ef4444";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(cx + 16, cy + cardHeight - 56, cardWidth - 32, 40);
-
-        ctx.font = "bold 16px 'Courier New', Courier, monospace";
-        ctx.fillStyle = affordable ? "#ffffff" : "#f87171";
+        ctx.font = "bold 20px 'Courier New', Courier, monospace";
+        ctx.fillStyle = affordable ? "#fbbf24" : "#f87171";
         ctx.fillText(`COST: ${u.cost} COINS`, cx + cardWidth / 2, cy + cardHeight - 30);
       }
 
       ctx.textAlign = "center";
-      ctx.font = "20px 'Courier New', Courier, monospace";
+      ctx.font = "bold 20px 'Courier New', Courier, monospace";
       ctx.fillStyle = "#ffffff";
       ctx.fillText(
         "Press ENTER to skip / descend deeper",
         this.canvasWidth / 2,
-        this.canvasHeight - 40,
+        this.canvasHeight - 30,
       );
     }
 
