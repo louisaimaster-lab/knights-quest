@@ -863,14 +863,6 @@ export function generateCave(floor: number, maxFloor: number) {
       }
   }
 
-  // Ensure solid ground block directly beneath endPos
-  if (map[endPos.y + 1]) {
-      const tileBelow = map[endPos.y + 1][endPos.x];
-      if (tileBelow !== 1 && tileBelow !== 7 && tileBelow !== 8 && tileBelow !== 11 && tileBelow !== 15 && tileBelow !== 16 && tileBelow !== 17 && tileBelow !== 19 && tileBelow !== 20) {
-          map[endPos.y + 1][endPos.x] = 1; // Create solid ground block underneath gate
-      }
-  }
-
   // Final Pass: Fill all disconnected areas from startPos so no isolated pockets or weird unreachable areas remain
   let reachableFromStart = new Set<string>();
   let startQueue = [{ x: startPos.x, y: startPos.y }];
@@ -901,6 +893,16 @@ export function generateCave(floor: number, maxFloor: number) {
           if ((tile === 0 || tile === 4 || tile === 5 || tile === 6 || tile === 10 || tile === 12 || tile === 13 || tile === 18 || tile === 21) && !reachableFromStart.has(`${mx},${my}`)) {
               map[my][mx] = 1; // Fill disconnected pocket with solid wall
           }
+      }
+  }
+
+  // Ensure solid ground block directly beneath endPos AFTER BFS cleanup!
+  map[endPos.y - 1][endPos.x] = 0; // Empty air space above door
+  map[endPos.y][endPos.x] = 2;     // Descend trapdoor gate
+  if (map[endPos.y + 1]) {
+      const tileBelow = map[endPos.y + 1][endPos.x];
+      if (tileBelow !== 1 && tileBelow !== 7 && tileBelow !== 8 && tileBelow !== 11 && tileBelow !== 15 && tileBelow !== 16 && tileBelow !== 17 && tileBelow !== 19 && tileBelow !== 20) {
+          map[endPos.y + 1][endPos.x] = 1; // Create solid ground block underneath gate
       }
   }
 

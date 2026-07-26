@@ -108,11 +108,7 @@ export class GameEngine {
 
   initMenuBackground() {
     this.isMenuBackground = true;
-    this.state = this.getInitialState();
-    this.initFloor(1);
-    this.state.isPaused = false;
-    this.state.transitionState = "none";
-    this.state.floorTitleState = "none";
+    this.initCardBackground();
   }
 
   initCardBackground() {
@@ -3040,7 +3036,9 @@ export class GameEngine {
             tile === 11 ||
             tile === 15 ||
             tile === 16 ||
-            tile === 17
+            tile === 17 ||
+            tile === 19 ||
+            tile === 20
           ) {
             const isStoneBrick = tile === 11;
             const isGrass = tile === 7;
@@ -3048,10 +3046,22 @@ export class GameEngine {
             const isStone = tile === 8;
             const isSnow = tile === 16;
             const isIce = tile === 17;
+            const isBasalt = tile === 19;
+            const isMagma = tile === 20;
 
             let baseColor, darkColor, highlightColor, strokeColor;
 
-            if (isStoneBrick) {
+            if (isBasalt) {
+              baseColor = "#262626";
+              darkColor = "#171717";
+              highlightColor = "#404040";
+              strokeColor = "#0a0a0a";
+            } else if (isMagma) {
+              baseColor = "#451a03";
+              darkColor = "#1c1917";
+              highlightColor = "#f97316";
+              strokeColor = "#ef4444";
+            } else if (isStoneBrick) {
               baseColor = `hsl(${hue}, 5%, 35%)`;
               darkColor = `hsl(${hue}, 5%, 22%)`;
               highlightColor = `hsl(${hue}, 5%, 45%)`;
@@ -3092,7 +3102,12 @@ export class GameEngine {
 
             // Base texture for interior
             ctx.fillStyle = baseColor;
-            if (!isStoneBrick) {
+            if (isMagma) {
+              // Glowing magma cracks inside
+              ctx.fillRect(x * TILE_SIZE + 4, y * TILE_SIZE + 4, 12, 12);
+              ctx.fillStyle = "#f97316";
+              ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE + 8, 4, 4);
+            } else if (!isStoneBrick) {
               if ((x * 11 + y * 7) % 3 === 0)
                 ctx.fillRect(x * TILE_SIZE + 4, y * TILE_SIZE + 4, 8, 8);
               if ((x * 13 + y * 5) % 4 === 0)
@@ -3153,7 +3168,9 @@ export class GameEngine {
               t === 11 ||
               t === 15 ||
               t === 16 ||
-              t === 17;
+              t === 17 ||
+              t === 19 ||
+              t === 20;
             const top = isSolid(this.state.map[y - 1]?.[x]);
             const bottom = isSolid(this.state.map[y + 1]?.[x]);
             const left = isSolid(this.state.map[y][x - 1]);
@@ -4922,6 +4939,12 @@ export class GameEngine {
     }
 
     // Darkness overlay (using offscreen canvas)
+    if (this.isMenuBackground) {
+      ctx.fillStyle = "rgba(9, 13, 22, 0.30)";
+      ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+      return;
+    }
+
     if (!this.lightCanvas) {
       this.lightCanvas = document.createElement("canvas");
     }
