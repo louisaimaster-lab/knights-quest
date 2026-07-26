@@ -3420,6 +3420,50 @@ export class GameEngine {
               ctx.fillRect(x * TILE_SIZE + 4, y * TILE_SIZE + 2, 4, 4);
             if (Math.cos(x * 2.7) > 0)
               ctx.fillRect(x * TILE_SIZE + 18, y * TILE_SIZE + 4, 6, 2);
+          } else if (tile === 21) {
+            // Lava (Glowing fiery orange / magma fluid)
+            const lavaAbove =
+              y > 0 &&
+              this.state.map[y - 1] &&
+              this.state.map[y - 1][x] === 21;
+
+            ctx.fillStyle = "rgba(234, 88, 12, 0.9)"; // Fiery orange magma
+            if (lavaAbove) {
+              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
+            } else {
+              ctx.fillRect(
+                x * TILE_SIZE,
+                y * TILE_SIZE + 4,
+                TILE_SIZE + 1,
+                TILE_SIZE - 4 + 1,
+              );
+              // Animated glowing yellow magma ripples
+              ctx.fillStyle = "#fef08a";
+              if (Math.sin(Date.now() * 0.005 + x * 0.8) > 0) {
+                ctx.fillRect(
+                  x * TILE_SIZE + 2,
+                  y * TILE_SIZE + 4,
+                  TILE_SIZE - 4,
+                  3,
+                );
+              }
+            }
+
+            // Magma core glow
+            ctx.fillStyle = "#ea580c";
+            ctx.fillRect(x * TILE_SIZE + 6, y * TILE_SIZE + 12, TILE_SIZE - 12, 8);
+            ctx.fillStyle = "#f97316";
+            ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE + 14, TILE_SIZE - 16, 4);
+
+            // Ambient rising fire embers
+            if (!lavaAbove && Math.random() < 0.08) {
+              this.spawnParticles(
+                x * TILE_SIZE + Math.random() * TILE_SIZE,
+                y * TILE_SIZE + 2,
+                "#f97316",
+                1
+              );
+            }
           } else if (tile === 10 || tile === 12) {
             // Torch
             const isPurple = tile === 12;
@@ -5103,43 +5147,48 @@ export class GameEngine {
       ctx.restore();
     }
 
-    // HUD
-    ctx.fillStyle = "#fbbf24"; // Yellow color for coins
-    ctx.font = "bold 20px 'Courier New', Courier, monospace";
-    ctx.textAlign = "right";
-    ctx.fillText(`${this.state.player.coins} COINS`, this.canvasWidth - 20, 30);
+    if (!this.isMenuBackground) {
+      // HUD
+      ctx.fillStyle = "#fbbf24"; // Yellow color for coins
+      ctx.font = "bold 20px 'Courier New', Courier, monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(`${this.state.player.coins} COINS`, this.canvasWidth - 20, 30);
 
-    this.drawHUD();
+      this.drawHUD();
 
-    if (this.state.floorTitleState !== "none") {
-      let alpha = 0;
-      if (this.state.floorTitleState === "in")
-        alpha = this.state.floorTitleTimer / 30;
-      else if (this.state.floorTitleState === "show") alpha = 1;
-      else if (this.state.floorTitleState === "out")
-        alpha = 1 - this.state.floorTitleTimer / 30;
+      if (this.state.floorTitleState !== "none") {
+        let alpha = 0;
+        if (this.state.floorTitleState === "in")
+          alpha = this.state.floorTitleTimer / 30;
+        else if (this.state.floorTitleState === "show") alpha = 1;
+        else if (this.state.floorTitleState === "out")
+          alpha = 1 - this.state.floorTitleTimer / 30;
 
-      let title = "Standard Caves";
-      let subtitle = "The good ol' classic.";
-      if (this.state.biome === "ice") {
-        title = "Ice Pathways";
-        subtitle = "You feel your own heart getting colder.";
-      } else if (this.state.biome === "moss") {
-        title = "Overgrown Moss";
-        subtitle = "It spreads.";
+        let title = "Standard Caves";
+        let subtitle = "The good ol' classic.";
+        if (this.state.biome === "ice") {
+          title = "Ice Pathways";
+          subtitle = "You feel your own heart getting colder.";
+        } else if (this.state.biome === "moss") {
+          title = "Overgrown Moss";
+          subtitle = "It spreads.";
+        } else if (this.state.biome === "volcanic") {
+          title = "Volcanic Caverns";
+          subtitle = "A heatwave emerges. Watch your step.";
+        }
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.textAlign = "center";
+        ctx.font = "bold 36px 'Courier New', Courier, monospace";
+        ctx.fillText(
+          `Floor ${this.state.floor} - ${title}`,
+          this.canvasWidth / 2,
+          140,
+        );
+        ctx.font = "20px 'Courier New', Courier, monospace";
+        ctx.fillStyle = `rgba(180, 220, 255, ${alpha})`;
+        ctx.fillText(subtitle, this.canvasWidth / 2, 180);
       }
-
-      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-      ctx.textAlign = "center";
-      ctx.font = "bold 36px 'Courier New', Courier, monospace";
-      ctx.fillText(
-        `Floor ${this.state.floor} - ${title}`,
-        this.canvasWidth / 2,
-        140,
-      );
-      ctx.font = "20px 'Courier New', Courier, monospace";
-      ctx.fillStyle = `rgba(180, 220, 255, ${alpha})`;
-      ctx.fillText(subtitle, this.canvasWidth / 2, 180);
     }
 
     if (this.state.isFloorComplete) {

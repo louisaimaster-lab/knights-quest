@@ -405,13 +405,20 @@ export function generateCave(floor: number, maxFloor: number) {
       map[startPos.y + 1][startPos.x] = 5; // Place a platform right beneath spawn
   }
     
-  let endSpaces = openSpaces.filter(s => s.y >= maxY - 15 && map[s.y+1] && (map[s.y+1][s.x] === 1 || map[s.y+1][s.x] === 8 || map[s.y+1][s.x] === 11 || map[s.y+1][s.x] === 15));
+  let endSpaces = openSpaces.filter(
+    s => s.y >= Math.floor(height * 0.70) &&
+         map[s.y + 1] &&
+         map[s.y + 1][s.x] !== 0 &&
+         map[s.y + 1][s.x] !== 4 &&
+         map[s.y + 1][s.x] !== 6 &&
+         map[s.y + 1][s.x] !== 21
+  );
   if (endSpaces.length === 0) {
-      endSpaces = openSpaces.filter(s => s.y >= maxY - 5);
+    endSpaces = openSpaces.filter(s => s.y >= Math.floor(height * 0.50));
   }
   let endPos = endSpaces.length > 0 
     ? endSpaces[Math.floor(Math.random() * endSpaces.length)] 
-    : {x: Math.floor(width/2), y: height - 2};
+    : {x: Math.floor(width/2), y: height - 5};
 
   if (floor < maxFloor) {
       // Exit is handled by Engine via endPos
