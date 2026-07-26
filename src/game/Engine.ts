@@ -4939,31 +4939,32 @@ export class GameEngine {
     const ctx = this.ctx;
     const p = this.state.player;
 
+    ctx.imageSmoothingEnabled = false;
     ctx.textAlign = "left";
 
     ctx.save();
-    ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
-    ctx.shadowBlur = 6;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
+    ctx.shadowBlur = 0; // Crisp pixel shadow (no blur)
     ctx.shadowOffsetX = 2;
     ctx.shadowOffsetY = 2;
 
-    // --- 1. FREELY FLOATING FLOOR TEXT (Top Center - Scaled 2.5x) ---
+    // --- 1. FREELY FLOATING FLOOR TEXT (Top Center - 2.0x Scale) ---
     ctx.fillStyle = "#94a3b8"; // Faded slate-silver
-    ctx.font = "bold 38px 'Courier New', Courier, monospace";
+    ctx.font = "bold 30px 'Courier New', Courier, monospace";
     ctx.textAlign = "center";
-    ctx.fillText(`FLOOR ${this.state.floor} / ${this.state.maxFloor}`, this.canvasWidth / 2, 55);
+    ctx.fillText(`FLOOR ${this.state.floor} / ${this.state.maxFloor}`, Math.floor(this.canvasWidth / 2), 44);
     ctx.textAlign = "left";
 
-    // --- 2. FREELY FLOATING 10 HEARTS (Top Left - Scaled 2.5x) ---
-    const hudX = 25;
-    const hudY = 25;
+    // --- 2. FREELY FLOATING 10 HEARTS (Top Left - 2.0x Scale) ---
+    const hudX = 20;
+    const hudY = 20;
     const hpPerHeart = 10; // 100 HP = 10 Hearts total
     const totalHearts = Math.ceil(p.maxHealth / hpPerHeart);
 
     const drawHeart = (x: number, y: number, state: 'full' | 'half' | 'empty') => {
       ctx.save();
-      ctx.translate(x, y);
-      ctx.scale(2.5, 2.5); // 2.5x Heart Scaling!
+      ctx.translate(Math.floor(x), Math.floor(y));
+      ctx.scale(2.0, 2.0); // 2.0x Heart Scaling!
 
       // Dark Heart Outline
       ctx.fillStyle = "#1e1b1e";
@@ -5020,7 +5021,7 @@ export class GameEngine {
     };
 
     for (let i = 0; i < totalHearts; i++) {
-      const hx = hudX + i * 46;
+      const hx = hudX + i * 38;
       const hy = hudY;
       const hpInHeart = p.health - i * hpPerHeart;
 
@@ -5031,44 +5032,44 @@ export class GameEngine {
       drawHeart(hx, hy, state);
     }
 
-    // Exact Numeric HP Readout (Scaled 2.5x)
+    // Exact Numeric HP Readout (2.0x Scale)
     ctx.fillStyle = "#f87171";
-    ctx.font = "bold 30px 'Courier New', Courier, monospace";
-    ctx.fillText(`${Math.max(0, p.health)} / ${p.maxHealth} HP`, hudX + totalHearts * 46 + 20, hudY + 28);
+    ctx.font = "bold 24px 'Courier New', Courier, monospace";
+    ctx.fillText(`${Math.max(0, p.health)} / ${p.maxHealth} HP`, hudX + totalHearts * 38 + 16, hudY + 22);
 
-    // --- 3. FREELY FLOATING ACTIVE ITEM TEXT (Scaled 2.5x) ---
-    const activeBadgeY = hudY + 55;
+    // --- 3. FREELY FLOATING ACTIVE ITEM TEXT (1.5x Scale) ---
+    const activeBadgeY = hudY + 46;
 
     ctx.fillStyle = "#94a3b8"; // Soft faded slate
-    ctx.font = "bold 30px 'Courier New', Courier, monospace";
+    ctx.font = "bold 18px 'Courier New', Courier, monospace";
     const currentItem = p.hotbar[p.activeSlot];
     let displayItemName = "UNARMED";
     if (p.clawsActive) displayItemName = "RIP & TEAR CLAWS";
     else if (currentItem) {
       displayItemName = currentItem.toUpperCase().replace(/_/g, ' ');
     }
-    ctx.fillText(`ACTIVE: ${displayItemName}`, hudX, activeBadgeY + 28);
+    ctx.fillText(`ACTIVE: ${displayItemName}`, hudX, activeBadgeY + 18);
 
-    let nextHUDY = activeBadgeY + 70;
+    let nextHUDY = activeBadgeY + 48;
 
-    // Super Abilities & Buff Status (Scaled 2.5x)
+    // Super Abilities & Buff Status (1.5x Scale)
     const drawAbilityPanel = (title: string, has: boolean, active: boolean, timer: number, cooldown: number, maxTimer: number, maxCooldown: number, keyChar: string) => {
       if (!has) return;
       ctx.fillStyle = "#cbd5e1";
-      ctx.font = "bold 26px 'Courier New', Courier, monospace";
-      ctx.fillText(title, hudX, nextHUDY + 24);
+      ctx.font = "bold 16px 'Courier New', Courier, monospace";
+      ctx.fillText(title, hudX, nextHUDY + 16);
 
       if (active) {
         ctx.fillStyle = "#d97706";
-        ctx.fillText(`ACTIVE: ${Math.ceil(timer / 60)}s`, hudX + 260, nextHUDY + 24);
+        ctx.fillText(`ACTIVE: ${Math.ceil(timer / 60)}s`, hudX + 160, nextHUDY + 16);
       } else if (cooldown > 0) {
         ctx.fillStyle = "#ef4444";
-        ctx.fillText(`CD: ${Math.ceil(cooldown / 60)}s`, hudX + 260, nextHUDY + 24);
+        ctx.fillText(`CD: ${Math.ceil(cooldown / 60)}s`, hudX + 160, nextHUDY + 16);
       } else {
         ctx.fillStyle = "#22c55e";
-        ctx.fillText(`READY [${keyChar}]`, hudX + 260, nextHUDY + 24);
+        ctx.fillText(`READY [${keyChar}]`, hudX + 160, nextHUDY + 16);
       }
-      nextHUDY += 50;
+      nextHUDY += 32;
     };
 
     drawAbilityPanel("MALEVOLENCE", p.hasMalevolence, p.malevolenceActive, p.malevolenceTimer, p.malevolenceCooldown, 900, 6000, "Q");
@@ -5078,41 +5079,41 @@ export class GameEngine {
     // Speed Potion Swiftness Buff Status
     if (p.speedPotionTimer && p.speedPotionTimer > 0) {
       ctx.fillStyle = "#38bdf8";
-      ctx.font = "bold 26px 'Courier New', Courier, monospace";
-      ctx.fillText(`SWIFTNESS: ${Math.ceil(p.speedPotionTimer / 60)}s`, hudX, nextHUDY + 24);
-      nextHUDY += 50;
+      ctx.font = "bold 16px 'Courier New', Courier, monospace";
+      ctx.fillText(`SWIFTNESS: ${Math.ceil(p.speedPotionTimer / 60)}s`, hudX, nextHUDY + 16);
+      nextHUDY += 32;
     }
 
     // Poison status
     if (p.poisonTimer > 0) {
       ctx.fillStyle = "#22c55e";
-      ctx.font = "bold 26px 'Courier New', Courier, monospace";
-      ctx.fillText(`POISONED: ${Math.ceil(p.poisonTimer / 60)}s`, hudX, nextHUDY + 24);
-      nextHUDY += 50;
+      ctx.font = "bold 16px 'Courier New', Courier, monospace";
+      ctx.fillText(`POISONED: ${Math.ceil(p.poisonTimer / 60)}s`, hudX, nextHUDY + 16);
+      nextHUDY += 32;
     }
 
     // Diamond status
     if (p.hasDiamond) {
       ctx.fillStyle = COLORS.diamond;
-      ctx.font = "bold 30px 'Courier New', Courier, monospace";
-      ctx.fillText("[TRUE DIAMOND SECURED]", hudX, nextHUDY + 24);
+      ctx.font = "bold 18px 'Courier New', Courier, monospace";
+      ctx.fillText("[TRUE DIAMOND SECURED]", hudX, nextHUDY + 16);
     }
 
     ctx.restore();
 
-    // --- Hotbar Slots Rendering (3 SLOTS, Bottom-Center - Scaled 2.5x) ---
-    const midX = this.canvasWidth / 2;
-    const slotW = 135; // 54 * 2.5
-    const slotH = 135; // 54 * 2.5
-    const slotGap = 25; // 10 * 2.5
-    const hotbarY = this.canvasHeight - slotH - 35;
+    // --- Hotbar Slots Rendering (3 SLOTS, Bottom-Center - 1.5x Scale) ---
+    const midX = Math.floor(this.canvasWidth / 2);
+    const slotW = 81; // 54 * 1.5
+    const slotH = 81; // 54 * 1.5
+    const slotGap = 15; // 10 * 1.5
+    const hotbarY = this.canvasHeight - slotH - 25;
     const totalHotbarW = 3 * slotW + 2 * slotGap;
-    const startHotbarX = midX - totalHotbarW / 2;
+    const startHotbarX = midX - Math.floor(totalHotbarW / 2);
 
     const drawItemIcon = (x: number, y: number, type: WeaponType) => {
       ctx.save();
-      ctx.translate(x + slotW / 2, y + slotH / 2);
-      ctx.scale(2.5, 2.5); // 2.5x Item Icon Scale!
+      ctx.translate(Math.floor(x + slotW / 2), Math.floor(y + slotH / 2));
+      ctx.scale(1.5, 1.5); // 1.5x Item Icon Scale!
 
       if (type === 'sword') {
         ctx.fillStyle = "#cbd5e1";
@@ -5186,19 +5187,19 @@ export class GameEngine {
 
       if (isActive) {
         ctx.strokeStyle = "#38bdf8";
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 3;
         ctx.strokeRect(slotX, hotbarY, slotW, slotH);
       } else {
         ctx.strokeStyle = "#334155";
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1.5;
         ctx.strokeRect(slotX, hotbarY, slotW, slotH);
       }
 
-      // Slot Number Label [1], [2], [3] (Scaled 2.5x)
+      // Slot Number Label [1], [2], [3] (1.5x Scale)
       ctx.fillStyle = isActive ? "#38bdf8" : "#64748b";
-      ctx.font = "bold 25px 'Courier New', Courier, monospace";
+      ctx.font = "bold 15px 'Courier New', Courier, monospace";
       ctx.textAlign = "left";
-      ctx.fillText(`[${i + 1}]`, slotX + 8, hotbarY + 28);
+      ctx.fillText(`[${i + 1}]`, slotX + 6, hotbarY + 18);
 
       const item = p.hotbar[i];
       if (item !== null) {
@@ -5206,11 +5207,11 @@ export class GameEngine {
       }
     }
 
-    // Faded Muted Hotbar Label (Scaled 2.5x)
+    // Faded Muted Hotbar Label (1.5x Scale)
     ctx.textAlign = "center";
     ctx.fillStyle = "#64748b";
-    ctx.font = "bold 25px 'Courier New', Courier, monospace";
-    ctx.fillText("HOTBAR (1 - 3)", midX, hotbarY - 14);
+    ctx.font = "bold 15px 'Courier New', Courier, monospace";
+    ctx.fillText("HOTBAR (1 - 3)", midX, hotbarY - 8);
   }
 
   drawAfterimages() {
