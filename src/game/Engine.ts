@@ -61,6 +61,8 @@ export class GameEngine {
         hasMalevolence: p.hasMalevolence,
         hasImpenetrable: p.hasImpenetrable,
         hasSupersonic: p.hasSupersonic,
+        hasPulsar: p.hasPulsar,
+        hasSupernova: p.hasSupernova,
         hasDiamond: p.hasDiamond,
         facingRight: p.facingRight
       },
@@ -92,6 +94,8 @@ export class GameEngine {
     p.hasMalevolence = rp.hasMalevolence;
     p.hasImpenetrable = rp.hasImpenetrable;
     p.hasSupersonic = rp.hasSupersonic;
+    p.hasPulsar = rp.hasPulsar;
+    p.hasSupernova = rp.hasSupernova;
     p.hasDiamond = rp.hasDiamond;
     p.facingRight = rp.facingRight;
 
@@ -177,6 +181,14 @@ export class GameEngine {
         supersonicCooldown: 0,
         supersonicActive: false,
         supersonicTimer: 0,
+        hasPulsar: false,
+        pulsarCooldown: 0,
+        pulsarActive: false,
+        pulsarTimer: 0,
+        hasSupernova: false,
+        supernovaCooldown: 0,
+        supernovaActive: false,
+        supernovaTimer: 0,
       },
       enemies: [],
       particles: [],
@@ -1044,13 +1056,88 @@ export class GameEngine {
       }
     }
 
-    // Super ability activation: Supersonic (Time Slow) on X or C
-    if (p.hasSupersonic && (keys["x"] || keys["X"] || keys["c"] || keys["C"]) && !(prevKeys["x"] || prevKeys["X"] || keys["c"] || prevKeys["C"])) {
+    // Super ability activation: Supersonic (Time Slow) on X or E
+    if (p.hasSupersonic && (keys["x"] || keys["X"] || keys["e"] || keys["E"]) && !(prevKeys["x"] || prevKeys["X"] || prevKeys["e"] || prevKeys["E"])) {
       if (p.supersonicCooldown <= 0 && !p.supersonicActive) {
         p.supersonicActive = true;
         p.supersonicTimer = 600; // 10s
         p.timeSlowActive = true;
         this.state.timeScale = 0.20; // Slow everything except player to 0.2x speed
+      }
+    }
+
+    // Super ability activation: Pulsar (Shockwave) on C
+    if (p.hasPulsar && (keys["c"] || keys["C"]) && !(prevKeys["c"] || prevKeys["C"])) {
+      if (p.pulsarCooldown <= 0 && !p.pulsarActive) {
+        p.pulsarActive = true;
+        p.pulsarTimer = 30;
+        p.pulsarCooldown = 3600; // 60s CD
+        this.state.shakeTimer = 25;
+
+        // 7 blocks left & right (224px), 3 blocks up & down (96px)
+        const rangeX = 224;
+        const rangeY = 96;
+        const px = p.x + p.w / 2;
+        const py = p.y + p.h / 2;
+        const dmg = Math.round(40 * p.damageMulti);
+
+        // Wave FX particles
+        for (let i = 0; i < 40; i++) {
+          const angle = (i / 40) * Math.PI * 2;
+          const speed = 4 + Math.random() * 6;
+          this.state.particles.push({
+            x: px,
+            y: py,
+            vx: Math.cos(angle) * speed * 2.0,
+            vy: Math.sin(angle) * speed * 0.8,
+            life: 25,
+            maxLife: 25,
+            color: i % 2 === 0 ? "#38bdf8" : "#c084fc",
+            size: 4 + Math.random() * 4
+          });
+        }
+
+        // Damage and knock enemies 7 blocks (224px)
+        for (const enemy of this.state.enemies) {
+          const ex = enemy.x + enemy.w / 2;
+          const ey = enemy.y + enemy.h / 2;
+          if (Math.abs(ex - px) <= rangeX && Math.abs(ey - py) <= rangeY) {
+            enemy.health -= dmg;
+            enemy.invulnerableTimer = 15;
+            const dir = ex >= px ? 1 : -1;
+            enemy.vx = dir * 14;
+            enemy.vy = -6;
+
+            this.state.texts.push({
+              x: ex,
+              y: ey - 10,
+              text: `-${dmg} [PULSAR]`,
+              life: 45,
+              maxLife: 45
+            });
+          }
+        }
+      }
+    }
+
+    // Super ability activation: Cosmic Supernova on V
+    if (p.hasSupernova && (keys["v"] || keys["V"]) && !(prevKeys["v"] || prevKeys["V"])) {
+      if (p.supernovaCooldown <= 0 && !p.supernovaActive && !this.state.supernovaStar) {
+        p.supernovaActive = true;
+        p.supernovaTimer = 600;
+        p.supernovaCooldown = 5400; // 90s CD
+        this.state.shakeTimer = 10;
+
+        const targetX = this.state.mouse.worldX;
+        const targetY = this.state.mouse.worldY;
+        this.state.supernovaStar = {
+          x: p.x + p.w / 2,
+          y: p.y + p.h / 2,
+          targetX,
+          targetY,
+          state: 'traveling',
+          timer: 0
+        };
       }
     }
 
@@ -1076,6 +1163,24 @@ export class GameEngine {
       }
     } else if (p.impenetrableCooldown > 0) {
       p.impenetrableCooldown--;
+    }
+
+    if (p.pulsarActive) {
+      p.pulsarTimer--;
+      if (p.pulsarTimer <= 0) {
+        p.pulsarActive = false;
+      }
+    } else if (p.pulsarCooldown > 0) {
+      p.pulsarCooldown--;
+    }
+
+    if (p.supernovaActive) {
+      p.supernovaTimer--;
+      if (p.supernovaTimer <= 0) {
+        p.supernovaActive = false;
+      }
+    } else if (p.supernovaCooldown > 0) {
+      p.supernovaCooldown--;
     }
 
     if (p.supersonicActive) {
@@ -1973,7 +2078,7 @@ export class GameEngine {
         title: "Fighter",
         desc: "+20% Damage",
         isSuper: false,
-        cost: 15,
+        cost: 25,
         effect: (p: any) => {
           p.damageMulti += 0.20;
         }
@@ -1982,7 +2087,7 @@ export class GameEngine {
         title: "Glass Cannon",
         desc: "-35% Max HP\n+50% Damage",
         isSuper: false,
-        cost: 15,
+        cost: 25,
         effect: (p: any) => {
           p.maxHealth = Math.max(10, Math.round(p.maxHealth * 0.65));
           if (p.health > p.maxHealth) p.health = p.maxHealth;
@@ -1993,7 +2098,7 @@ export class GameEngine {
         title: "Workout",
         desc: "+10% Damage\n+10% HP\n+5% Speed",
         isSuper: false,
-        cost: 15,
+        cost: 25,
         effect: (p: any) => {
           p.damageMulti += 0.10;
           p.maxHealth = Math.round(p.maxHealth * 1.10);
@@ -2005,7 +2110,7 @@ export class GameEngine {
         title: "Bones of Steel",
         desc: "+25% HP",
         isSuper: false,
-        cost: 15,
+        cost: 25,
         effect: (p: any) => {
           p.maxHealth = Math.round(p.maxHealth * 1.25);
           p.health += Math.round(p.baseMaxHealth * 0.25);
@@ -2015,7 +2120,7 @@ export class GameEngine {
         title: "Heavy",
         desc: "+30% HP\n-5% Speed",
         isSuper: false,
-        cost: 15,
+        cost: 25,
         effect: (p: any) => {
           p.maxHealth = Math.round(p.maxHealth * 1.30);
           p.health += Math.round(p.baseMaxHealth * 0.30);
@@ -2026,7 +2131,7 @@ export class GameEngine {
         title: "Runner",
         desc: "+35% Speed",
         isSuper: false,
-        cost: 15,
+        cost: 25,
         effect: (p: any) => {
           p.speedMulti += 0.35;
         }
@@ -2035,7 +2140,7 @@ export class GameEngine {
         title: "Sprinter",
         desc: "+55% Speed\n-15% Jump Height\n-15% Max HP",
         isSuper: false,
-        cost: 15,
+        cost: 25,
         effect: (p: any) => {
           p.speedMulti += 0.55;
           p.jumpMulti -= 0.15;
@@ -2047,7 +2152,7 @@ export class GameEngine {
         title: "Spring Heels",
         desc: "+20% Jump Height",
         isSuper: false,
-        cost: 15,
+        cost: 25,
         effect: (p: any) => {
           p.jumpMulti += 0.20;
         }
@@ -2056,7 +2161,7 @@ export class GameEngine {
         title: "Jumper",
         desc: "+10% Speed\n+10% Jump Height",
         isSuper: false,
-        cost: 15,
+        cost: 25,
         effect: (p: any) => {
           p.speedMulti += 0.10;
           p.jumpMulti += 0.10;
@@ -2070,7 +2175,7 @@ export class GameEngine {
         desc: "+120% Damage\n+35% Speed\n+15% HP\n\nRip and Tear Claws\nability on Q (CD 100s)",
         isSuper: true,
         abilityId: 'malevolence' as const,
-        cost: 35,
+        cost: 100,
         effect: (p: any) => {
           p.hasMalevolence = true;
           p.damageMulti += 1.20;
@@ -2084,7 +2189,7 @@ export class GameEngine {
         desc: "+110% HP\n-5% Speed\n-25% Jump Height\n\nShield of Solidity\nability on Z (CD 110s)",
         isSuper: true,
         abilityId: 'impenetrable' as const,
-        cost: 35,
+        cost: 100,
         effect: (p: any) => {
           p.hasImpenetrable = true;
           p.maxHealth = Math.round(p.maxHealth * 2.10);
@@ -2098,42 +2203,92 @@ export class GameEngine {
         desc: "+140% Speed\n+35% Jump Height\n\nHyper Perception\nability on X (CD 125s)",
         isSuper: true,
         abilityId: 'supersonic' as const,
-        cost: 35,
+        cost: 100,
         effect: (p: any) => {
           p.hasSupersonic = true;
           p.speedMulti += 1.40;
           p.jumpMulti += 0.35;
         }
+      },
+      {
+        title: "PULSAR",
+        desc: "+50% Damage\n+30% Speed\n+15% HP\n\nShockwave Wave\nability on C (CD 60s)",
+        isSuper: true,
+        abilityId: 'pulsar' as const,
+        cost: 100,
+        effect: (p: any) => {
+          p.hasPulsar = true;
+          p.damageMulti += 0.50;
+          p.speedMulti += 0.30;
+          p.maxHealth = Math.round(p.maxHealth * 1.15);
+          p.health += Math.round(p.baseMaxHealth * 0.15);
+        }
       }
     ];
 
-    // Pick 3 random normal upgrades
-    normalPool.sort(() => Math.random() - 0.5);
-    const selected = normalPool.slice(0, 3);
+    const ultimateCard = {
+      title: "COSMIC SUPERNOVA",
+      desc: "+270% Damage\n+75% Speed\n+25% Jump Height\n+120% HP\n\nSupernova Starburst\nability on V (CD 90s)",
+      isSuper: true,
+      isUltimate: true,
+      abilityId: 'supernova' as const,
+      cost: 250,
+      effect: (p: any) => {
+        p.hasSupernova = true;
+        p.damageMulti += 2.70;
+        p.speedMulti += 0.75;
+        p.jumpMulti += 0.25;
+        p.maxHealth = Math.round(p.maxHealth * 2.20);
+        p.health += Math.round(p.baseMaxHealth * 1.20);
+      }
+    };
 
-    // 5% chance to replace each chosen card with a random super card
-    this.state.upgrades = selected.map((u, i) => {
-      if (Math.random() < 0.05) {
-        const superUpgrade = superPool[Math.floor(Math.random() * superPool.length)];
-        return {
+    // Shuffle pools
+    normalPool.sort(() => Math.random() - 0.5);
+    superPool.sort(() => Math.random() - 0.5);
+
+    const resultUpgrades: any[] = [];
+    for (let i = 0; i < 3; i++) {
+      const r = Math.random();
+      if (r < 0.005) {
+        // 0.5% Ultimate Cosmic Supernova
+        resultUpgrades.push({
+          id: `upgrade_${i}`,
+          title: ultimateCard.title,
+          desc: ultimateCard.desc,
+          isSuper: true,
+          isUltimate: true,
+          abilityId: ultimateCard.abilityId,
+          cost: 250,
+          effect: ultimateCard.effect
+        });
+      } else if (r < 0.06 && superPool.length > 0) {
+        // 5.5% Super Card
+        const superUpgrade = superPool[i % superPool.length];
+        resultUpgrades.push({
           id: `upgrade_${i}`,
           title: superUpgrade.title,
           desc: superUpgrade.desc,
           isSuper: true,
           abilityId: superUpgrade.abilityId,
-          cost: 35,
+          cost: 100,
           effect: superUpgrade.effect
-        };
+        });
+      } else {
+        // Standard Upgrade Card
+        const normUpgrade = normalPool[i % normalPool.length];
+        resultUpgrades.push({
+          id: `upgrade_${i}`,
+          title: normUpgrade.title,
+          desc: normUpgrade.desc,
+          isSuper: false,
+          cost: 25,
+          effect: normUpgrade.effect
+        });
       }
-      return {
-        id: `upgrade_${i}`,
-        title: u.title,
-        desc: u.desc,
-        isSuper: false,
-        cost: 15,
-        effect: u.effect
-      };
-    });
+    }
+
+    this.state.upgrades = resultUpgrades;
   }
 
   updateEnemies() {
@@ -4686,29 +4841,48 @@ export class GameEngine {
     }
 
     if (this.state.isFloorComplete) {
-      ctx.fillStyle = "#000000";
+      // Main menu style backdrop overlay
+      ctx.fillStyle = "rgba(9, 13, 22, 0.85)";
       ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
-      ctx.fillStyle = COLORS.diamond;
-      ctx.font = "bold 36px 'Courier New', Courier, monospace";
+
+      // Main Menu Style Container Panel
+      const panelW = Math.min(this.canvasWidth - 60, 1120);
+      const panelH = Math.min(this.canvasHeight - 60, 640);
+      const panelX = (this.canvasWidth - panelW) / 2;
+      const panelY = (this.canvasHeight - panelH) / 2;
+
+      ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
+      ctx.fillRect(panelX, panelY, panelW, panelH);
+      ctx.strokeStyle = "rgba(6, 182, 212, 0.60)";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(panelX, panelY, panelW, panelH);
+      ctx.strokeStyle = "rgba(6, 182, 212, 0.30)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(panelX + 4, panelY + 4, panelW - 8, panelH - 8);
+
+      ctx.fillStyle = "#38bdf8";
+      ctx.font = "bold 32px 'Courier New', Courier, monospace";
       ctx.textAlign = "center";
       ctx.fillText(
-        `FLOOR ${this.state.floor} CLEARED - SELECT UPGRADE`,
+        `FLOOR ${this.state.floor} CLEARED`,
         this.canvasWidth / 2,
-        80,
+        panelY + 48,
       );
       ctx.fillStyle = "#fbbf24";
+      ctx.font = "bold 20px 'Courier New', Courier, monospace";
       ctx.fillText(
-        `COINS: ${this.state.player.coins}`,
+        `YOUR COINS: ${this.state.player.coins}`,
         this.canvasWidth / 2,
-        120,
+        panelY + 80,
       );
 
-      // Draw upgrades
-      const cardWidth = 200;
-      const cardHeight = 280;
-      const gap = 40;
-      const startX = this.canvasWidth / 2 - (cardWidth * 1.5 + gap);
-      const startY = this.canvasHeight / 2 - cardHeight / 2 + 20;
+      // Draw Screen-Filling Legacy Upgrades (320px x 460px)
+      const cardWidth = Math.min(320, Math.floor((panelW - 120) / 3));
+      const cardHeight = Math.min(460, panelH - 160);
+      const gap = 24;
+      const totalWidth = 3 * cardWidth + 2 * gap;
+      const startX = this.canvasWidth / 2 - totalWidth / 2;
+      const startY = panelY + 110;
 
       for (let i = 0; i < this.state.upgrades.length; i++) {
         const u = this.state.upgrades[i];
@@ -4721,55 +4895,66 @@ export class GameEngine {
           this.state.mouse.y >= cy &&
           this.state.mouse.y <= cy + cardHeight;
 
-        // Terraria Card Background
-        let strokeColor = "#334155";
-        let fillStyle = isHover ? "rgba(15, 23, 42, 0.96)" : "rgba(30, 41, 59, 0.90)";
-        let innerColor = isHover ? "#06b6d4" : "#475569";
-        
-        if (u.isSuper) {
-          const timeCycle = Date.now() / 250;
-          const hue = Math.floor(45 + Math.sin(timeCycle) * 15);
-          strokeColor = `hsl(${hue}, 100%, 50%)`;
-          fillStyle = isHover ? "rgba(45, 30, 15, 0.96)" : "rgba(30, 20, 10, 0.92)";
-          innerColor = "#fef08a";
-        } else {
-          strokeColor = isHover ? "#22d3ee" : "#334155";
+        // Legacy Card Background & Borders
+        let fillStyle = isHover ? "rgba(30, 20, 12, 0.98)" : "rgba(20, 14, 8, 0.95)";
+        let strokeColor = isHover ? "#f59e0b" : "#b45309";
+        let innerColor = "#78350f";
+        let titleColor = "#fbbf24";
+
+        if (u.isUltimate) {
+          const timeCycle = Date.now() / 200;
+          const hue = Math.floor((timeCycle * 50) % 360);
+          strokeColor = `hsl(${hue}, 100%, 60%)`;
+          fillStyle = isHover ? "rgba(45, 10, 35, 0.98)" : "rgba(25, 5, 20, 0.95)";
+          innerColor = "#ec4899";
+          titleColor = "#f472b6";
+        } else if (u.isSuper) {
+          strokeColor = isHover ? "#fbbf24" : "#d97706";
+          fillStyle = isHover ? "rgba(35, 25, 10, 0.98)" : "rgba(22, 16, 6, 0.95)";
+          innerColor = "#ca8a04";
+          titleColor = "#fef08a";
         }
 
         ctx.fillStyle = fillStyle;
         ctx.fillRect(cx, cy, cardWidth, cardHeight);
 
-        // Slate/Cyan Outer Frame
+        // Classic Legacy Card Double Border
         ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = u.isSuper ? 4 : 3;
+        ctx.lineWidth = u.isSuper || u.isUltimate ? 4 : 3;
         ctx.strokeRect(cx, cy, cardWidth, cardHeight);
 
-        // Inner Accent Box
         ctx.strokeStyle = innerColor;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(cx + 4, cy + 4, cardWidth - 8, cardHeight - 8);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(cx + 6, cy + 6, cardWidth - 12, cardHeight - 12);
+
+        // Card Header Banner
+        ctx.fillStyle = u.isUltimate ? "#831843" : (u.isSuper ? "#78350f" : "#451a03");
+        ctx.fillRect(cx + 8, cy + 8, cardWidth - 16, 60);
 
         // Title
         ctx.textAlign = "center";
-        ctx.font = "bold 17px 'Courier New', Courier, monospace";
-        ctx.fillStyle = u.isSuper ? "#fef08a" : "#38bdf8";
-        ctx.fillText(u.title, cx + cardWidth / 2, cy + 32);
+        ctx.font = "bold 20px 'Courier New', Courier, monospace";
+        ctx.fillStyle = titleColor;
+        ctx.fillText(u.title, cx + cardWidth / 2, cy + 36);
 
         // Sub-Label Banner
-        ctx.font = "bold 11px 'Courier New', Courier, monospace";
-        ctx.fillStyle = u.isSuper ? "#f59e0b" : "#ca8a04";
-        ctx.fillText(u.isSuper ? "★ SUPER CARD ★" : "UPGRADE CARD", cx + cardWidth / 2, cy + 56);
+        ctx.font = "bold 12px 'Courier New', Courier, monospace";
+        ctx.fillStyle = u.isUltimate ? "#f472b6" : (u.isSuper ? "#fef08a" : "#fde047");
+        let subText = "LEGACY UPGRADE";
+        if (u.isUltimate) subText = "★ ULTIMATE CARD ★";
+        else if (u.isSuper) subText = "★ SUPER CARD ★";
+        ctx.fillText(subText, cx + cardWidth / 2, cy + 56);
 
-        // Divider line
-        ctx.strokeStyle = u.isSuper ? "#f59e0b" : "#7c4a1e";
-        ctx.lineWidth = 1;
+        // Gold Banner Divider
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(cx + 15, cy + 68);
-        ctx.lineTo(cx + cardWidth - 15, cy + 68);
+        ctx.moveTo(cx + 12, cy + 68);
+        ctx.lineTo(cx + cardWidth - 12, cy + 68);
         ctx.stroke();
 
-        // Desc lines (colored green for bonuses +, red for penalties -, cyan for abilities)
-        ctx.font = "bold 13px 'Courier New', Courier, monospace";
+        // Desc lines (green for +, red for -, cyan for abilities)
+        ctx.font = "bold 15px 'Courier New', Courier, monospace";
         const lines = u.desc.split("\n");
         for (let j = 0; j < lines.length; j++) {
           const line = lines[j];
@@ -4782,14 +4967,20 @@ export class GameEngine {
           } else {
             ctx.fillStyle = "#fef08a";
           }
-          ctx.fillText(line, cx + cardWidth / 2, cy + 96 + j * 20);
+          ctx.fillText(line, cx + cardWidth / 2, cy + 104 + j * 24);
         }
 
-        // Card cost badge
+        // Card cost badge button
         const affordable = this.state.player.coins >= u.cost;
-        ctx.font = "bold 14px 'Courier New', Courier, monospace";
-        ctx.fillStyle = affordable ? "#fef08a" : "#ef4444";
-        ctx.fillText(`COST: ${u.cost} COINS`, cx + cardWidth / 2, cy + cardHeight - 20);
+        ctx.fillStyle = affordable ? (isHover ? "#15803d" : "#166534") : "#7f1d1d";
+        ctx.fillRect(cx + 16, cy + cardHeight - 56, cardWidth - 32, 40);
+        ctx.strokeStyle = affordable ? "#4ade80" : "#ef4444";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(cx + 16, cy + cardHeight - 56, cardWidth - 32, 40);
+
+        ctx.font = "bold 16px 'Courier New', Courier, monospace";
+        ctx.fillStyle = affordable ? "#ffffff" : "#f87171";
+        ctx.fillText(`COST: ${u.cost} COINS`, cx + cardWidth / 2, cy + cardHeight - 30);
       }
 
       ctx.textAlign = "center";
@@ -4935,7 +5126,7 @@ export class GameEngine {
   }
 
   drawHUD() {
-    if (!this.ctx) return;
+    if (!this.ctx || this.isMenuBackground) return;
     const ctx = this.ctx;
     const p = this.state.player;
 

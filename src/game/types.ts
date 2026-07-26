@@ -23,7 +23,7 @@ export interface Entity extends Rect {
 }
 
 export type WeaponType = 'sword' | 'bow' | 'colossal_sword' | 'dual_daggers' | 'mace' | 'battle_axe' | 'torch' | 'health_potion' | 'speed_potion' | 'bomb' | 'shield';
-export type SuperAbilityType = 'malevolence' | 'impenetrable' | 'supersonic';
+export type SuperAbilityType = 'malevolence' | 'impenetrable' | 'supersonic' | 'pulsar' | 'supernova';
 
 export interface Afterimage {
   x: number;
@@ -85,6 +85,14 @@ export interface Player extends Entity {
   supersonicCooldown: number;
   supersonicActive: boolean;
   supersonicTimer: number;
+  hasPulsar: boolean;
+  pulsarCooldown: number;
+  pulsarActive: boolean;
+  pulsarTimer: number;
+  hasSupernova: boolean;
+  supernovaCooldown: number;
+  supernovaActive: boolean;
+  supernovaTimer: number;
   afterimages?: Afterimage[];
   bowChargeTimer?: number;
   attackAngle?: number;
@@ -98,6 +106,7 @@ export interface UpgradeChoice {
   desc: string;
   cost: number;
   isSuper?: boolean;
+  isUltimate?: boolean;
   abilityId?: SuperAbilityType;
   effect: (p: Player) => void;
 }
@@ -164,6 +173,15 @@ export interface DroppedWeapon extends Rect {
   type: WeaponType;
 }
 
+export interface SupernovaStar {
+  x: number;
+  y: number;
+  targetX: number;
+  targetY: number;
+  state: 'traveling' | 'windup' | 'exploding';
+  timer: number;
+}
+
 export interface GameState {
   floor: number;
   maxFloor: number;
@@ -181,6 +199,7 @@ export interface GameState {
   chests: Chest[];
   projectiles: Projectile[];
   droppedWeapons: DroppedWeapon[];
+  supernovaStar?: SupernovaStar | null;
   camera: { x: number; y: number; zoom: number };
   keys: { [key: string]: boolean };
   prevKeys: { [key: string]: boolean };
@@ -230,6 +249,8 @@ export interface SavedRunState {
     hasMalevolence: boolean;
     hasImpenetrable: boolean;
     hasSupersonic: boolean;
+    hasPulsar: boolean;
+    hasSupernova: boolean;
     hasDiamond: boolean;
     facingRight: boolean;
   };
