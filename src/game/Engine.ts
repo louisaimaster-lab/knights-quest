@@ -3638,13 +3638,27 @@ export class GameEngine {
         const headX = baseX + Math.cos(targetAngle) * stretch;
         const headY = baseY + Math.sin(targetAngle) * stretch;
 
-        // Textured Vine Stem (Green with Vein Stripes)
-        ctx.fillStyle = "#14532d";
-        ctx.fillRect(baseX - 4, baseY - 4, 8, 8);
-        ctx.fillStyle = "#16a34a";
-        ctx.fillRect(baseX - 2, baseY - 4, 4, 8);
-        ctx.fillStyle = "#4ade80";
-        ctx.fillRect(baseX - 1, baseY - 4, 1, 8);
+        // Draw Plant Neck / Stem connecting Base to Head
+        ctx.strokeStyle = "#14532d";
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(baseX, baseY);
+        ctx.lineTo(headX, headY);
+        ctx.stroke();
+
+        ctx.strokeStyle = "#16a34a";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(baseX, baseY);
+        ctx.lineTo(headX, headY);
+        ctx.stroke();
+
+        ctx.strokeStyle = "#4ade80"; // Light green vein stripe highlight
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(baseX - 1, baseY - 1);
+        ctx.lineTo(headX - 1, headY - 1);
+        ctx.stroke();
 
         // Plant Head Assembly
         ctx.save();
@@ -4852,122 +4866,62 @@ export class GameEngine {
     }
     const lctx = this.lightCanvas.getContext("2d");
     if (lctx) {
-      const centerTx = Math.floor((p.x + p.w / 2) / TILE_SIZE);
-      const centerTy = Math.floor((p.y + p.h / 2) / TILE_SIZE);      // 1. Draw standard cave lighting (if structureOverlayAlpha < 1)
-      if (this.state.structureOverlayAlpha < 1.0) {
-        lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-        lctx.fillStyle = "rgba(0, 0, 0, 0.85)"; // Full in-game darkness restored!
-        lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+      lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+      lctx.fillStyle = "rgba(0, 0, 0, 0.98)"; // Pitch Black Outside Darkness!
+      lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
-        lctx.globalCompositeOperation = "destination-out";
-        lctx.save();
-        lctx.translate(Math.round(this.canvasWidth / 2), Math.round(this.canvasHeight / 2));
-        lctx.translate(-scaledCamX, -scaledCamY);
-        lctx.scale(zoom, zoom);
+      lctx.globalCompositeOperation = "destination-out";
+      lctx.save();
+      lctx.translate(Math.round(this.canvasWidth / 2), Math.round(this.canvasHeight / 2));
+      lctx.translate(-scaledCamX, -scaledCamY);
+      lctx.scale(zoom, zoom);
 
-        const drawLight = (x: number, y: number, radius: number) => {
-          const tx = Math.floor(x / TILE_SIZE);
-          const ty = Math.floor(y / TILE_SIZE);
-          const isLightInside = this.state.bgMap[ty] && this.state.bgMap[ty][tx] === 9;
-          
-          let finalRadius = radius;
-          if (isLightInside) {
-            finalRadius = radius * 0.55; // 45% reduction inside structures
-          }
+      const drawLight = (x: number, y: number, radius: number) => {
+        const grad = lctx.createRadialGradient(x, y, radius * 0.15, x, y, radius);
+        grad.addColorStop(0, "rgba(255,255,255,1)");
+        grad.addColorStop(0.5, "rgba(255,255,255,0.7)");
+        grad.addColorStop(1, "rgba(255,255,255,0)");
+        lctx.fillStyle = grad;
+        lctx.beginPath();
+        lctx.arc(x, y, radius, 0, Math.PI * 2);
+        lctx.fill();
+      };
 
-          const grad = lctx.createRadialGradient(x, y, finalRadius * 0.2, x, y, finalRadius);
-          grad.addColorStop(0, "rgba(255,255,255,1)");
-          grad.addColorStop(0.4, "rgba(255,255,255,0.6)");
-          grad.addColorStop(1, "rgba(255,255,255,0)");
-          lctx.fillStyle = grad;
-          lctx.beginPath();
-          lctx.arc(x, y, finalRadius, 0, Math.PI * 2);
-          lctx.fill();
-        };
+      // Draw Player light (higher radius if holding torch)
+      const pLightRad = (p.weapon === 'torch' && p.weaponEquipped) ? 330.0 : 175.5;
+      drawLight(p.x + p.w / 2, p.y + p.h / 2, pLightRad);
 
-        // Draw Player light (higher radius if holding torch)
-        const pLightRad = (p.weapon === 'torch' && p.weaponEquipped) ? 330.0 : 175.5;
-        drawLight(p.x + p.w / 2, p.y + p.h / 2, pLightRad);
+      // Draw Torches light
+      const startColLight = Math.max(0, Math.floor((this.state.camera.x - this.canvasWidth / 2 / zoom - 300) / TILE_SIZE));
+      const endColLight = Math.min(this.state.width, Math.ceil((this.state.camera.x + this.canvasWidth / 2 / zoom + 300) / TILE_SIZE));
+      const startRowLight = Math.max(0, Math.floor((this.state.camera.y - this.canvasHeight / 2 / zoom - 300) / TILE_SIZE));
+      const endRowLight = Math.min(this.state.height, Math.ceil((this.state.camera.y + this.canvasHeight / 2 / zoom + 300) / TILE_SIZE));
 
-        // Draw Torches light
-        const startColLight = Math.max(0, Math.floor((this.state.camera.x - this.canvasWidth / 2 / zoom - 300) / TILE_SIZE));
-        const endColLight = Math.min(this.state.width, Math.ceil((this.state.camera.x + this.canvasWidth / 2 / zoom + 300) / TILE_SIZE));
-        const startRowLight = Math.max(0, Math.floor((this.state.camera.y - this.canvasHeight / 2 / zoom - 300) / TILE_SIZE));
-        const endRowLight = Math.min(this.state.height, Math.ceil((this.state.camera.y + this.canvasHeight / 2 / zoom + 300) / TILE_SIZE));
-
-        for (let y = startRowLight; y < endRowLight; y++) {
-          for (let x = startColLight; x < endColLight; x++) {
-            if (this.state.map[y] && this.state.map[y][x] === 10) {
-              drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 195 + Math.random() * 18);
-            } else if (this.state.map[y] && this.state.map[y][x] === 12) {
-              drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 156 + Math.random() * 30);
-            }
+      for (let y = startRowLight; y < endRowLight; y++) {
+        for (let x = startColLight; x < endColLight; x++) {
+          if (this.state.map[y] && this.state.map[y][x] === 10) {
+            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 195 + Math.random() * 18);
+          } else if (this.state.map[y] && this.state.map[y][x] === 12) {
+            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 156 + Math.random() * 30);
           }
         }
-
-        // Draw exit/boss room light
-        if (this.state.floor < this.state.maxFloor && this.state.endPos.x >= startColLight && this.state.endPos.x < endColLight && this.state.endPos.y >= startRowLight && this.state.endPos.y < endRowLight) {
-          drawLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 227.5 + Math.random() * 30);
-        } else if (this.state.floor === this.state.maxFloor && !p.hasDiamond && this.state.endPos.x >= startColLight && this.state.endPos.x < endColLight && this.state.endPos.y >= startRowLight && this.state.endPos.y < endRowLight) {
-          drawLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 200 + Math.random() * 20);
-        }
-
-        lctx.restore();
-        lctx.globalCompositeOperation = "source-over";
-
-        ctx.save();
-        ctx.resetTransform();
-        ctx.globalAlpha = 1.0 - this.state.structureOverlayAlpha;
-        ctx.drawImage(this.lightCanvas, 0, 0);
-        ctx.restore();
       }
 
-      // 2. Draw structure mask (if structureOverlayAlpha > 0)
-      if (this.state.structureOverlayAlpha > 0.0) {
-        lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-        lctx.fillStyle = "rgba(0, 0, 0, 0.25)"; // 25% darkness inside structure
-        lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
-
-        lctx.globalCompositeOperation = "destination-out";
-        lctx.save();
-        lctx.translate(Math.round(this.canvasWidth / 2), Math.round(this.canvasHeight / 2));
-        lctx.translate(-scaledCamX, -scaledCamY);
-        lctx.scale(zoom, zoom);
-
-        // Find structure bounds dynamically by walking outward along bgMap === 9
-        let sx = centerTx;
-        while (sx >= 0 && this.state.bgMap[centerTy]?.[sx] === 9) sx--;
-        sx++;
-
-        let ex = centerTx;
-        while (ex < this.state.width && this.state.bgMap[centerTy]?.[ex] === 9) ex++;
-        ex--;
-
-        let sy = centerTy;
-        while (sy >= 0 && this.state.bgMap[sy]?.[centerTx] === 9) sy--;
-        sy++;
-
-        let ey = centerTy;
-        while (ey < this.state.height && this.state.bgMap[ey]?.[centerTx] === 9) ey++;
-        ey--;
-
-        // Light area fits structure exactly, NOT 1 block outside it
-        const xMin = sx * TILE_SIZE;
-        const xMax = (ex + 1) * TILE_SIZE;
-        const yMin = sy * TILE_SIZE;
-        const yMax = (ey + 1) * TILE_SIZE;
-
-        lctx.fillStyle = "rgba(255, 255, 255, 1.0)";
-        lctx.fillRect(xMin, yMin, xMax - xMin, yMax - yMin);
-        lctx.restore();
-        lctx.globalCompositeOperation = "source-over";
-
-        ctx.save();
-        ctx.resetTransform();
-        ctx.globalAlpha = this.state.structureOverlayAlpha;
-        ctx.drawImage(this.lightCanvas, 0, 0);
-        ctx.restore();
+      // Draw exit/boss room light
+      if (this.state.floor < this.state.maxFloor && this.state.endPos.x >= startColLight && this.state.endPos.x < endColLight && this.state.endPos.y >= startRowLight && this.state.endPos.y < endRowLight) {
+        drawLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 227.5 + Math.random() * 30);
+      } else if (this.state.floor === this.state.maxFloor && !p.hasDiamond && this.state.endPos.x >= startColLight && this.state.endPos.x < endColLight && this.state.endPos.y >= startRowLight && this.state.endPos.y < endRowLight) {
+        drawLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 200 + Math.random() * 20);
       }
+
+      lctx.restore();
+      lctx.globalCompositeOperation = "source-over";
+
+      ctx.save();
+      ctx.resetTransform();
+      ctx.drawImage(this.lightCanvas, 0, 0);
+      ctx.restore();
+    }
 
       // Structure dark overlay (always present in structure, dimmer when player inside)
       {
@@ -4985,8 +4939,7 @@ export class GameEngine {
             }
           }
         }
-      } 
-    }
+      }
 
     ctx.restore(); // Restore from Main Camera save
 
@@ -5342,7 +5295,7 @@ export class GameEngine {
   }
 
   drawHUD() {
-    if (!this.ctx || this.isMenuBackground) return;
+    if (!this.ctx || this.isMenuBackground || this.state.isFloorComplete || this.state.transitionState === 'cards' || this.state.transitionState === 'out_to_cards_delay') return;
     const ctx = this.ctx;
     const p = this.state.player;
 

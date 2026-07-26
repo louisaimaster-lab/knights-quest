@@ -852,7 +852,7 @@ export function generateCave(floor: number, maxFloor: number) {
       });
   }
 
-  // Descend gate rule: endPos CANNOT spawn inside lava (tile 21)
+  // Descend gate rule: endPos CANNOT spawn inside lava (tile 21) AND MUST spawn on top of solid ground
   if (map[endPos.y] && map[endPos.y][endPos.x] === 21) {
       for (let spot of openSpaces) {
           if (map[spot.y] && map[spot.y][spot.x] !== 21 && map[spot.y][spot.x] !== 1) {
@@ -863,7 +863,13 @@ export function generateCave(floor: number, maxFloor: number) {
       }
   }
 
-  // Player spawn does not replace current block (including water/lava)
+  // Ensure solid ground block directly beneath endPos
+  if (map[endPos.y + 1]) {
+      const tileBelow = map[endPos.y + 1][endPos.x];
+      if (tileBelow !== 1 && tileBelow !== 7 && tileBelow !== 8 && tileBelow !== 11 && tileBelow !== 15 && tileBelow !== 16 && tileBelow !== 17 && tileBelow !== 19 && tileBelow !== 20) {
+          map[endPos.y + 1][endPos.x] = 1; // Create solid ground block underneath gate
+      }
+  }
 
   // Final Pass: Fill all disconnected areas from startPos so no isolated pockets or weird unreachable areas remain
   let reachableFromStart = new Set<string>();
@@ -880,7 +886,7 @@ export function generateCave(floor: number, maxFloor: number) {
               let ntile = map[ny][nx];
               let key = `${nx},${ny}`;
               // Non-solid / traversable tiles
-              if (!reachableFromStart.has(key) && (ntile === 0 || ntile === 2 || ntile === 3 || ntile === 4 || ntile === 5 || ntile === 6 || ntile === 10 || ntile === 12 || ntile === 13 || ntile === 21)) {
+              if (!reachableFromStart.has(key) && (ntile === 0 || ntile === 2 || ntile === 3 || ntile === 4 || ntile === 5 || ntile === 6 || ntile === 10 || ntile === 12 || ntile === 13 || ntile === 15 || ntile === 18 || ntile === 21)) {
                   reachableFromStart.add(key);
                   startQueue.push({ x: nx, y: ny });
               }
@@ -892,7 +898,7 @@ export function generateCave(floor: number, maxFloor: number) {
   for (let my = 1; my < height - 1; my++) {
       for (let mx = 1; mx < width - 1; mx++) {
           let tile = map[my][mx];
-          if ((tile === 0 || tile === 4 || tile === 5 || tile === 6 || tile === 10 || tile === 12 || tile === 13 || tile === 21) && !reachableFromStart.has(`${mx},${my}`)) {
+          if ((tile === 0 || tile === 4 || tile === 5 || tile === 6 || tile === 10 || tile === 12 || tile === 13 || tile === 18 || tile === 21) && !reachableFromStart.has(`${mx},${my}`)) {
               map[my][mx] = 1; // Fill disconnected pocket with solid wall
           }
       }
