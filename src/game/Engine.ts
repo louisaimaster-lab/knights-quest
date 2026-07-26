@@ -115,6 +115,25 @@ export class GameEngine {
     this.state.floorTitleState = "none";
   }
 
+  initCardBackground() {
+    this.isMenuBackground = true;
+    const gen = generateCave(Math.min(25, this.state.floor + 1), this.state.maxFloor);
+    this.state.map = gen.map;
+    this.state.bgMap = gen.bgMap;
+    this.state.biome = gen.biome;
+    this.state.width = gen.width;
+    this.state.height = gen.height;
+    this.state.camera.x = Math.floor((gen.width * TILE_SIZE) / 2);
+    this.state.camera.y = Math.floor((gen.height * TILE_SIZE) / 2);
+    this.state.camera.zoom = 1;
+    this.state.enemies = [];
+    this.state.particles = [];
+    this.state.projectiles = [];
+    this.state.droppedWeapons = [];
+    this.state.chests = [];
+    this.state.fallingIcicles = [];
+  }
+
   getInitialState(): GameState {
     return {
       floor: 1,
@@ -228,6 +247,7 @@ export class GameEngine {
   }
 
   initFloor(floor: number) {
+    this.isMenuBackground = false;
     const gen = generateCave(floor, this.state.maxFloor);
 
     // Transition in
@@ -522,6 +542,7 @@ export class GameEngine {
         this.state.transitionState = "cards";
         this.state.isFloorComplete = true;
         this.generateUpgrades();
+        this.initCardBackground();
         if (typeof window !== "undefined") {
           window.dispatchEvent(
             new CustomEvent("floorCompleted", {
@@ -3596,7 +3617,7 @@ export class GameEngine {
         ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
         ctx.fillRect(e.x + 8, sy + 4, 3, 2);
       } else if (e.type === "flytrap") {
-        // Clean, Sleek Flytrap Plant Model
+        // High-Detail Carnivorous Flytrap Plant Model
         let stretch = 0;
         if (e.aiState === "tracking") {
           stretch = (1 - (e.trackTimer || 45) / 45) * 45;
@@ -3610,15 +3631,15 @@ export class GameEngine {
         const headX = baseX + Math.cos(targetAngle) * stretch;
         const headY = baseY + Math.sin(targetAngle) * stretch;
 
-        // Clean Vine Stem
-        ctx.fillStyle = "#15803d";
-        ctx.fillRect(baseX - 3, baseY - 4, 6, 8);
-        ctx.fillStyle = "#166534";
-        ctx.beginPath();
-        ctx.arc(headX, headY, 5, 0, Math.PI * 2);
-        ctx.fill();
+        // Textured Vine Stem (Green with Vein Stripes)
+        ctx.fillStyle = "#14532d";
+        ctx.fillRect(baseX - 4, baseY - 4, 8, 8);
+        ctx.fillStyle = "#16a34a";
+        ctx.fillRect(baseX - 2, baseY - 4, 4, 8);
+        ctx.fillStyle = "#4ade80";
+        ctx.fillRect(baseX - 1, baseY - 4, 1, 8);
 
-        // Plant Head
+        // Plant Head Assembly
         ctx.save();
         ctx.translate(headX, headY);
         let trackAngle = 0;
@@ -3632,107 +3653,238 @@ export class GameEngine {
         if (!e.facingRight) ctx.scale(-1, 1);
         ctx.rotate(trackAngle);
 
-        const jawOffset = e.aiState === "attacking" ? 6 : (e.aiState === "tracking" ? 2 : 0);
-        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#16a34a";
-        ctx.fillRect(-10, -12 - jawOffset, 20, 7);
-        ctx.fillRect(-10, -5 + jawOffset, 20, 6);
+        const jawOffset = e.aiState === "attacking" ? 8 : (e.aiState === "tracking" ? 3 : 0);
 
+        // Outer Dark Green Leaf Shell
+        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#14532d";
+        ctx.fillRect(-12, -14 - jawOffset, 24, 8);
+        ctx.fillRect(-12, -4 + jawOffset, 24, 8);
+
+        // Mid Green Leaf Texture
+        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#16a34a";
+        ctx.fillRect(-10, -13 - jawOffset, 20, 6);
+        ctx.fillRect(-10, -3 + jawOffset, 20, 6);
+
+        // Crimson Inner Mouth Trap Cavity
+        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#991b1b";
+        ctx.fillRect(-8, -8 - jawOffset, 16, 3);
+        ctx.fillRect(-8, -1 + jawOffset, 16, 3);
+
+        // Sharp Ivory Teeth
         ctx.fillStyle = "#ffffff";
-        for (let i = 0; i < 4; i++) {
-          ctx.fillRect(-8 + i * 4, -5 - jawOffset, 2, 2);
-          ctx.fillRect(-6 + i * 4, -7 + jawOffset, 2, 2);
+        for (let i = 0; i < 5; i++) {
+          ctx.fillRect(-9 + i * 4, -5 - jawOffset, 2, 3);
+          ctx.fillRect(-7 + i * 4, -4 + jawOffset, 2, 3);
         }
         ctx.restore();
 
-        // Sleek base leaves
-        ctx.fillStyle = "#166534";
-        ctx.fillRect(e.x + 3, e.y + e.h - 4, 7, 4);
-        ctx.fillRect(e.x + 14, e.y + e.h - 4, 7, 4);
+        // Shaded Base Root Leaves
+        ctx.fillStyle = "#14532d";
+        ctx.fillRect(e.x + 2, e.y + e.h - 6, 8, 6);
+        ctx.fillRect(e.x + 14, e.y + e.h - 6, 8, 6);
+        ctx.fillStyle = "#22c55e";
+        ctx.fillRect(e.x + 3, e.y + e.h - 4, 6, 2);
+        ctx.fillRect(e.x + 15, e.y + e.h - 4, 6, 2);
       } else if (e.type === "yeti") {
-        // Clean, Sleek Yeti Model
+        // High-Detail Yeti Beast (Inspired by reference photo)
         const isHitColor = e.invulnerableTimer > 0;
-        
-        // Crisp White Body
-        ctx.fillStyle = isHitColor ? "#fff" : "#e2e8f0";
-        ctx.fillRect(e.x + 3, e.y + 4, e.w - 6, e.h - 6);
-        ctx.fillStyle = isHitColor ? "#fff" : "#f8fafc";
-        ctx.fillRect(e.x + 5, e.y + 2, e.w - 10, e.h - 8);
+        const ex = e.x;
+        const ey = e.y;
+        const ew = e.w; // 32
+        const eh = e.h; // 32
 
-        // Smooth Horn Silhouettes
-        ctx.fillStyle = isHitColor ? "#fff" : "#38bdf8";
-        ctx.fillRect(e.x + 2, e.y - 2, 4, 5);
-        ctx.fillRect(e.x + e.w - 6, e.y - 2, 4, 5);
+        // Ground Shadow
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.fillRect(ex + 2, ey + eh - 3, ew - 4, 3);
 
-        // Face Visor / Eyes
-        ctx.fillStyle = isHitColor ? "#fff" : "#0f172a";
-        ctx.fillRect(e.x + 8, e.y + 6, e.w - 16, 6);
-        ctx.fillStyle = isHitColor ? "#fff" : "#fbbf24";
-        const eyeX = e.facingRight ? e.x + 14 : e.x + 10;
-        ctx.fillRect(eyeX, e.y + 7, 3, 3);
-        ctx.fillRect(eyeX + (e.facingRight ? 5 : -5), e.y + 7, 3, 3);
+        // Dark Purple/Slate Under-Mantle Shadow
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#475569";
+        ctx.fillRect(ex + 4, ey + 10, ew - 8, eh - 12);
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#334155";
+        ctx.fillRect(ex + 6, ey + 14, ew - 12, eh - 16);
 
-        // Sleek Arms
-        ctx.fillStyle = isHitColor ? "#fff" : "#cbd5e1";
+        // Broad Shaggy White Fur Torso
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#e2e8f0";
+        ctx.fillRect(ex + 3, ey + 8, ew - 6, eh - 11);
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#ffffff"; // Top fur highlight
+        ctx.fillRect(ex + 5, ey + 6, ew - 10, eh - 16);
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#cbd5e1"; // Lower fur shading
+        ctx.fillRect(ex + 4, ey + eh - 6, ew - 8, 4);
+
+        // Chest Fur Tuft Ridge
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#f1f5f9";
+        ctx.fillRect(ex + 8, ey + 12, ew - 16, 8);
+
+        // Massive Sweeping Ram Horns (Dark Slate/Indigo with Beveled Highlights)
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#1e293b"; // Dark base
+        ctx.fillRect(ex - 4, ey - 6, 7, 14);
+        ctx.fillRect(ex + ew - 3, ey - 6, 7, 14);
+
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#334155"; // Horn body
+        ctx.fillRect(ex - 3, ey - 8, 5, 12);
+        ctx.fillRect(ex + ew - 2, ey - 8, 5, 12);
+
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#64748b"; // Horn ridge
+        ctx.fillRect(ex - 2, ey - 10, 4, 8);
+        ctx.fillRect(ex + ew - 2, ey - 10, 4, 8);
+
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#94a3b8"; // Horn tip highlight
+        ctx.fillRect(ex - 1, ey - 11, 2, 4);
+        ctx.fillRect(ex + ew - 1, ey - 11, 2, 4);
+
+        // Shaggy White Fur Collar Over Horn Base
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#ffffff";
+        ctx.fillRect(ex + 2, ey + 2, ew - 4, 6);
+        ctx.fillRect(ex + 4, ey, ew - 8, 4);
+
+        // Dark Face Visor Socket
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#0f172a";
+        ctx.fillRect(ex + 7, ey + 5, ew - 14, 7);
+
+        // Fierce Glowing Orange/Crimson Eyes
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#f97316";
+        const eyeX = e.facingRight ? ex + 14 : ex + 9;
+        ctx.fillRect(eyeX, ey + 6, 4, 3);
+        ctx.fillRect(eyeX + (e.facingRight ? 5 : -5), ey + 6, 4, 3);
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#ef4444";
+        ctx.fillRect(eyeX + 1, ey + 7, 2, 1);
+        ctx.fillRect(eyeX + (e.facingRight ? 6 : -4), ey + 7, 2, 1);
+
+        // Wide Menacing Jaw Line & Ivory Teeth
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#fef08a";
+        ctx.fillRect(ex + 9, ey + 10, ew - 18, 3);
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#0f172a";
+        ctx.fillRect(ex + 11, ey + 11, 1, 2);
+        ctx.fillRect(ex + 15, ey + 11, 1, 2);
+        ctx.fillRect(ex + 19, ey + 11, 1, 2);
+
+        // Heavy Furry Arms & Slate Claws
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#cbd5e1";
         if (e.aiState === "leaping") {
-          ctx.fillRect(e.x - 4, e.y - 6, 5, 18);
-          ctx.fillRect(e.x + e.w - 1, e.y - 6, 5, 18);
+          ctx.fillRect(ex - 5, ey - 4, 6, 20);
+          ctx.fillRect(ex + ew - 1, ey - 4, 6, 20);
+          ctx.fillStyle = isHitColor ? "#ffffff" : "#334155";
+          ctx.fillRect(ex - 6, ey - 6, 4, 4);
+          ctx.fillRect(ex + ew + 1, ey - 6, 4, 4);
         } else {
-          ctx.fillRect(e.x - 3, e.y + 8, 4, 16);
-          ctx.fillRect(e.x + e.w - 1, e.y + 8, 4, 16);
+          ctx.fillRect(ex - 4, ey + 10, 6, 18);
+          ctx.fillRect(ex + ew - 2, ey + 10, 6, 18);
+          ctx.fillStyle = isHitColor ? "#ffffff" : "#334155";
+          ctx.fillRect(ex - 5, ey + 24, 4, 5);
+          ctx.fillRect(ex + ew + 1, ey + 24, 4, 5);
         }
       } else if (e.type === "bat") {
-        // Clean, Sleek Bat Model
-        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#581c87";
-        ctx.fillRect(e.x + e.w / 2 - 4, e.y + e.h / 2 - 4, 8, 8);
+        // High-Detail Winged Bat Model
+        const isHitColor = e.invulnerableTimer > 0;
+        const bx = e.x + e.w / 2;
+        const by = e.y + e.h / 2;
+        const flap = Math.floor(Date.now() / 120) % 2 === 0;
 
-        ctx.fillStyle = e.invulnerableTimer > 0 ? "#fff" : "#7e22ce";
-        if (Math.floor(Date.now() / 150) % 2 === 0) {
-          ctx.fillRect(e.x + e.w / 2 - 12, e.y + e.h / 2, 8, 4);
-          ctx.fillRect(e.x + e.w / 2 + 4, e.y + e.h / 2, 8, 4);
+        // Furry Dark Purple Torso
+        ctx.fillStyle = isHitColor ? "#fff" : "#3b0764";
+        ctx.fillRect(bx - 5, by - 6, 10, 12);
+        ctx.fillStyle = isHitColor ? "#fff" : "#581c87";
+        ctx.fillRect(bx - 3, by - 4, 6, 8);
+
+        // Pointed Bat Ears
+        ctx.fillStyle = isHitColor ? "#fff" : "#7e22ce";
+        ctx.fillRect(bx - 5, by - 9, 3, 4);
+        ctx.fillRect(bx + 2, by - 9, 3, 4);
+
+        // Glowing Crimson Eyes
+        ctx.fillStyle = isHitColor ? "#fff" : "#ef4444";
+        ctx.fillRect(bx - 3, by - 3, 2, 2);
+        ctx.fillRect(bx + 1, by - 3, 2, 2);
+
+        // Ivory Fangs
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(bx - 2, by + 1, 1, 2);
+        ctx.fillRect(bx + 1, by + 1, 1, 2);
+
+        // Layered Wings with Bone Ribs
+        ctx.fillStyle = isHitColor ? "#fff" : "#6b21a8";
+        if (flap) {
+          ctx.fillRect(bx - 14, by - 8, 9, 8);
+          ctx.fillRect(bx + 5, by - 8, 9, 8);
+          ctx.fillStyle = isHitColor ? "#fff" : "#a855f7";
+          ctx.fillRect(bx - 12, by - 6, 7, 5);
+          ctx.fillRect(bx + 5, by - 6, 7, 5);
+          ctx.fillStyle = "#e9d5ff";
+          ctx.fillRect(bx - 14, by - 8, 9, 1);
+          ctx.fillRect(bx + 5, by - 8, 9, 1);
         } else {
-          ctx.fillRect(e.x + e.w / 2 - 12, e.y + e.h / 2 - 4, 8, 4);
-          ctx.fillRect(e.x + e.w / 2 + 4, e.y + e.h / 2 - 4, 8, 4);
+          ctx.fillRect(bx - 14, by - 2, 9, 8);
+          ctx.fillRect(bx + 5, by - 2, 9, 8);
+          ctx.fillStyle = isHitColor ? "#fff" : "#a855f7";
+          ctx.fillRect(bx - 12, by, 7, 5);
+          ctx.fillRect(bx + 5, by, 7, 5);
+          ctx.fillStyle = "#e9d5ff";
+          ctx.fillRect(bx - 14, by + 5, 9, 1);
+          ctx.fillRect(bx + 5, by + 5, 9, 1);
         }
       } else if (e.type === "boss") {
-        // Pixelated Cavern Titan Golem Model (80x80)
+        // High-Detail Cavern Titan Golem Boss Model (80x80)
         const isHitColor = e.invulnerableTimer > 0;
         const isEnraged = e.health < e.maxHealth * 0.5;
 
-        // Base Shadow
-        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        // Ground Shadow
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
         ctx.fillRect(e.x + 4, e.y + e.h - 6, e.w - 8, 6);
 
-        // Heavy Obsidian Body Base
-        ctx.fillStyle = isHitColor ? "#ffffff" : (isEnraged ? "#7f1d1d" : "#0f172a");
-        ctx.fillRect(e.x + 8, e.y + 12, e.w - 16, e.h - 20);
+        // Heavy Chiseled Obsidian Base Body
+        ctx.fillStyle = isHitColor ? "#ffffff" : (isEnraged ? "#450a0a" : "#0f172a");
+        ctx.fillRect(e.x + 6, e.y + 10, e.w - 12, e.h - 18);
 
-        // Stone Armor Plates
+        // Beveled Slate Armor Plates
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#1e293b";
+        ctx.fillRect(e.x + 10, e.y + 14, e.w - 20, e.h - 24);
         ctx.fillStyle = isHitColor ? "#ffffff" : "#334155";
-        ctx.fillRect(e.x + 12, e.y + 16, e.w - 24, e.h - 28);
+        ctx.fillRect(e.x + 14, e.y + 18, e.w - 28, e.h - 32);
 
-        // Magma Core Chest (Glowing Orange/Red)
-        const corePulse = Math.sin(Date.now() / 200) * 0.2 + 0.8;
-        ctx.fillStyle = isHitColor ? "#ffffff" : `rgba(249, 115, 22, ${corePulse})`;
-        ctx.fillRect(e.x + e.w / 2 - 12, e.y + 24, 24, 20);
-        ctx.fillStyle = isHitColor ? "#ffffff" : "#ef4444";
-        ctx.fillRect(e.x + e.w / 2 - 6, e.y + 28, 12, 12);
+        // Plate Edge Bevel Highlights
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#64748b";
+        ctx.fillRect(e.x + 10, e.y + 14, e.w - 20, 2);
+        ctx.fillRect(e.x + 10, e.y + 14, 2, e.h - 24);
+
+        // Molten Magma Core (Chest Chamber with Pulsating Cracks)
+        const corePulse = Math.sin(Date.now() / 150) * 0.25 + 0.75;
+        ctx.fillStyle = isHitColor ? "#ffffff" : `rgba(234, 88, 12, ${corePulse})`;
+        ctx.fillRect(e.x + e.w / 2 - 14, e.y + 22, 28, 22);
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#f97316";
+        ctx.fillRect(e.x + e.w / 2 - 8, e.y + 26, 16, 14);
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#fef08a";
+        ctx.fillRect(e.x + e.w / 2 - 4, e.y + 30, 8, 6);
+
+        // Ancient Rune Crown over Head
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#38bdf8";
+        ctx.fillRect(e.x + e.w / 2 - 16, e.y + 4, 32, 4);
+        ctx.fillRect(e.x + e.w / 2 - 12, e.y + 2, 24, 2);
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#7dd3fc";
+        ctx.fillRect(e.x + e.w / 2 - 10, e.y + 2, 4, 2);
+        ctx.fillRect(e.x + e.w / 2 + 6, e.y + 2, 4, 2);
 
         // Massive Stone Shoulder Pauldrons
         ctx.fillStyle = isHitColor ? "#ffffff" : "#475569";
-        ctx.fillRect(e.x - 4, e.y + 10, 16, 20);
-        ctx.fillRect(e.x + e.w - 12, e.y + 10, 16, 20);
+        ctx.fillRect(e.x - 6, e.y + 8, 18, 22);
+        ctx.fillRect(e.x + e.w - 12, e.y + 8, 18, 22);
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#94a3b8";
+        ctx.fillRect(e.x - 6, e.y + 8, 18, 3);
+        ctx.fillRect(e.x + e.w - 12, e.y + 8, 18, 3);
 
-        // Heavy Fists
+        // Heavy Fists with Knuckle Ridges
         const fistBob = Math.sin(Date.now() / 100) * 3;
         ctx.fillStyle = isHitColor ? "#ffffff" : "#1e293b";
-        ctx.fillRect(e.x - 6, e.y + 32 + fistBob, 14, 18);
-        ctx.fillRect(e.x + e.w - 8, e.y + 32 - fistBob, 14, 18);
+        ctx.fillRect(e.x - 8, e.y + 32 + fistBob, 16, 20);
+        ctx.fillRect(e.x + e.w - 8, e.y + 32 - fistBob, 16, 20);
+        ctx.fillStyle = isHitColor ? "#ffffff" : "#64748b";
+        ctx.fillRect(e.x - 8, e.y + 48 + fistBob, 16, 4);
+        ctx.fillRect(e.x + e.w - 8, e.y + 48 - fistBob, 16, 4);
 
         // Glowing Fiery Eyes
         ctx.fillStyle = isHitColor ? "#ffffff" : (isEnraged ? "#ef4444" : "#f59e0b");
         const eyeX = e.facingRight ? e.x + e.w / 2 + 6 : e.x + e.w / 2 - 14;
-        ctx.fillRect(eyeX, e.y + 16, 8, 4);
-        ctx.fillRect(eyeX + (e.facingRight ? 12 : -12), e.y + 16, 8, 4);
+        ctx.fillRect(eyeX, e.y + 14, 8, 4);
+        ctx.fillRect(eyeX + (e.facingRight ? 12 : -12), e.y + 14, 8, 4);
       }
 
       // Draw Enemy Health Bar (for all enemies)
@@ -3990,11 +4142,58 @@ export class GameEngine {
         }
         ctx.restore();
       } else {
-        // Standard Sword Blade (Behind Hand)
+        // Custom Broadsword Model held by player (matching pixil-frame-0 (2).png)
+        const gemColor = p.playerColor || "#ea580c";
+        const sx = p.facingRight ? p.x + p.w - 2 : p.x - 2;
+        const sy = p.y + bob;
+
+        ctx.save();
+        ctx.translate(sx + 2, sy + 8);
+        if (!p.facingRight) ctx.scale(-1, 1);
+
+        // Blade Tip (Specular Peak)
+        ctx.fillStyle = isHit ? COLORS.playerHit : "#f8fafc";
+        ctx.fillRect(-1, -15, 2, 2);
+
+        // Blade Left (Light Highlight)
+        ctx.fillStyle = isHit ? COLORS.playerHit : "#f1f5f9";
+        ctx.fillRect(-3, -13, 3, 14);
+
+        // Blade Center Ridge (Fuller)
+        ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1";
+        ctx.fillRect(0, -13, 1, 14);
+
+        // Blade Right (Shaded Edge)
+        ctx.fillStyle = isHit ? COLORS.playerHit : "#94a3b8";
+        ctx.fillRect(1, -13, 2, 14);
+
+        // Winged Crossguard
         ctx.fillStyle = isHit ? COLORS.playerHit : "#e2e8f0";
-        ctx.fillRect(p.x + p.w - 2, p.y - 2 + bob, 4, 14);
-        ctx.fillStyle = p.playerColor || "#ea580c";
-        ctx.fillRect(p.x + p.w - 4, p.y + 10 + bob, 8, 4);
+        ctx.fillRect(-7, 1, 14, 3);
+        ctx.fillStyle = isHit ? COLORS.playerHit : "#64748b";
+        ctx.fillRect(-7, 4, 14, 1);
+
+        // Center Gem Housing & Player Color Gem
+        ctx.fillStyle = isHit ? COLORS.playerHit : "#ffffff";
+        ctx.fillRect(-3, -1, 6, 5);
+        ctx.fillStyle = isHit ? COLORS.playerHit : gemColor;
+        ctx.fillRect(-2, 0, 4, 3);
+        ctx.fillStyle = "#ffffff"; // Top-left specular dot
+        ctx.fillRect(-2, 0, 1, 1);
+
+        // Leather Handle / Grip
+        ctx.fillStyle = isHit ? COLORS.playerHit : "#78350f";
+        ctx.fillRect(-2, 5, 4, 5);
+        ctx.fillStyle = isHit ? COLORS.playerHit : "#451a03";
+        ctx.fillRect(0, 5, 2, 5);
+
+        // Diamond Steel Pommel & Gem Dot
+        ctx.fillStyle = isHit ? COLORS.playerHit : "#cbd5e1";
+        ctx.fillRect(-3, 10, 6, 2);
+        ctx.fillStyle = isHit ? COLORS.playerHit : gemColor;
+        ctx.fillRect(-1, 10, 2, 2);
+
+        ctx.restore();
       }
     }
     ctx.restore();
@@ -4622,7 +4821,7 @@ export class GameEngine {
       const centerTy = Math.floor((p.y + p.h / 2) / TILE_SIZE);      // 1. Draw standard cave lighting (if structureOverlayAlpha < 1)
       if (this.state.structureOverlayAlpha < 1.0) {
         lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-        lctx.fillStyle = "rgba(0, 0, 0, 0.25)"; // 25% darkness effect outside (terrain visible without torches!)
+        lctx.fillStyle = "rgba(0, 0, 0, 0.85)"; // Full in-game darkness restored!
         lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
         lctx.globalCompositeOperation = "destination-out";
@@ -4868,8 +5067,8 @@ export class GameEngine {
       // Pan camera continuously across world generation pane behind card choices
       this.state.camera.x += 1.2;
 
-      // 60% lighter backdrop overlay (darkness lifted by 60%: 0.25 opacity)
-      ctx.fillStyle = "rgba(9, 13, 22, 0.25)";
+      // 30% dark backdrop overlay (30% darkness when choosing cards)
+      ctx.fillStyle = "rgba(9, 13, 22, 0.30)";
       ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
       // Freely floating header text (NO box container)
