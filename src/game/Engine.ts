@@ -445,6 +445,67 @@ export class GameEngine {
   }
 
   update() {
+    if (this.state.isFloorComplete || this.state.transitionState === "cards") {
+      // Update mouse world pos for UI interactions
+      this.state.mouse.worldX =
+        (this.state.mouse.x - this.canvasWidth / 2) / this.state.camera.zoom +
+        this.state.camera.x;
+      this.state.mouse.worldY =
+        (this.state.mouse.y - this.canvasHeight / 2) / this.state.camera.zoom +
+        this.state.camera.y;
+
+      // Handle Upgrade Clicks (320px x 460px)
+      if (this.state.mouse.clicked) {
+        const cardWidth = 320;
+        const cardHeight = 460;
+        const gap = 40;
+        const totalWidth = 3 * cardWidth + 2 * gap;
+        const startX = this.canvasWidth / 2 - totalWidth / 2;
+        const startY = this.canvasHeight / 2 - cardHeight / 2 + 30;
+
+        for (let i = 0; i < this.state.upgrades.length; i++) {
+          const u = this.state.upgrades[i];
+          const cx = startX + i * (cardWidth + gap);
+          const cy = startY;
+
+          if (
+            this.state.mouse.x >= cx &&
+            this.state.mouse.x <= cx + cardWidth &&
+            this.state.mouse.y >= cy &&
+            this.state.mouse.y <= cy + cardHeight
+          ) {
+            if (this.state.player.coins >= u.cost) {
+              this.state.player.coins -= u.cost;
+              u.effect(this.state.player);
+              this.state.isFloorComplete = false;
+              this.state.transitionState = "none";
+              this.isMenuBackground = false;
+              this.initFloor(this.state.floor + 1);
+            } else {
+              this.state.texts.push({
+                x: this.state.player.x + this.state.player.w / 2,
+                y: this.state.player.y - 15,
+                text: "Not enough coins!",
+                life: 60,
+                maxLife: 60
+              });
+            }
+            break;
+          }
+        }
+      }
+
+      if (this.state.keys["Enter"]) {
+        this.state.isFloorComplete = false;
+        this.state.transitionState = "none";
+        this.isMenuBackground = false;
+        this.initFloor(this.state.floor + 1);
+      }
+      this.state.mouse.clicked = false;
+      this.state.prevKeys = { ...this.state.keys };
+      return;
+    }
+
     if (this.isMenuBackground) {
       this.state.frameCounter++;
       const panSpeed = 0.6;
@@ -838,6 +899,13 @@ export class GameEngine {
       this.state.floorTitleState !== "none" ||
       this.state.transitionState !== "none" ||
       this.state.gateEntered;
+
+    if (isStunned) {
+      p.vx = 0;
+      p.vy = 0;
+      p.isAttacking = false;
+      return;
+    }
 
     // Check if player is in water or on ladder
     let inWater = false;
