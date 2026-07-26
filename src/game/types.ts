@@ -22,7 +22,7 @@ export interface Entity extends Rect {
   onLadder: boolean;
 }
 
-export type WeaponType = 'sword' | 'bow' | 'colossal_sword' | 'dual_daggers' | 'mace' | 'battle_axe' | 'torch';
+export type WeaponType = 'sword' | 'bow' | 'colossal_sword' | 'dual_daggers' | 'mace' | 'battle_axe' | 'torch' | 'health_potion' | 'speed_potion' | 'bomb' | 'shield';
 export type SuperAbilityType = 'malevolence' | 'impenetrable' | 'supersonic';
 
 export interface Afterimage {
@@ -88,6 +88,8 @@ export interface Player extends Entity {
   afterimages?: Afterimage[];
   bowChargeTimer?: number;
   attackAngle?: number;
+  speedPotionTimer?: number;
+  itemUseCooldown?: number;
 }
 
 export interface UpgradeChoice {
@@ -151,9 +153,10 @@ export interface Projectile extends Rect {
   id: string;
   vx: number;
   vy: number;
-  type: 'arrow' | 'magma';
+  type: 'arrow' | 'magma' | 'bomb';
   damage: number;
   facingRight: boolean;
+  timer?: number;
 }
 
 export interface DroppedWeapon extends Rect {
@@ -205,4 +208,30 @@ export interface GameState {
   bossCutsceneTimer?: number;
   bossSpawned?: boolean;
   letterboxHeight?: number;
+}
+
+export interface SavedRunState {
+  floor: number;
+  biome: 'neutral' | 'ice' | 'moss' | 'ice_fortress';
+  player: {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    health: number;
+    maxHealth: number;
+    coins: number;
+    damageMulti: number;
+    speedMulti: number;
+    jumpMulti: number;
+    hotbar: (WeaponType | null)[];
+    activeSlot: number;
+    weaponEquipped: boolean;
+    hasMalevolence: boolean;
+    hasImpenetrable: boolean;
+    hasSupersonic: boolean;
+    hasDiamond: boolean;
+    facingRight: boolean;
+  };
+  hasActiveRun: boolean;
 }

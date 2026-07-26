@@ -7,6 +7,7 @@ import {
   EnemyType,
   WeaponType,
   UpgradeChoice,
+  SavedRunState,
 } from "./types";
 import { generateCave } from "./mapGen";
 import { AABBMapCollision, rectIntersect, checkTilesAt } from "./physics";
@@ -20,16 +21,94 @@ import {
   COLORS,
 } from "./constants";
 
+export function isWeapon(type: WeaponType | null): boolean {
+  if (!type) return false;
+  return ['sword', 'bow', 'colossal_sword', 'dual_daggers', 'mace', 'battle_axe'].includes(type);
+}
+
 export class GameEngine {
   state: GameState;
   ctx: CanvasRenderingContext2D | null = null;
   lightCanvas?: HTMLCanvasElement;
   canvasWidth = 800;
   canvasHeight = 600;
+  isMenuBackground = false;
 
   constructor() {
     this.state = this.getInitialState();
     this.initFloor(1);
+  }
+
+  serializeRunState(): SavedRunState {
+    const p = this.state.player;
+    return {
+      floor: this.state.floor,
+      biome: this.state.biome,
+      player: {
+        x: p.x,
+        y: p.y,
+        vx: p.vx,
+        vy: p.vy,
+        health: p.health,
+        maxHealth: p.maxHealth,
+        coins: p.coins,
+        damageMulti: p.damageMulti,
+        speedMulti: p.speedMulti,
+        jumpMulti: p.jumpMulti,
+        hotbar: [...p.hotbar],
+        activeSlot: p.activeSlot,
+        weaponEquipped: p.weaponEquipped,
+        hasMalevolence: p.hasMalevolence,
+        hasImpenetrable: p.hasImpenetrable,
+        hasSupersonic: p.hasSupersonic,
+        hasDiamond: p.hasDiamond,
+        facingRight: p.facingRight
+      },
+      hasActiveRun: true
+    };
+  }
+
+  restoreRunState(runState: SavedRunState) {
+    this.isMenuBackground = false;
+    this.state = this.getInitialState();
+    this.initFloor(runState.floor);
+    const p = this.state.player;
+    const rp = runState.player;
+
+    p.x = rp.x;
+    p.y = rp.y;
+    p.vx = rp.vx;
+    p.vy = rp.vy;
+    p.health = rp.health;
+    p.maxHealth = rp.maxHealth;
+    p.coins = rp.coins;
+    p.damageMulti = rp.damageMulti;
+    p.speedMulti = rp.speedMulti;
+    p.jumpMulti = rp.jumpMulti;
+    p.hotbar = [...rp.hotbar];
+    p.activeSlot = rp.activeSlot;
+    p.weaponEquipped = rp.weaponEquipped;
+    p.weapon = p.hotbar[p.activeSlot] || undefined;
+    p.hasMalevolence = rp.hasMalevolence;
+    p.hasImpenetrable = rp.hasImpenetrable;
+    p.hasSupersonic = rp.hasSupersonic;
+    p.hasDiamond = rp.hasDiamond;
+    p.facingRight = rp.facingRight;
+
+    this.state.camera.x = p.x + p.w / 2;
+    this.state.camera.y = p.y + p.h / 2;
+    this.state.transitionState = "none";
+    this.state.floorTitleState = "none";
+    this.state.isPaused = false;
+  }
+
+  initMenuBackground() {
+    this.isMenuBackground = true;
+    this.state = this.getInitialState();
+    this.initFloor(1);
+    this.state.isPaused = false;
+    this.state.transitionState = "none";
+    this.state.floorTitleState = "none";
   }
 
   getInitialState(): GameState {
@@ -80,7 +159,7 @@ export class GameEngine {
         baseSpeedMulti: 1,
         baseJumpMulti: 1,
         baseMaxHealth: 100,
-        hotbar: ["sword", null],
+        hotbar: ["sword", null, null],
         activeSlot: 0,
         maceChargeTimer: 0,
         maceChargeRatio: 0,
@@ -184,7 +263,8 @@ export class GameEngine {
     this.state.chests = gen.chests ? gen.chests.map((c, idx) => {
       let chestItem: WeaponType;
       if (Math.random() < 0.55) {
-        chestItem = 'torch';
+        const itemPool: WeaponType[] = ['torch', 'health_potion', 'speed_potion', 'bomb', 'shield'];
+        chestItem = itemPool[Math.floor(Math.random() * itemPool.length)];
       } else {
         const weaponPool: WeaponType[] = ['sword', 'bow', 'colossal_sword', 'dual_daggers', 'mace', 'battle_axe'];
         chestItem = weaponPool[Math.floor(Math.random() * weaponPool.length)];
@@ -323,7 +403,67 @@ export class GameEngine {
   }
 
   update() {
-    if (this.state.isPaused) return;
+    if (this.isMenuBackground) {
+      this.state.frameCounter++;
+      const panSpeed = 0.6;
+      this.state.camera.x += panSpeed;
+      if (this.state.camera.x > (this.state.width * TILE_SIZE) - 400) {
+        this.state.camera.x = 200;
+      }
+      this.state.camera.y = (this.state.height * TILE_SIZE) / 2;
+      this.updateParticlesAndTexts();
+      if (Math.random() < 0.3) {
+        this.spawnParticles(
+          this.state.camera.x + (Math.random() - 0.5) * 800,
+          this.state.camera.y + (Math.random() - 0.5) * 600,
+          Math.random() < 0.5 ? "rgba(251, 191, 36, 0.4)" : "rgba(249, 115, 22, 0.4)",
+          1
+        );
+      }
+      return;
+    }
+
+    // Toggle Pause state on Escape key
+    if (this.state.keys["Escape"] && !this.state.prevKeys["Escape"]) {
+      this.state.isPaused = !this.state.isPaused;
+    }
+
+    if (this.state.isPaused) {
+      if (this.state.mouse.clicked) {
+        const panelW = 320;
+        const panelH = 240;
+        const panelY = this.canvasHeight / 2 - panelH / 2;
+        const bw = 240;
+        const bh = 42;
+        const bx = this.canvasWidth / 2 - bw / 2;
+
+        // Button 0: Resume
+        const by0 = panelY + 75;
+        if (this.state.mouse.x >= bx && this.state.mouse.x <= bx + bw && this.state.mouse.y >= by0 && this.state.mouse.y <= by0 + bh) {
+          this.state.isPaused = false;
+        }
+
+        // Button 1: Save & Exit
+        const by1 = panelY + 75 + 52;
+        if (this.state.mouse.x >= bx && this.state.mouse.x <= bx + bw && this.state.mouse.y >= by1 && this.state.mouse.y <= by1 + bh) {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("saveAndExit"));
+          }
+        }
+
+        // Button 2: Main Menu
+        const by2 = panelY + 75 + 104;
+        if (this.state.mouse.x >= bx && this.state.mouse.x <= bx + bw && this.state.mouse.y >= by2 && this.state.mouse.y <= by2 + bh) {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("exitToMenu"));
+          }
+        }
+      }
+
+      this.state.prevKeys = { ...this.state.keys };
+      this.state.mouse.clicked = false;
+      return;
+    }
 
     if (this.state.gateEntered) {
       this.state.gateTimer = (this.state.gateTimer || 0) + 1;
@@ -676,26 +816,35 @@ export class GameEngine {
       }
     }
 
-    // Weapon & Super stat multipliers
+    // Weapon & Super & Potion stat multipliers
     let weaponSpeedMult = 1;
     let weaponJumpMult = 1;
     if (p.weaponEquipped && !p.clawsActive) {
       if (p.weapon === 'colossal_sword') { weaponSpeedMult = 0.80; weaponJumpMult = 0.90; }
-      else if (p.weapon === 'bow') { weaponSpeedMult = 1.05; weaponJumpMult = 1.20; }
-      else if (p.weapon === 'dual_daggers') { weaponSpeedMult = 1.15; weaponJumpMult = 1.10; }
+      else if (p.weapon === 'bow') { weaponSpeedMult = 1.00; weaponJumpMult = 1.20; }
+      else if (p.weapon === 'dual_daggers') { weaponSpeedMult = 1.10; weaponJumpMult = 1.10; }
       else if (p.weapon === 'battle_axe') { weaponSpeedMult = 0.90; weaponJumpMult = 0.95; }
       else if (p.weapon === 'mace') { weaponSpeedMult = 0.85; weaponJumpMult = 0.90; }
     }
 
-    // SUPERSONIC active boost (+250% speed active during Hyper Perception)
+    let potionSpeedMult = 1;
+    if (p.speedPotionTimer && p.speedPotionTimer > 0) {
+      p.speedPotionTimer--;
+      potionSpeedMult = 1.20;
+      if (p.speedPotionTimer % 6 === 0) {
+        this.spawnParticles(p.x + Math.random() * p.w, p.y + p.h, "#38bdf8", 1);
+      }
+    }
+
+    // SUPERSONIC active boost (+175% speed active during Hyper Perception)
     let superSpeedMult = 1;
     let superJumpMult = 1;
     if (p.supersonicActive) {
-      superSpeedMult = 3.50;
+      superSpeedMult = 2.75;
       superJumpMult = 1.25;
     }
 
-    const effectiveSpeedMulti = p.speedMulti * weaponSpeedMult * superSpeedMult;
+    const effectiveSpeedMulti = p.speedMulti * weaponSpeedMult * superSpeedMult * potionSpeedMult;
     const effectiveJumpMulti = p.jumpMulti * weaponJumpMult * superJumpMult;
 
     if (this.state.floorTitleState === "none") {
@@ -792,7 +941,7 @@ export class GameEngine {
 
     if ((p.airAttackCooldown || 0) > 0) p.airAttackCooldown--;
 
-    // Hotbar: Press 1 or 2 to switch slots / toggle equip
+    // Hotbar: Press 1, 2, or 3 to switch slots / toggle equip
     if (keys["1"] && !prevKeys["1"]) {
       if (p.activeSlot === 0) {
         p.weaponEquipped = !p.weaponEquipped;
@@ -809,6 +958,71 @@ export class GameEngine {
         p.weaponEquipped = true;
       }
       p.weapon = p.hotbar[1] || undefined;
+    } else if (keys["3"] && !prevKeys["3"]) {
+      if (p.activeSlot === 2) {
+        p.weaponEquipped = !p.weaponEquipped;
+      } else {
+        p.activeSlot = 2;
+        p.weaponEquipped = true;
+      }
+      p.weapon = p.hotbar[2] || undefined;
+    }
+
+    // Consumable & Active Non-weapon items usage
+    if (p.itemUseCooldown && p.itemUseCooldown > 0) p.itemUseCooldown--;
+    const currentActiveItem = p.hotbar[p.activeSlot];
+    if (
+      this.state.mouse.clicked &&
+      (p.itemUseCooldown || 0) <= 0 &&
+      currentActiveItem &&
+      !isWeapon(currentActiveItem) &&
+      this.state.floorTitleState === "none" &&
+      this.state.transitionState === "none"
+    ) {
+      if (currentActiveItem === 'health_potion') {
+        p.hotbar[p.activeSlot] = null;
+        const healAmt = 40;
+        p.health = Math.min(p.maxHealth, p.health + healAmt);
+        p.itemUseCooldown = 20;
+        this.state.texts.push({
+          x: p.x + p.w / 2,
+          y: p.y - 15,
+          text: `+${healAmt} HP!`,
+          life: 60,
+          maxLife: 60
+        });
+        this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, "#4ade80", 20);
+      } else if (currentActiveItem === 'speed_potion') {
+        p.hotbar[p.activeSlot] = null;
+        p.speedPotionTimer = 900; // 15 seconds
+        p.itemUseCooldown = 20;
+        this.state.texts.push({
+          x: p.x + p.w / 2,
+          y: p.y - 15,
+          text: "SWIFTNESS!",
+          life: 60,
+          maxLife: 60
+        });
+        this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, "#38bdf8", 20);
+      } else if (currentActiveItem === 'bomb') {
+        p.hotbar[p.activeSlot] = null;
+        p.itemUseCooldown = 25;
+        const angle = Math.atan2(this.state.mouse.worldY - (p.y + p.h / 2), this.state.mouse.worldX - (p.x + p.w / 2));
+        const speed = 10;
+        this.state.projectiles.push({
+          id: `bomb_${Date.now()}_${Math.random()}`,
+          x: p.x + p.w / 2 - 6,
+          y: p.y + p.h / 2 - 6,
+          w: 12,
+          h: 12,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 3,
+          type: 'bomb',
+          damage: 50,
+          facingRight: Math.cos(angle) >= 0,
+          timer: 90
+        });
+      }
     }
 
     // Super ability activation: Malevolence (Claws) on Q
@@ -1261,22 +1475,55 @@ export class GameEngine {
     }
 
       if (nearestDropped && justPressedSwap) {
-        const activeItem = p.hotbar[p.activeSlot];
-        
-        if (activeItem === null) {
-          // Slot is empty: pick up the item
-          p.hotbar[p.activeSlot] = nearestDropped.type;
-          
-          // Remove dropped weapon from world
-          const index = this.state.droppedWeapons.indexOf(nearestDropped);
-          if (index !== -1) {
-            this.state.droppedWeapons.splice(index, 1);
+        const pickedType = nearestDropped.type;
+
+        if (isWeapon(pickedType)) {
+          // Player can ONLY have 1 weapon at a time
+          const existingWeaponIndex = p.hotbar.findIndex(slot => isWeapon(slot));
+          if (existingWeaponIndex !== -1) {
+            // Already has a weapon: replace existing weapon slot!
+            const oldWeapon = p.hotbar[existingWeaponIndex] as WeaponType;
+            p.hotbar[existingWeaponIndex] = pickedType;
+            nearestDropped.type = oldWeapon;
+            p.activeSlot = existingWeaponIndex;
+          } else {
+            // Player currently has NO weapon in hotbar
+            if (p.hotbar[p.activeSlot] === null) {
+              p.hotbar[p.activeSlot] = pickedType;
+              const index = this.state.droppedWeapons.indexOf(nearestDropped);
+              if (index !== -1) this.state.droppedWeapons.splice(index, 1);
+            } else {
+              const emptyIdx = p.hotbar.indexOf(null);
+              if (emptyIdx !== -1) {
+                p.hotbar[emptyIdx] = pickedType;
+                p.activeSlot = emptyIdx;
+                const index = this.state.droppedWeapons.indexOf(nearestDropped);
+                if (index !== -1) this.state.droppedWeapons.splice(index, 1);
+              } else {
+                const oldItem = p.hotbar[p.activeSlot] as WeaponType;
+                p.hotbar[p.activeSlot] = pickedType;
+                nearestDropped.type = oldItem;
+              }
+            }
           }
         } else {
-          // Slot is occupied: swap in place
-          const oldItem = activeItem;
-          p.hotbar[p.activeSlot] = nearestDropped.type;
-          nearestDropped.type = oldItem;
+          // Non-weapon item (potion, bomb, shield, torch)
+          if (p.hotbar[p.activeSlot] === null) {
+            p.hotbar[p.activeSlot] = pickedType;
+            const index = this.state.droppedWeapons.indexOf(nearestDropped);
+            if (index !== -1) this.state.droppedWeapons.splice(index, 1);
+          } else {
+            const emptyIdx = p.hotbar.indexOf(null);
+            if (emptyIdx !== -1) {
+              p.hotbar[emptyIdx] = pickedType;
+              const index = this.state.droppedWeapons.indexOf(nearestDropped);
+              if (index !== -1) this.state.droppedWeapons.splice(index, 1);
+            } else {
+              const oldItem = p.hotbar[p.activeSlot] as WeaponType;
+              p.hotbar[p.activeSlot] = pickedType;
+              nearestDropped.type = oldItem;
+            }
+          }
         }
 
         p.weapon = p.hotbar[p.activeSlot] || undefined;
@@ -1298,7 +1545,11 @@ export class GameEngine {
           'dual_daggers': 'Dual Daggers',
           'mace': 'Mace',
           'battle_axe': 'Battle Axe',
-          'torch': 'Torch'
+          'torch': 'Torch',
+          'health_potion': 'Health Potion',
+          'speed_potion': 'Swiftness Potion',
+          'bomb': 'Explosive Bomb',
+          'shield': 'Iron Shield'
         };
         const itemName = itemNames[p.weapon || ''] || p.weapon || 'Nothing';
         this.state.texts.push({
@@ -1514,6 +1765,10 @@ export class GameEngine {
     if (p.clawsActive) {
       finalDamage = Math.round(finalDamage * 1.20);
     }
+    // Iron Shield check: 40% damage reduction when active slot is holding shield
+    if (p.hotbar[p.activeSlot] === 'shield') {
+      finalDamage = Math.max(1, Math.round(finalDamage * 0.60));
+    }
 
     p.health -= finalDamage;
     p.invulnerableTimer = 45; // 0.75s immunity time (45 frames at 60fps)
@@ -1537,6 +1792,9 @@ export class GameEngine {
     if (p.health <= 0) {
       p.health = 0;
       this.state.isGameOver = true;
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("playerDied"));
+      }
     }
     return true;
   }
@@ -1622,7 +1880,41 @@ export class GameEngine {
         hitWall = true;
       }
 
-      if (hitWall) {
+      if (proj.type === 'bomb') {
+        proj.vy += 0.25; // gravity
+        proj.timer = (proj.timer || 90) - 1;
+        this.spawnParticles(proj.x + proj.w / 2, proj.y + proj.h / 2, "#f59e0b", 1);
+
+        if (hitWall || proj.timer <= 0) {
+          const bx = proj.x + proj.w / 2;
+          const by = proj.y + proj.h / 2;
+          this.state.shakeTimer = 20;
+          this.spawnParticles(bx, by, "#ef4444", 20);
+          this.spawnParticles(bx, by, "#f97316", 20);
+          this.spawnParticles(bx, by, "#eab308", 15);
+
+          for (const e of this.state.enemies) {
+            const dist = Math.hypot(e.x + e.w / 2 - bx, e.y + e.h / 2 - by);
+            if (dist < 70) {
+              const dmg = Math.round(proj.damage * p.damageMulti);
+              e.health -= dmg;
+              e.invulnerableTimer = 10;
+              e.vx = (e.x + e.w / 2 > bx ? 1 : -1) * 6;
+              e.vy = -4;
+              this.spawnParticles(e.x + e.w / 2, e.y + e.h / 2, "#f97316", 10);
+              this.state.texts.push({
+                x: e.x,
+                y: e.y - 10,
+                text: dmg.toString(),
+                life: 30,
+                maxLife: 30
+              });
+            }
+          }
+          this.state.projectiles.splice(i, 1);
+          continue;
+        }
+      } else if (hitWall) {
         this.spawnParticles(proj.x + (proj.w || 8) / 2, proj.y + (proj.h || 8) / 2, "rgba(200, 200, 200, 0.4)", 4);
         this.state.projectiles.splice(i, 1);
         continue;
@@ -1688,7 +1980,7 @@ export class GameEngine {
       },
       {
         title: "Glass Cannon",
-        desc: "-35% HP\n+50% Damage",
+        desc: "-35% Max HP\n+50% Damage",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
@@ -1699,14 +1991,14 @@ export class GameEngine {
       },
       {
         title: "Workout",
-        desc: "+10% Damage\n+10% HP\n+10% Speed",
+        desc: "+10% Damage\n+10% HP\n+5% Speed",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
           p.damageMulti += 0.10;
           p.maxHealth = Math.round(p.maxHealth * 1.10);
           p.health += Math.round(p.baseMaxHealth * 0.10);
-          p.speedMulti += 0.10;
+          p.speedMulti += 0.05;
         }
       },
       {
@@ -1721,31 +2013,31 @@ export class GameEngine {
       },
       {
         title: "Heavy",
-        desc: "+30% HP\n-10% Speed",
+        desc: "+30% HP\n-5% Speed",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
           p.maxHealth = Math.round(p.maxHealth * 1.30);
           p.health += Math.round(p.baseMaxHealth * 0.30);
-          p.speedMulti -= 0.10;
+          p.speedMulti -= 0.05;
         }
       },
       {
         title: "Runner",
-        desc: "+50% Speed",
+        desc: "+35% Speed",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
-          p.speedMulti += 0.50;
+          p.speedMulti += 0.35;
         }
       },
       {
         title: "Sprinter",
-        desc: "+80% Speed\n-15% Jump Height\n-15% HP",
+        desc: "+55% Speed\n-15% Jump Height\n-15% Max HP",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
-          p.speedMulti += 0.80;
+          p.speedMulti += 0.55;
           p.jumpMulti -= 0.15;
           p.maxHealth = Math.max(10, Math.round(p.maxHealth * 0.85));
           if (p.health > p.maxHealth) p.health = p.maxHealth;
@@ -1762,11 +2054,11 @@ export class GameEngine {
       },
       {
         title: "Jumper",
-        desc: "+20% Speed\n+10% Jump Height",
+        desc: "+10% Speed\n+10% Jump Height",
         isSuper: false,
         cost: 15,
         effect: (p: any) => {
-          p.speedMulti += 0.20;
+          p.speedMulti += 0.10;
           p.jumpMulti += 0.10;
         }
       }
@@ -1775,21 +2067,21 @@ export class GameEngine {
     const superPool = [
       {
         title: "MALEVOLENCE",
-        desc: "+120% Damage\n+50% Speed\n+15% HP\n\nRip and Tear Claws\nability on Q (CD 100s)",
+        desc: "+120% Damage\n+35% Speed\n+15% HP\n\nRip and Tear Claws\nability on Q (CD 100s)",
         isSuper: true,
         abilityId: 'malevolence' as const,
         cost: 35,
         effect: (p: any) => {
           p.hasMalevolence = true;
           p.damageMulti += 1.20;
-          p.speedMulti += 0.50;
+          p.speedMulti += 0.35;
           p.maxHealth = Math.round(p.maxHealth * 1.15);
           p.health += Math.round(p.baseMaxHealth * 0.15);
         }
       },
       {
         title: "IMPENETRABLE",
-        desc: "+110% HP\n-10% Speed\n-25% Jump Height\n\nShield of Solidity\nability on Z (CD 110s)",
+        desc: "+110% HP\n-5% Speed\n-25% Jump Height\n\nShield of Solidity\nability on Z (CD 110s)",
         isSuper: true,
         abilityId: 'impenetrable' as const,
         cost: 35,
@@ -1797,19 +2089,19 @@ export class GameEngine {
           p.hasImpenetrable = true;
           p.maxHealth = Math.round(p.maxHealth * 2.10);
           p.health += Math.round(p.baseMaxHealth * 1.10);
-          p.speedMulti -= 0.10;
+          p.speedMulti -= 0.05;
           p.jumpMulti -= 0.25;
         }
       },
       {
         title: "SUPERSONIC",
-        desc: "+200% Speed\n+35% Jump Height\n\nHyper Perception\nability on X (CD 125s)",
+        desc: "+140% Speed\n+35% Jump Height\n\nHyper Perception\nability on X (CD 125s)",
         isSuper: true,
         abilityId: 'supersonic' as const,
         cost: 35,
         effect: (p: any) => {
           p.hasSupersonic = true;
-          p.speedMulti += 2.00;
+          p.speedMulti += 1.40;
           p.jumpMulti += 0.35;
         }
       }
@@ -4004,11 +4296,52 @@ export class GameEngine {
           ctx.fillRect(0, -7, 4, 3);
           ctx.fillStyle = "#ef4444";
           ctx.fillRect(1, -9, 2, 2);
+        } else if (type === 'health_potion') {
+          ctx.fillStyle = "#78350f";
+          ctx.fillRect(-2, -8, 4, 3);
+          ctx.fillStyle = "#ef4444";
+          ctx.fillRect(-5, -5, 10, 11);
+          ctx.fillStyle = "#dc2626";
+          ctx.fillRect(-4, -4, 8, 9);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(-3, -3, 2, 3);
+        } else if (type === 'speed_potion') {
+          ctx.fillStyle = "#78350f";
+          ctx.fillRect(-2, -8, 4, 3);
+          ctx.fillStyle = "#06b6d4";
+          ctx.fillRect(-5, -5, 10, 11);
+          ctx.fillStyle = "#0891b2";
+          ctx.fillRect(-4, -4, 8, 9);
+          ctx.fillStyle = "#a5f3fc";
+          ctx.fillRect(-3, -3, 2, 3);
+        } else if (type === 'bomb') {
+          ctx.fillStyle = "#1e293b";
+          ctx.beginPath();
+          ctx.arc(0, 2, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#64748b";
+          ctx.fillRect(-2, 0, 2, 2);
+          ctx.strokeStyle = "#eab308";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(0, -4);
+          ctx.lineTo(3, -7);
+          ctx.stroke();
+          ctx.fillStyle = "#ef4444";
+          ctx.fillRect(3, -8, 2, 2);
+        } else if (type === 'shield') {
+          ctx.fillStyle = "#475569";
+          ctx.fillRect(-6, -6, 12, 12);
+          ctx.fillStyle = "#94a3b8";
+          ctx.fillRect(-5, -5, 10, 10);
+          ctx.fillStyle = "#fbbf24";
+          ctx.fillRect(-1, -4, 2, 8);
+          ctx.fillRect(-4, -1, 8, 2);
         }
         
         ctx.restore();
 
-        // If player is close, draw swap prompt "[F] Swap to [Weapon]"
+        // If player is close, draw swap prompt "[F] Take [Item]"
         const px = this.state.player.x + this.state.player.w / 2;
         const py = this.state.player.y + this.state.player.h / 2;
         const dist = Math.hypot(px - (dw.x + dw.w / 2), py - (dw.y + dw.h / 2));
@@ -4020,7 +4353,11 @@ export class GameEngine {
             'dual_daggers': 'Dual Daggers',
             'mace': 'Mace',
             'battle_axe': 'Battle Axe',
-            'torch': 'Torch'
+            'torch': 'Torch',
+            'health_potion': 'Health Potion',
+            'speed_potion': 'Swiftness Potion',
+            'bomb': 'Explosive Bomb',
+            'shield': 'Iron Shield'
           };
           const itemName = itemNames[dw.type] || dw.type;
           ctx.fillStyle = "#ffffff";
@@ -4384,49 +4721,73 @@ export class GameEngine {
           this.state.mouse.y >= cy &&
           this.state.mouse.y <= cy + cardHeight;
 
-        // Card background
-        let strokeColor = "#ffffff";
-        let fillStyle = isHover ? "#2a2a35" : "#13131e";
+        // Terraria Card Background
+        let strokeColor = "#7c4a1e";
+        let fillStyle = isHover ? "rgba(35, 25, 45, 0.95)" : "rgba(20, 15, 30, 0.90)";
         
         if (u.isSuper) {
           const timeCycle = Date.now() / 250;
           const hue = Math.floor(45 + Math.sin(timeCycle) * 15);
           strokeColor = `hsl(${hue}, 100%, 50%)`;
-          fillStyle = isHover ? "#322510" : "#1a150b";
+          fillStyle = isHover ? "rgba(55, 35, 15, 0.95)" : "rgba(35, 20, 10, 0.92)";
         } else {
-          strokeColor = isHover ? "#fbbf24" : "#4b5563";
+          strokeColor = isHover ? "#facc15" : "#7c4a1e";
         }
 
         ctx.fillStyle = fillStyle;
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = u.isSuper ? 3 : 2;
         ctx.fillRect(cx, cy, cardWidth, cardHeight);
+
+        // Wood/Gold Outer Frame
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = u.isSuper ? 4 : 3;
         ctx.strokeRect(cx, cy, cardWidth, cardHeight);
+
+        // Inner Gold Accent Box
+        ctx.strokeStyle = u.isSuper ? "#fef08a" : "#ca8a04";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx + 4, cy + 4, cardWidth - 8, cardHeight - 8);
 
         // Title
         ctx.textAlign = "center";
-        ctx.font = "bold 18px 'Courier New', Courier, monospace";
-        ctx.fillStyle = u.isSuper ? "#fbbf24" : "#fff";
-        ctx.fillText(u.title, cx + cardWidth / 2, cy + 30);
+        ctx.font = "bold 17px 'Courier New', Courier, monospace";
+        ctx.fillStyle = u.isSuper ? "#fef08a" : "#fef08a";
+        ctx.fillText(u.title, cx + cardWidth / 2, cy + 32);
 
-        // Label
-        ctx.font = "bold 12px 'Courier New', Courier, monospace";
-        ctx.fillStyle = u.isSuper ? "#f59e0b" : "#9ca3af";
-        ctx.fillText(u.isSuper ? "★ SUPER CARD ★" : "NORMAL UPGRADE", cx + cardWidth / 2, cy + 60);
+        // Sub-Label Banner
+        ctx.font = "bold 11px 'Courier New', Courier, monospace";
+        ctx.fillStyle = u.isSuper ? "#f59e0b" : "#ca8a04";
+        ctx.fillText(u.isSuper ? "★ SUPER CARD ★" : "UPGRADE CARD", cx + cardWidth / 2, cy + 56);
 
-        // Desc lines
-        ctx.fillStyle = "#e5e7eb";
-        ctx.font = "14px 'Courier New', Courier, monospace";
+        // Divider line
+        ctx.strokeStyle = u.isSuper ? "#f59e0b" : "#7c4a1e";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx + 15, cy + 68);
+        ctx.lineTo(cx + cardWidth - 15, cy + 68);
+        ctx.stroke();
+
+        // Desc lines (colored green for bonuses +, red for penalties -, cyan for abilities)
+        ctx.font = "bold 13px 'Courier New', Courier, monospace";
         const lines = u.desc.split("\n");
         for (let j = 0; j < lines.length; j++) {
-          ctx.fillText(lines[j], cx + cardWidth / 2, cy + 100 + j * 20);
+          const line = lines[j];
+          if (line.startsWith("+")) {
+            ctx.fillStyle = "#4ade80"; // Green bonus
+          } else if (line.startsWith("-")) {
+            ctx.fillStyle = "#f87171"; // Red penalty
+          } else if (line.includes("ability")) {
+            ctx.fillStyle = "#38bdf8"; // Cyan ability
+          } else {
+            ctx.fillStyle = "#fef08a";
+          }
+          ctx.fillText(line, cx + cardWidth / 2, cy + 96 + j * 20);
         }
 
-        // Card cost
+        // Card cost badge
         const affordable = this.state.player.coins >= u.cost;
-        ctx.font = "bold 15px 'Courier New', Courier, monospace";
-        ctx.fillStyle = affordable ? "#fbbf24" : "#f87171";
-        ctx.fillText(`COST: ${u.cost} COINS`, cx + cardWidth / 2, cy + cardHeight - 25);
+        ctx.font = "bold 14px 'Courier New', Courier, monospace";
+        ctx.fillStyle = affordable ? "#fef08a" : "#ef4444";
+        ctx.fillText(`COST: ${u.cost} COINS`, cx + cardWidth / 2, cy + cardHeight - 20);
       }
 
       ctx.textAlign = "center";
@@ -4513,6 +4874,62 @@ export class GameEngine {
         this.canvasHeight / 2 + 40,
       );
     }
+
+    // --- Terraria Pause Menu Modal Overlay ---
+    if (this.state.isPaused && !this.isMenuBackground) {
+      ctx.fillStyle = "rgba(10, 8, 16, 0.85)";
+      ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+
+      const panelW = 320;
+      const panelH = 250;
+      const panelX = this.canvasWidth / 2 - panelW / 2;
+      const panelY = this.canvasHeight / 2 - panelH / 2;
+
+      // Wood & Gold Box
+      ctx.fillStyle = "rgba(24, 18, 36, 0.96)";
+      ctx.fillRect(panelX, panelY, panelW, panelH);
+      ctx.strokeStyle = "#7c4a1e";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(panelX, panelY, panelW, panelH);
+      ctx.strokeStyle = "#fef08a";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(panelX + 4, panelY + 4, panelW - 8, panelH - 8);
+
+      ctx.fillStyle = "#fef08a";
+      ctx.font = "bold 26px 'Courier New', Courier, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("GAME PAUSED", this.canvasWidth / 2, panelY + 42);
+
+      const buttons = [
+        { text: "RESUME GAME" },
+        { text: "SAVE & EXIT" },
+        { text: "MAIN MENU" }
+      ];
+
+      for (let i = 0; i < buttons.length; i++) {
+        const btn = buttons[i];
+        const bw = 240;
+        const bh = 42;
+        const bx = this.canvasWidth / 2 - bw / 2;
+        const by = panelY + 68 + i * 52;
+
+        const isHover =
+          this.state.mouse.x >= bx &&
+          this.state.mouse.x <= bx + bw &&
+          this.state.mouse.y >= by &&
+          this.state.mouse.y <= by + bh;
+
+        ctx.fillStyle = isHover ? "rgba(234, 179, 8, 0.3)" : "rgba(124, 74, 30, 0.4)";
+        ctx.strokeStyle = isHover ? "#fef08a" : "#7c4a1e";
+        ctx.lineWidth = 2;
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.strokeRect(bx, by, bw, bh);
+
+        ctx.fillStyle = isHover ? "#fef08a" : "#e2e8f0";
+        ctx.font = "bold 15px 'Courier New', Courier, monospace";
+        ctx.fillText(btn.text, this.canvasWidth / 2, by + 26);
+      }
+    }
   }
 
   drawHUD() {
@@ -4521,92 +4938,192 @@ export class GameEngine {
     const p = this.state.player;
 
     ctx.textAlign = "left";
-    ctx.fillStyle = "rgba(0,0,0,0.6)";
-    ctx.fillRect(20, 20, 240, 105);
-    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+
+    // --- Terraria Top-Left HUD Panel ---
+    const hudX = 20;
+    const hudY = 20;
+    const totalHearts = Math.ceil(p.maxHealth / 20);
+    const heartRows = Math.ceil(totalHearts / 10);
+    const hudW = Math.max(260, Math.min(10, totalHearts) * 22 + 70);
+    const hudH = 75 + (heartRows - 1) * 20;
+
+    // Wood & Stone Panel Background
+    ctx.fillStyle = "rgba(18, 24, 38, 0.88)";
+    ctx.fillRect(hudX, hudY, hudW, hudH);
+    ctx.strokeStyle = "#7c4a1e"; // Wood border
+    ctx.lineWidth = 3;
+    ctx.strokeRect(hudX, hudY, hudW, hudH);
+    ctx.strokeStyle = "#eab308"; // Gold inner trim
     ctx.lineWidth = 1;
-    ctx.strokeRect(20, 20, 240, 105);
+    ctx.strokeRect(hudX + 3, hudY + 3, hudW - 6, hudH - 6);
 
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 16px 'Courier New', Courier, monospace";
-    ctx.fillText(`FLOOR ${this.state.floor} / ${this.state.maxFloor}`, 30, 45);
+    // Floor Text Header
+    ctx.fillStyle = "#fef08a";
+    ctx.font = "bold 14px 'Courier New', Courier, monospace";
+    ctx.fillText(`FLOOR ${this.state.floor} / ${this.state.maxFloor}`, hudX + 12, hudY + 22);
 
-    // Health bar
-    ctx.fillStyle = "#f87171"; // red-400
-    ctx.font = "bold 12px 'Courier New', Courier, monospace";
-    ctx.fillText("HP", 30, 75);
+    // --- Terraria Heart Containers ---
+    const drawHeart = (x: number, y: number, state: 'full' | 'half' | 'empty') => {
+      ctx.save();
+      ctx.translate(x, y);
 
-    ctx.fillStyle = "#ef4444"; // red-500
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 1;
-    ctx.fillRect(60, 63, 180, 15);
-    ctx.strokeRect(60, 63, 180, 15);
-    ctx.fillStyle = "#b91c1c"; // red-700
-    ctx.fillRect(
-      60,
-      63,
-      180 * (Math.max(0, p.health) / p.maxHealth),
-      15,
-    );
+      // Dark Heart Outline
+      ctx.fillStyle = "#1e080a";
+      ctx.beginPath();
+      ctx.moveTo(8, 3);
+      ctx.bezierCurveTo(8, 0, 4, 0, 2, 2.5);
+      ctx.bezierCurveTo(0, 0, -4, 0, -4, 3);
+      ctx.bezierCurveTo(-4, 7, 0, 10, 2, 13);
+      ctx.bezierCurveTo(4, 10, 8, 7, 8, 3);
+      ctx.fill();
 
-    // Weapon Name display
-    ctx.fillStyle = "#fbbf24"; // gold/yellow
-    ctx.font = "bold 12px 'Courier New', Courier, monospace";
-    const weaponName = p.weaponEquipped
-      ? (p.clawsActive ? "RIP & TEAR CLAWS" : (p.weapon ? p.weapon.toUpperCase().replace('_', ' ') : 'SWORD'))
-      : "UNARMED";
-    ctx.fillText(`WEAPON: ${weaponName}`, 30, 105);
+      if (state === 'full') {
+        // Red Ruby Heart Fill
+        ctx.fillStyle = "#ef4444";
+        ctx.beginPath();
+        ctx.arc(-2, 3, 3, 0, Math.PI * 2);
+        ctx.arc(2, 3, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-4, 4);
+        ctx.lineTo(0, 11);
+        ctx.lineTo(4, 4);
+        ctx.fill();
+        // Shiny highlight
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(-3, 2, 2, 2);
+      } else if (state === 'half') {
+        // Left half red
+        ctx.fillStyle = "#ef4444";
+        ctx.beginPath();
+        ctx.arc(-2, 3, 3, Math.PI * 0.5, Math.PI * 1.5);
+        ctx.fill();
+        ctx.fillRect(-4, 3, 4, 4);
+        ctx.beginPath();
+        ctx.moveTo(-4, 4);
+        ctx.lineTo(0, 11);
+        ctx.lineTo(0, 4);
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(-3, 2, 1.5, 1.5);
+        // Right half empty
+        ctx.fillStyle = "#331619";
+        ctx.beginPath();
+        ctx.arc(2, 3, 2.5, -Math.PI * 0.5, Math.PI * 0.5);
+        ctx.fill();
+      } else {
+        // Empty heart container
+        ctx.fillStyle = "#331619";
+        ctx.beginPath();
+        ctx.arc(-2, 3, 2.5, 0, Math.PI * 2);
+        ctx.arc(2, 3, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-3, 4);
+        ctx.lineTo(0, 10);
+        ctx.lineTo(3, 4);
+        ctx.fill();
+      }
+      ctx.restore();
+    };
 
-    let nextHUDY = 135;
+    const hpPerHeart = 20;
+    for (let i = 0; i < totalHearts; i++) {
+      const col = i % 10;
+      const row = Math.floor(i / 10);
+      const hx = hudX + 16 + col * 18;
+      const hy = hudY + 36 + row * 18;
+      const hpInHeart = p.health - i * hpPerHeart;
 
-    // Super Abilities status panels (Multiple super cards can be owned)
+      let state: 'full' | 'half' | 'empty' = 'empty';
+      if (hpInHeart >= hpPerHeart) state = 'full';
+      else if (hpInHeart >= hpPerHeart / 2) state = 'half';
+
+      drawHeart(hx, hy, state);
+    }
+
+    // Exact Numeric HP Readout
+    ctx.fillStyle = "#f87171";
+    ctx.font = "bold 11px 'Courier New', Courier, monospace";
+    ctx.fillText(`${Math.max(0, p.health)} / ${p.maxHealth} HP`, hudX + Math.min(totalHearts, 10) * 18 + 22, hudY + 45);
+
+    // Active Item/Weapon Badge
+    ctx.fillStyle = "#fbbf24";
+    ctx.font = "bold 11px 'Courier New', Courier, monospace";
+    const currentItem = p.hotbar[p.activeSlot];
+    let displayItemName = "UNARMED";
+    if (p.clawsActive) displayItemName = "RIP & TEAR CLAWS";
+    else if (currentItem) {
+      displayItemName = currentItem.toUpperCase().replace(/_/g, ' ');
+    }
+    ctx.fillText(`ACTIVE: ${displayItemName}`, hudX + 12, hudY + 62 + (heartRows - 1) * 20);
+
+    let nextHUDY = hudY + hudH + 12;
+
+    // Super Abilities & Buff Panels
     const drawAbilityPanel = (title: string, has: boolean, active: boolean, timer: number, cooldown: number, maxTimer: number, maxCooldown: number, keyChar: string) => {
       if (!has) return;
-      ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.fillRect(20, nextHUDY, 240, 40);
-      ctx.strokeStyle = "rgba(255,255,255,0.2)";
-      ctx.strokeRect(20, nextHUDY, 240, 40);
+      ctx.fillStyle = "rgba(18, 24, 38, 0.88)";
+      ctx.fillRect(hudX, nextHUDY, 240, 36);
+      ctx.strokeStyle = "#7c4a1e";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(hudX, nextHUDY, 240, 36);
 
       ctx.fillStyle = "#fff";
       ctx.font = "bold 11px 'Courier New', Courier, monospace";
-      ctx.fillText(title, 30, nextHUDY + 16);
+      ctx.fillText(title, hudX + 10, nextHUDY + 16);
 
       if (active) {
         ctx.fillStyle = "#f59e0b";
-        ctx.fillText(`ACTIVE: ${Math.ceil(timer / 60)}s`, 140, nextHUDY + 16);
+        ctx.fillText(`ACTIVE: ${Math.ceil(timer / 60)}s`, hudX + 130, nextHUDY + 16);
         ctx.fillStyle = "#d97706";
-        ctx.fillRect(30, nextHUDY + 24, 220 * (timer / maxTimer), 4);
+        ctx.fillRect(hudX + 10, nextHUDY + 24, 220 * (timer / maxTimer), 4);
       } else if (cooldown > 0) {
         ctx.fillStyle = "#ef4444";
-        ctx.fillText(`CD: ${Math.ceil(cooldown / 60)}s`, 140, nextHUDY + 16);
+        ctx.fillText(`CD: ${Math.ceil(cooldown / 60)}s`, hudX + 130, nextHUDY + 16);
         ctx.fillStyle = "#7f1d1d";
-        ctx.fillRect(30, nextHUDY + 24, 220 * (1 - cooldown / maxCooldown), 4);
+        ctx.fillRect(hudX + 10, nextHUDY + 24, 220 * (1 - cooldown / maxCooldown), 4);
       } else {
         ctx.fillStyle = "#22c55e";
-        ctx.fillText(`READY [${keyChar}]`, 140, nextHUDY + 16);
+        ctx.fillText(`READY [${keyChar}]`, hudX + 130, nextHUDY + 16);
       }
-      nextHUDY += 48;
+      nextHUDY += 42;
     };
 
     drawAbilityPanel("MALEVOLENCE", p.hasMalevolence, p.malevolenceActive, p.malevolenceTimer, p.malevolenceCooldown, 900, 6000, "Q");
     drawAbilityPanel("IMPENETRABLE", p.hasImpenetrable, p.impenetrableActive, p.impenetrableTimer, p.impenetrableCooldown, 1200, 6600, "Z");
     drawAbilityPanel("SUPERSONIC", p.hasSupersonic, p.supersonicActive, p.supersonicTimer, p.supersonicCooldown, 600, 7500, "X");
 
+    // Speed Potion Swiftness Buff Panel
+    if (p.speedPotionTimer && p.speedPotionTimer > 0) {
+      ctx.fillStyle = "rgba(18, 24, 38, 0.88)";
+      ctx.fillRect(hudX, nextHUDY, 240, 32);
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(hudX, nextHUDY, 240, 32);
+
+      ctx.fillStyle = "#38bdf8";
+      ctx.font = "bold 11px 'Courier New', Courier, monospace";
+      ctx.fillText(`SWIFTNESS: ${Math.ceil(p.speedPotionTimer / 60)}s`, hudX + 10, nextHUDY + 16);
+      ctx.fillStyle = "#0284c7";
+      ctx.fillRect(hudX + 10, nextHUDY + 22, 220 * (p.speedPotionTimer / 900), 4);
+      nextHUDY += 38;
+    }
+
     // Poison status panel
     if (p.poisonTimer > 0) {
-      ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.fillRect(20, nextHUDY, 240, 35);
+      ctx.fillStyle = "rgba(18, 24, 38, 0.88)";
+      ctx.fillRect(hudX, nextHUDY, 240, 32);
       ctx.strokeStyle = "#22c55e";
-      ctx.strokeRect(20, nextHUDY, 240, 35);
+      ctx.lineWidth = 2;
+      ctx.strokeRect(hudX, nextHUDY, 240, 32);
 
       ctx.fillStyle = "#22c55e";
       ctx.font = "bold 11px 'Courier New', Courier, monospace";
-      ctx.fillText(`POISONED: ${Math.ceil(p.poisonTimer / 60)}s`, 30, nextHUDY + 16);
-      
-      // Poison progress bar
+      ctx.fillText(`POISONED: ${Math.ceil(p.poisonTimer / 60)}s`, hudX + 10, nextHUDY + 16);
       ctx.fillStyle = "#15803d";
-      ctx.fillRect(30, nextHUDY + 22, 220 * (p.poisonTimer / 300), 4);
-      nextHUDY += 45;
+      ctx.fillRect(hudX + 10, nextHUDY + 22, 220 * (p.poisonTimer / 300), 4);
+      nextHUDY += 38;
     }
 
     // Diamond status
@@ -4614,28 +5131,29 @@ export class GameEngine {
       ctx.fillStyle = COLORS.diamond;
       ctx.font = "bold 14px 'Courier New', Courier, monospace";
       ctx.textAlign = "left";
-      ctx.fillText("[TRUE DIAMOND SECURED]", 30, nextHUDY + 15);
+      ctx.fillText("[TRUE DIAMOND SECURED]", hudX, nextHUDY + 15);
     }
 
-    // Hotbar slots rendering (bottom-center, 2 slots)
+    // --- Terraria Hotbar Slots Rendering (3 SLOTS, Bottom-Center) ---
     const midX = this.canvasWidth / 2;
     const hotbarY = this.canvasHeight - 75;
-    const slotW = 50;
-    const slotH = 50;
+    const slotW = 54;
+    const slotH = 54;
+    const slotGap = 10;
+    const totalHotbarW = 3 * slotW + 2 * slotGap;
+    const startHotbarX = midX - totalHotbarW / 2;
 
     const drawItemIcon = (x: number, y: number, type: WeaponType) => {
       ctx.save();
-      ctx.translate(x + 25, y + 25);
-      
+      ctx.translate(x + slotW / 2, y + slotH / 2);
+
       if (type === 'sword') {
-        // Diagonal sword
         ctx.strokeStyle = "#cbd5e1";
         ctx.lineWidth = 3;
         ctx.beginPath(); ctx.moveTo(-10, 10); ctx.lineTo(10, -10); ctx.stroke();
         ctx.fillStyle = "#fbbf24";
         ctx.fillRect(-12, 8, 4, 4);
       } else if (type === 'bow') {
-        // Small bow
         ctx.strokeStyle = "#b45309";
         ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.arc(0, 0, 12, -Math.PI * 0.4, Math.PI * 0.4); ctx.stroke();
@@ -4643,14 +5161,12 @@ export class GameEngine {
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(5, -10); ctx.lineTo(5, 10); ctx.stroke();
       } else if (type === 'colossal_sword') {
-        // Colossal sword
         ctx.strokeStyle = "#94a3b8";
         ctx.lineWidth = 5;
         ctx.beginPath(); ctx.moveTo(-12, 12); ctx.lineTo(12, -12); ctx.stroke();
         ctx.fillStyle = "#fbbf24";
         ctx.fillRect(-14, 10, 5, 5);
       } else if (type === 'dual_daggers') {
-        // Crossed daggers
         ctx.strokeStyle = "#cbd5e1";
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(-10, 10); ctx.lineTo(6, -6); ctx.stroke();
@@ -4659,7 +5175,6 @@ export class GameEngine {
         ctx.beginPath(); ctx.moveTo(10, 10); ctx.lineTo(-6, -6); ctx.stroke();
         ctx.fillStyle = "#ea580c"; ctx.fillRect(9, 10, 3, 3);
       } else if (type === 'mace') {
-        // Spiked mace
         ctx.strokeStyle = "#78350f";
         ctx.lineWidth = 3;
         ctx.beginPath(); ctx.moveTo(-10, 10); ctx.lineTo(2, -2); ctx.stroke();
@@ -4670,7 +5185,6 @@ export class GameEngine {
         ctx.fillRect(-4, -4, 2, 2);
         ctx.fillRect(10, -4, 2, 2);
       } else if (type === 'battle_axe') {
-        // Battle axe
         ctx.strokeStyle = "#78350f";
         ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.moveTo(-10, 10); ctx.lineTo(2, -2); ctx.stroke();
@@ -4681,7 +5195,6 @@ export class GameEngine {
         ctx.fillRect(7, -10, 2, 9);
         ctx.fillRect(-7, -10, 2, 9);
       } else if (type === 'torch') {
-        // Torch icon
         ctx.strokeStyle = "#78350f";
         ctx.lineWidth = 3;
         ctx.beginPath(); ctx.moveTo(-6, 8); ctx.lineTo(2, -2); ctx.stroke();
@@ -4691,34 +5204,79 @@ export class GameEngine {
         ctx.fillRect(0, -9, 5, 4);
         ctx.fillStyle = "#ef4444";
         ctx.fillRect(2, -12, 2, 3);
+      } else if (type === 'health_potion') {
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-2, -12, 4, 3);
+        ctx.fillStyle = "#ef4444";
+        ctx.fillRect(-7, -9, 14, 16);
+        ctx.fillStyle = "#dc2626";
+        ctx.fillRect(-5, -7, 10, 12);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(-3, -5, 3, 4);
+      } else if (type === 'speed_potion') {
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-2, -12, 4, 3);
+        ctx.fillStyle = "#06b6d4";
+        ctx.fillRect(-7, -9, 14, 16);
+        ctx.fillStyle = "#0891b2";
+        ctx.fillRect(-5, -7, 10, 12);
+        ctx.fillStyle = "#a5f3fc";
+        ctx.fillRect(-3, -5, 3, 4);
+      } else if (type === 'bomb') {
+        ctx.fillStyle = "#1e293b";
+        ctx.beginPath();
+        ctx.arc(0, 2, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#64748b";
+        ctx.fillRect(-3, -2, 3, 3);
+        ctx.strokeStyle = "#eab308";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -7);
+        ctx.lineTo(4, -12);
+        ctx.stroke();
+        ctx.fillStyle = "#ef4444";
+        ctx.fillRect(4, -13, 3, 3);
+      } else if (type === 'shield') {
+        ctx.fillStyle = "#475569";
+        ctx.fillRect(-9, -11, 18, 20);
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillRect(-7, -9, 14, 16);
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillRect(-2, -8, 4, 14);
+        ctx.fillRect(-7, -3, 14, 4);
       }
-      
+
       ctx.restore();
     };
 
-    for (let i = 0; i < 2; i++) {
-      const slotX = i === 0 ? midX - 55 : midX + 5;
+    for (let i = 0; i < 3; i++) {
+      const slotX = startHotbarX + i * (slotW + slotGap);
       const isActive = p.activeSlot === i;
-      
-      // Draw background
-      ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+
+      // Slot Wood/Stone Frame Background
+      ctx.fillStyle = "rgba(16, 22, 34, 0.90)";
       ctx.fillRect(slotX, hotbarY, slotW, slotH);
 
-      // Border style: highlighted gold if active AND weapon equipped
-      if (isActive && p.weaponEquipped) {
-        ctx.strokeStyle = "#fbbf24";
+      if (isActive) {
+        // Glowing Gold Highlight for Active Slot
+        ctx.strokeStyle = "#facc15";
         ctx.lineWidth = 3;
-      } else {
-        ctx.strokeStyle = "#4b5563";
+        ctx.strokeRect(slotX, hotbarY, slotW, slotH);
+        ctx.strokeStyle = "#fef08a";
         ctx.lineWidth = 1;
+        ctx.strokeRect(slotX + 3, hotbarY + 3, slotW - 6, slotH - 6);
+      } else {
+        ctx.strokeStyle = "#653a18";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(slotX, hotbarY, slotW, slotH);
       }
-      ctx.strokeRect(slotX, hotbarY, slotW, slotH);
 
-      // Label [1] or [2]
-      ctx.fillStyle = "#9ca3af";
-      ctx.font = "bold 9px 'Courier New', Courier, monospace";
+      // Slot Number Label [1], [2], [3]
+      ctx.fillStyle = isActive ? "#fef08a" : "#a16207";
+      ctx.font = "bold 10px 'Courier New', Courier, monospace";
       ctx.textAlign = "left";
-      ctx.fillText(`[${i + 1}]`, slotX + 4, hotbarY + 11);
+      ctx.fillText(`[${i + 1}]`, slotX + 4, hotbarY + 12);
 
       // Draw item icon if slot is not empty
       const item = p.hotbar[i];
@@ -4727,11 +5285,11 @@ export class GameEngine {
       }
     }
 
-    // Hotbar label above slots
+    // Terraria Hotbar Label
     ctx.textAlign = "center";
-    ctx.fillStyle = "#9ca3af";
-    ctx.font = "bold 9px 'Courier New', Courier, monospace";
-    ctx.fillText("HOTBAR", midX, hotbarY - 6);
+    ctx.fillStyle = "#fef08a";
+    ctx.font = "bold 10px 'Courier New', Courier, monospace";
+    ctx.fillText("HOTBAR (1 - 3)", midX, hotbarY - 6);
   }
 
   drawAfterimages() {

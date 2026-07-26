@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { GameEngine } from "./Engine";
 import { COLORS } from "./constants";
+import { SavedRunState } from "./types";
 
 interface SaveFile {
   id: string;
   name: string;
   color: string;
   maxFloorReached: number;
+  savedRun?: SavedRunState;
 }
 
 export default function Game() {
@@ -47,6 +49,17 @@ export default function Game() {
     saveToStorage([...saves, newSave]);
   };
 
+  const deleteSave = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm("Are you sure you want to delete this Knight save slot?")) {
+      const updated = saves.filter((s) => s.id !== id);
+      saveToStorage(updated);
+      if (currentSave?.id === id) {
+        setCurrentSave(null);
+      }
+    }
+  };
+
   const updateCurrentSaveColor = (color: string) => {
     if (!currentSave) return;
     const updated = { ...currentSave, color };
@@ -57,17 +70,25 @@ export default function Game() {
     }
   };
 
-  const startGame = (save: SaveFile) => {
+  const startGame = (save: SaveFile, newRunOverride: boolean = false) => {
     setCurrentSave(save);
     setAppState("playing");
 
     if (engineRef.current) {
+      engineRef.current.isMenuBackground = false;
       engineRef.current.state.player.playerColor = save.color;
+
+      if (!newRunOverride && save.savedRun && save.savedRun.hasActiveRun) {
+        // Restore active saved run right where the player was!
+        engineRef.current.restoreRunState(save.savedRun);
+        engineRef.current.state.player.playerColor = save.color;
+      } else {
+        // Fresh new run!
+        engineRef.current.state = engineRef.current.getInitialState();
+        engineRef.current.state.player.playerColor = save.color;
+        engineRef.current.initFloor(1);
+      }
       engineRef.current.state.isPaused = false;
-      // If you want to load floor, we could engineRef.current.initFloor(save.maxFloorReached), but standard roguelike starts at 1
-      engineRef.current.state = engineRef.current.getInitialState();
-      engineRef.current.state.player.playerColor = save.color;
-      engineRef.current.initFloor(1);
     }
     setTimeout(() => {
       containerRef.current?.focus();
@@ -91,9 +112,51 @@ export default function Game() {
         }
       }
     };
+
+    const handleSaveAndExit = () => {
+      if (engineRef.current && currentSave) {
+        const runData = engineRef.current.serializeRunState();
+        const updatedSave: SaveFile = { ...currentSave, savedRun: runData };
+        setCurrentSave(updatedSave);
+        setSaves((prev) => {
+          const newSaves = prev.map((s) => (s.id === updatedSave.id ? updatedSave : s));
+          localStorage.setItem("deep_mine_saves", JSON.stringify(newSaves));
+          return newSaves;
+        });
+        engineRef.current.initMenuBackground();
+        setAppState("menu");
+      }
+    };
+
+    const handleExitToMenu = () => {
+      if (engineRef.current) {
+        engineRef.current.initMenuBackground();
+        setAppState("menu");
+      }
+    };
+
+    const handlePlayerDied = () => {
+      if (currentSave) {
+        const updatedSave: SaveFile = { ...currentSave, savedRun: undefined };
+        setCurrentSave(updatedSave);
+        setSaves((prev) => {
+          const newSaves = prev.map((s) => (s.id === updatedSave.id ? updatedSave : s));
+          localStorage.setItem("deep_mine_saves", JSON.stringify(newSaves));
+          return newSaves;
+        });
+      }
+    };
+
     window.addEventListener("floorCompleted", handleFloorCompleted);
-    return () =>
+    window.addEventListener("saveAndExit", handleSaveAndExit);
+    window.addEventListener("exitToMenu", handleExitToMenu);
+    window.addEventListener("playerDied", handlePlayerDied);
+    return () => {
       window.removeEventListener("floorCompleted", handleFloorCompleted);
+      window.removeEventListener("saveAndExit", handleSaveAndExit);
+      window.removeEventListener("exitToMenu", handleExitToMenu);
+      window.removeEventListener("playerDied", handlePlayerDied);
+    };
   }, [currentSave]);
 
   useEffect(() => {
@@ -104,7 +167,7 @@ export default function Game() {
 
     const engine = new GameEngine();
     engineRef.current = engine;
-    engine.state.isPaused = true;
+    engine.initMenuBackground();
 
     // Set up canvas context
     const canvas = canvasRef.current;
@@ -234,12 +297,12 @@ export default function Game() {
     <div
       ref={containerRef}
       tabIndex={0}
-      className="w-full h-screen bg-gradient-to-b from-[#2d1305] to-[#0a0502] text-white font-mono overflow-hidden relative border-8 border-[#2d1b0d] select-none flex flex-col focus:outline-none"
+      className="w-full h-screen bg-gradient-to-b from-[#3b2314] via-[#1e130c] to-[#0d0906] text-white font-mono overflow-hidden relative border-8 border-[#5c3716] select-none flex flex-col focus:outline-none shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]"
     >
       <div
-        className="absolute inset-0 opacity-10 pointer-events-none z-0"
+        className="absolute inset-0 opacity-15 pointer-events-none z-0"
         style={{
-          backgroundImage: "radial-gradient(#8a4a2a 1px, transparent 1px)",
+          backgroundImage: "radial-gradient(#d4af37 1px, transparent 1px)",
           backgroundSize: "32px 32px",
         }}
       ></div>
@@ -255,9 +318,10 @@ export default function Game() {
       />
 
       {appState === "playing" && showInfo && (
-        <div className="absolute top-20 right-6 bg-black/40 border-l-4 border-cyan-500 p-4 w-56 backdrop-blur-sm z-20">
+        <div className="absolute top-20 right-6 bg-[#181224]/90 border-2 border-[#7c4a1e] p-4 w-60 backdrop-blur-md z-20 shadow-2xl rounded-md">
+          <div className="absolute inset-1 border border-[#eab308]/40 pointer-events-none"></div>
           <button
-            className="absolute top-2 right-2 text-white/50 hover:text-white"
+            className="absolute top-2 right-2 text-yellow-500/70 hover:text-yellow-400 text-sm font-bold"
             onClick={(e) => {
               e.stopPropagation();
               setShowInfo(false);
@@ -265,127 +329,161 @@ export default function Game() {
           >
             ✕
           </button>
-          <div className="text-[10px] text-cyan-400 mb-1 font-bold pointer-events-none">
-            CONTROLS & INFO
+          <div className="text-xs text-amber-300 mb-2 font-bold tracking-wider pointer-events-none flex items-center gap-1">
+            <span className="text-yellow-400">⚔</span> CONTROLS & INFO
           </div>
-          <ul className="text-[11px] space-y-2 opacity-90 pointer-events-none">
+          <ul className="text-xs space-y-1.5 opacity-90 pointer-events-none text-amber-100">
             <li>• W/A/S/D or Arrows to Move</li>
-            <li>• Click to Attack</li>
-            <li className="text-yellow-400">• Find the purple exit</li>
+            <li>• Click to Attack / Use Item</li>
+            <li>• Keys 1, 2, 3 to Switch Hotbar</li>
+            <li>• F to Pick Up / Swap Items</li>
+            <li className="text-yellow-300 font-bold">• Find the purple exit gate</li>
           </ul>
         </div>
       )}
 
       {appState === "playing" && !showInfo && (
         <button
-          className="absolute top-20 right-6 bg-black/40 border border-cyan-500/50 text-cyan-400 p-2 text-xs backdrop-blur-sm z-20 hover:bg-cyan-500/20"
+          className="absolute top-20 right-6 bg-[#181224]/90 border-2 border-[#7c4a1e] text-amber-300 px-3 py-1.5 text-xs backdrop-blur-md z-20 hover:bg-[#2a1e3d] font-bold rounded shadow-lg flex items-center gap-1"
           onClick={(e) => {
             e.stopPropagation();
             setShowInfo(true);
           }}
         >
-          ⓘ Info
+          <span>📜</span> Controls
         </button>
       )}
 
-      <div className="absolute bottom-0 left-0 w-full flex justify-between text-[10px] opacity-60 px-4 pb-2 border-t border-white/10 pt-2 bg-[#0a0a12] z-20 font-bold tracking-widest pointer-events-none">
+      <div className="absolute bottom-0 left-0 w-full flex justify-between text-[10px] opacity-75 px-4 pb-2 border-t border-[#7c4a1e] pt-2 bg-[#120d1a] z-20 font-bold tracking-widest pointer-events-none text-amber-200">
         <span>FPS: {fps} // HZ: {fps} // LAT: 42.122 // SECURE CONNECTION</span>
-        <span>VER: 0.9.1-CAVE</span>
+        <span>VER: 1.0.0-TERRARIA</span>
       </div>
 
       {appState === "menu" && (
-        <div className="absolute inset-0 bg-black/80 z-30 flex flex-col items-center justify-center p-8 backdrop-blur-sm">
-          <h1 className="text-6xl text-white font-bold mb-2 tracking-widest drop-shadow-lg text-center shadow-black">
-            KNIGHT'S <span className="text-cyan-500">QUEST</span>
-          </h1>
-          <p className="text-gray-400 mb-12">Descend. Survive. Conquer.</p>
-          <div className="space-y-4 flex flex-col w-64">
-            <button
-              onClick={() => setAppState("selectSave")}
-              className="px-6 py-4 bg-white text-black font-bold text-xl hover:bg-gray-200 transition-colors border-l-4 border-cyan-500"
-            >
-              PLAY GAME
-            </button>
+        <div className="absolute inset-0 bg-[#0d0914]/85 z-30 flex flex-col items-center justify-center p-8 backdrop-blur-md">
+          <div className="p-8 bg-[#181224]/95 border-4 border-[#7c4a1e] rounded-xl flex flex-col items-center max-w-md w-full shadow-[0_0_40px_rgba(234,179,8,0.25)] relative">
+            <div className="absolute inset-1.5 border-2 border-[#eab308]/50 rounded-lg pointer-events-none"></div>
+            <h1 className="text-5xl text-yellow-400 font-bold mb-2 tracking-widest text-center drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)]">
+              KNIGHT'S <span className="text-amber-500">QUEST</span>
+            </h1>
+            <p className="text-amber-200/80 mb-8 font-semibold tracking-wide">Descend. Survive. Conquer.</p>
+            <div className="space-y-4 flex flex-col w-full px-4">
+              <button
+                onClick={() => setAppState("selectSave")}
+                className="px-6 py-4 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-extrabold text-xl transition-all border-2 border-amber-200 rounded-lg shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
+              >
+                PLAY GAME
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {appState === "selectSave" && (
-        <div className="absolute inset-0 bg-black/80 z-30 flex flex-col items-center p-8 backdrop-blur-sm overflow-y-auto">
-          <h1 className="text-4xl text-white font-bold mt-10 mb-8">
-            SELECT SAVE
+        <div className="absolute inset-0 bg-[#0d0914]/90 z-30 flex flex-col items-center p-8 backdrop-blur-md overflow-y-auto">
+          <h1 className="text-4xl text-yellow-400 font-bold mt-8 mb-6 drop-shadow-md tracking-wider">
+            SELECT KNIGHT SAVE
           </h1>
           <div className="flex flex-wrap gap-6 mb-8 justify-center max-w-4xl">
-            {saves.map((save) => (
-              <div
-                key={save.id}
-                className="p-6 bg-gray-900 border border-gray-700 rounded-lg flex flex-col items-center min-w-[250px] shadow-lg"
-              >
-                <div className="w-16 h-16 mb-2 relative bg-slate-900 border-2 border-slate-700 rounded-lg flex items-center justify-center p-1">
-                  {/* Legacy Knight Helmet Preview */}
-                  <div className="relative w-8 h-8 flex flex-col items-center">
-                    {/* Helm */}
-                    <div className="w-7 h-7 bg-slate-300 rounded-t-md relative border border-slate-500 shadow-inner">
-                      {/* T-Visor */}
-                      <div className="absolute top-2 inset-x-1 h-1.5 bg-slate-950 flex items-center justify-center">
-                        <div className="w-2 h-[2px]" style={{ backgroundColor: save.color }}></div>
+            {saves.map((save) => {
+              const hasActiveRun = save.savedRun && save.savedRun.hasActiveRun;
+              return (
+                <div
+                  key={save.id}
+                  className="p-6 bg-[#181224]/90 border-4 border-[#7c4a1e] rounded-xl flex flex-col items-center min-w-[270px] shadow-[0_8px_25px_rgba(0,0,0,0.6)] relative group hover:border-amber-500/80 transition-all"
+                >
+                  <div className="absolute inset-1 border border-[#eab308]/40 rounded-lg pointer-events-none"></div>
+
+                  {/* Delete Save Button */}
+                  <button
+                    onClick={(e) => deleteSave(save.id, e)}
+                    className="absolute top-3 right-3 text-red-400/70 hover:text-red-400 bg-red-950/60 hover:bg-red-900/80 border border-red-800/80 p-1.5 rounded text-xs transition-colors z-20"
+                    title="Delete Save Slot"
+                  >
+                    🗑
+                  </button>
+
+                  <div className="w-16 h-16 mb-3 relative bg-slate-950 border-2 border-amber-600/70 rounded-lg flex items-center justify-center p-1 shadow-inner">
+                    {/* Knight Helmet Preview */}
+                    <div className="relative w-8 h-8 flex flex-col items-center">
+                      <div className="w-7 h-7 bg-slate-300 rounded-t-md relative border border-slate-500 shadow-inner">
+                        <div className="absolute top-2 inset-x-1 h-1.5 bg-slate-950 flex items-center justify-center">
+                          <div className="w-2 h-[2px]" style={{ backgroundColor: save.color }}></div>
+                        </div>
+                        <div className="absolute top-3 left-1/2 -translate-x-1/2 w-1.5 h-3 bg-slate-950"></div>
                       </div>
-                      <div className="absolute top-3 left-1/2 -translate-x-1/2 w-1.5 h-3 bg-slate-950"></div>
                     </div>
                   </div>
-                </div>
-                <h2 className="text-xl font-bold mb-1">{save.name}</h2>
-                <p className="text-sm text-cyan-400 mb-3">
-                  Max Floor: {save.maxFloorReached}
-                </p>
+                  <h2 className="text-xl font-bold mb-1 text-amber-100">{save.name}</h2>
+                  <p className="text-xs text-amber-300/80 mb-2 font-semibold">
+                    Max Floor: {save.maxFloorReached}
+                  </p>
 
-                {/* Character Color Customization Swatches */}
-                <p className="text-xs text-gray-400 mb-1">Knight Accent & Visor Color:</p>
-                <div className="flex space-x-1.5 mb-4">
-                  {[
-                    "#ea580c", // Orange
-                    "#3b82f6", // Royal Blue
-                    "#22c55e", // Emerald
-                    "#a855f7", // Purple
-                    "#eab308", // Gold
-                    "#ef4444", // Crimson
-                    "#06b6d4", // Cyan
-                    "#64748b", // Steel
-                  ].map((color) => (
+                  {/* Character Color Customization Swatches */}
+                  <p className="text-xs text-amber-200/80 mb-1.5 font-bold">Visor Accent:</p>
+                  <div className="flex space-x-1.5 mb-4">
+                    {[
+                      "#ea580c", // Orange
+                      "#3b82f6", // Royal Blue
+                      "#22c55e", // Emerald
+                      "#a855f7", // Purple
+                      "#eab308", // Gold
+                      "#ef4444", // Crimson
+                      "#06b6d4", // Cyan
+                      "#64748b", // Steel
+                    ].map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => {
+                          const updatedSaves = saves.map((s) =>
+                            s.id === save.id ? { ...s, color } : s,
+                          );
+                          saveToStorage(updatedSaves);
+                        }}
+                        className={`w-4 h-4 rounded-full border transition-transform ${save.color === color ? "border-amber-300 scale-125 z-10 shadow-md ring-2 ring-yellow-400/50" : "border-transparent opacity-70 hover:opacity-100"}`}
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+
+                  {hasActiveRun ? (
+                    <div className="w-full space-y-2">
+                      <button
+                        onClick={() => startGame(save, false)}
+                        className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-slate-950 font-extrabold w-full rounded-lg border border-green-300 shadow-md transition-all text-sm"
+                      >
+                        CONTINUE (FLOOR {save.savedRun?.floor})
+                      </button>
+                      <button
+                        onClick={() => startGame(save, true)}
+                        className="px-3 py-1.5 bg-amber-950/60 hover:bg-amber-900/80 text-amber-300/80 hover:text-yellow-200 font-bold w-full rounded border border-amber-800/50 text-xs transition-colors"
+                      >
+                        Start Fresh Run (Floor 1)
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      key={color}
-                      onClick={() => {
-                        const updatedSaves = saves.map((s) =>
-                          s.id === save.id ? { ...s, color } : s,
-                        );
-                        saveToStorage(updatedSaves);
-                      }}
-                      className={`w-5 h-5 rounded-full border-2 transition-transform ${save.color === color ? "border-white scale-125 z-10 shadow-md" : "border-transparent opacity-80 hover:opacity-100"}`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
+                      onClick={() => startGame(save, true)}
+                      className="px-4 py-2.5 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-extrabold w-full rounded-lg border border-amber-300 shadow-md transition-all text-sm"
+                    >
+                      ENTER CAVE (FLOOR 1)
+                    </button>
+                  )}
                 </div>
-
-                <button
-                  onClick={() => startGame(save)}
-                  className="px-4 py-2 bg-cyan-600 text-white font-bold hover:bg-cyan-500 w-full rounded"
-                >
-                  ENTER CAVE
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="flex space-x-4">
             <button
               onClick={createNewSave}
-              className="px-6 py-3 bg-white/10 text-white font-bold border border-white/20 hover:bg-white/20 rounded"
+              className="px-6 py-3 bg-amber-500/20 text-yellow-300 font-bold border-2 border-amber-500/60 hover:bg-amber-500/30 rounded-lg transition-colors"
             >
               CREATE NEW KNIGHT
             </button>
             <button
               onClick={() => setAppState("menu")}
-              className="px-6 py-3 text-gray-400 hover:text-white rounded border border-transparent hover:border-white/20"
+              className="px-6 py-3 text-amber-200/70 hover:text-amber-100 rounded-lg border border-transparent hover:border-amber-500/40 transition-colors"
             >
               BACK
             </button>
