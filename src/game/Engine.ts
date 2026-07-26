@@ -4722,35 +4722,37 @@ export class GameEngine {
           this.state.mouse.y <= cy + cardHeight;
 
         // Terraria Card Background
-        let strokeColor = "#7c4a1e";
-        let fillStyle = isHover ? "rgba(35, 25, 45, 0.95)" : "rgba(20, 15, 30, 0.90)";
+        let strokeColor = "#334155";
+        let fillStyle = isHover ? "rgba(15, 23, 42, 0.96)" : "rgba(30, 41, 59, 0.90)";
+        let innerColor = isHover ? "#06b6d4" : "#475569";
         
         if (u.isSuper) {
           const timeCycle = Date.now() / 250;
           const hue = Math.floor(45 + Math.sin(timeCycle) * 15);
           strokeColor = `hsl(${hue}, 100%, 50%)`;
-          fillStyle = isHover ? "rgba(55, 35, 15, 0.95)" : "rgba(35, 20, 10, 0.92)";
+          fillStyle = isHover ? "rgba(45, 30, 15, 0.96)" : "rgba(30, 20, 10, 0.92)";
+          innerColor = "#fef08a";
         } else {
-          strokeColor = isHover ? "#facc15" : "#7c4a1e";
+          strokeColor = isHover ? "#22d3ee" : "#334155";
         }
 
         ctx.fillStyle = fillStyle;
         ctx.fillRect(cx, cy, cardWidth, cardHeight);
 
-        // Wood/Gold Outer Frame
+        // Slate/Cyan Outer Frame
         ctx.strokeStyle = strokeColor;
         ctx.lineWidth = u.isSuper ? 4 : 3;
         ctx.strokeRect(cx, cy, cardWidth, cardHeight);
 
-        // Inner Gold Accent Box
-        ctx.strokeStyle = u.isSuper ? "#fef08a" : "#ca8a04";
+        // Inner Accent Box
+        ctx.strokeStyle = innerColor;
         ctx.lineWidth = 1;
         ctx.strokeRect(cx + 4, cy + 4, cardWidth - 8, cardHeight - 8);
 
         // Title
         ctx.textAlign = "center";
         ctx.font = "bold 17px 'Courier New', Courier, monospace";
-        ctx.fillStyle = u.isSuper ? "#fef08a" : "#fef08a";
+        ctx.fillStyle = u.isSuper ? "#fef08a" : "#38bdf8";
         ctx.fillText(u.title, cx + cardWidth / 2, cy + 32);
 
         // Sub-Label Banner
@@ -4875,9 +4877,9 @@ export class GameEngine {
       );
     }
 
-    // --- Terraria Pause Menu Modal Overlay ---
+    // --- Pause Menu Modal Overlay ---
     if (this.state.isPaused && !this.isMenuBackground) {
-      ctx.fillStyle = "rgba(10, 8, 16, 0.85)";
+      ctx.fillStyle = "rgba(10, 15, 26, 0.85)";
       ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
       const panelW = 320;
@@ -4885,17 +4887,17 @@ export class GameEngine {
       const panelX = this.canvasWidth / 2 - panelW / 2;
       const panelY = this.canvasHeight / 2 - panelH / 2;
 
-      // Wood & Gold Box
-      ctx.fillStyle = "rgba(24, 18, 36, 0.96)";
+      // Slate & Cyan Box
+      ctx.fillStyle = "rgba(15, 23, 42, 0.96)";
       ctx.fillRect(panelX, panelY, panelW, panelH);
-      ctx.strokeStyle = "#7c4a1e";
-      ctx.lineWidth = 4;
+      ctx.strokeStyle = "#06b6d4";
+      ctx.lineWidth = 3;
       ctx.strokeRect(panelX, panelY, panelW, panelH);
-      ctx.strokeStyle = "#fef08a";
+      ctx.strokeStyle = "#22d3ee";
       ctx.lineWidth = 1;
       ctx.strokeRect(panelX + 4, panelY + 4, panelW - 8, panelH - 8);
 
-      ctx.fillStyle = "#fef08a";
+      ctx.fillStyle = "#67e8f9";
       ctx.font = "bold 26px 'Courier New', Courier, monospace";
       ctx.textAlign = "center";
       ctx.fillText("GAME PAUSED", this.canvasWidth / 2, panelY + 42);
@@ -4919,13 +4921,13 @@ export class GameEngine {
           this.state.mouse.y >= by &&
           this.state.mouse.y <= by + bh;
 
-        ctx.fillStyle = isHover ? "rgba(234, 179, 8, 0.3)" : "rgba(124, 74, 30, 0.4)";
-        ctx.strokeStyle = isHover ? "#fef08a" : "#7c4a1e";
+        ctx.fillStyle = isHover ? "rgba(6, 182, 212, 0.3)" : "rgba(30, 41, 59, 0.7)";
+        ctx.strokeStyle = isHover ? "#22d3ee" : "#334155";
         ctx.lineWidth = 2;
         ctx.fillRect(bx, by, bw, bh);
         ctx.strokeRect(bx, by, bw, bh);
 
-        ctx.fillStyle = isHover ? "#fef08a" : "#e2e8f0";
+        ctx.fillStyle = isHover ? "#67e8f9" : "#e2e8f0";
         ctx.font = "bold 15px 'Courier New', Courier, monospace";
         ctx.fillText(btn.text, this.canvasWidth / 2, by + 26);
       }
@@ -4939,28 +4941,37 @@ export class GameEngine {
 
     ctx.textAlign = "left";
 
-    // --- Terraria Top-Left HUD Panel ---
+    // --- 1. SEPARATE FLOATING FLOOR BADGE (Top Center) ---
+    const floorW = 160;
+    const floorH = 32;
+    const floorX = this.canvasWidth / 2 - floorW / 2;
+    const floorY = 16;
+
+    ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+    ctx.fillRect(floorX, floorY, floorW, floorH);
+    ctx.strokeStyle = "#06b6d4"; // Cyan border
+    ctx.lineWidth = 2;
+    ctx.strokeRect(floorX, floorY, floorW, floorH);
+
+    ctx.fillStyle = "#22d3ee";
+    ctx.font = "bold 14px 'Courier New', Courier, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(`FLOOR ${this.state.floor} / ${this.state.maxFloor}`, this.canvasWidth / 2, floorY + 21);
+    ctx.textAlign = "left";
+
+    // --- 2. SEPARATE FLOATING HEARTS PANEL (Top Left) ---
     const hudX = 20;
     const hudY = 20;
     const totalHearts = Math.ceil(p.maxHealth / 20);
     const heartRows = Math.ceil(totalHearts / 10);
-    const hudW = Math.max(260, Math.min(10, totalHearts) * 22 + 70);
-    const hudH = 75 + (heartRows - 1) * 20;
+    const heartsW = Math.max(240, Math.min(10, totalHearts) * 20 + 90);
+    const heartsH = 20 + heartRows * 20;
 
-    // Wood & Stone Panel Background
-    ctx.fillStyle = "rgba(18, 24, 38, 0.88)";
-    ctx.fillRect(hudX, hudY, hudW, hudH);
-    ctx.strokeStyle = "#7c4a1e"; // Wood border
-    ctx.lineWidth = 3;
-    ctx.strokeRect(hudX, hudY, hudW, hudH);
-    ctx.strokeStyle = "#eab308"; // Gold inner trim
-    ctx.lineWidth = 1;
-    ctx.strokeRect(hudX + 3, hudY + 3, hudW - 6, hudH - 6);
-
-    // Floor Text Header
-    ctx.fillStyle = "#fef08a";
-    ctx.font = "bold 14px 'Courier New', Courier, monospace";
-    ctx.fillText(`FLOOR ${this.state.floor} / ${this.state.maxFloor}`, hudX + 12, hudY + 22);
+    ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+    ctx.fillRect(hudX, hudY, heartsW, heartsH);
+    ctx.strokeStyle = "#0284c7"; // Cyan/blue border
+    ctx.lineWidth = 2;
+    ctx.strokeRect(hudX, hudY, heartsW, heartsH);
 
     // --- Terraria Heart Containers ---
     const drawHeart = (x: number, y: number, state: 'full' | 'half' | 'empty') => {
@@ -4978,7 +4989,6 @@ export class GameEngine {
       ctx.fill();
 
       if (state === 'full') {
-        // Red Ruby Heart Fill
         ctx.fillStyle = "#ef4444";
         ctx.beginPath();
         ctx.arc(-2, 3, 3, 0, Math.PI * 2);
@@ -4989,11 +4999,9 @@ export class GameEngine {
         ctx.lineTo(0, 11);
         ctx.lineTo(4, 4);
         ctx.fill();
-        // Shiny highlight
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(-3, 2, 2, 2);
       } else if (state === 'half') {
-        // Left half red
         ctx.fillStyle = "#ef4444";
         ctx.beginPath();
         ctx.arc(-2, 3, 3, Math.PI * 0.5, Math.PI * 1.5);
@@ -5006,13 +5014,11 @@ export class GameEngine {
         ctx.fill();
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(-3, 2, 1.5, 1.5);
-        // Right half empty
         ctx.fillStyle = "#331619";
         ctx.beginPath();
         ctx.arc(2, 3, 2.5, -Math.PI * 0.5, Math.PI * 0.5);
         ctx.fill();
       } else {
-        // Empty heart container
         ctx.fillStyle = "#331619";
         ctx.beginPath();
         ctx.arc(-2, 3, 2.5, 0, Math.PI * 2);
@@ -5032,7 +5038,7 @@ export class GameEngine {
       const col = i % 10;
       const row = Math.floor(i / 10);
       const hx = hudX + 16 + col * 18;
-      const hy = hudY + 36 + row * 18;
+      const hy = hudY + 14 + row * 18;
       const hpInHeart = p.health - i * hpPerHeart;
 
       let state: 'full' | 'half' | 'empty' = 'empty';
@@ -5045,10 +5051,20 @@ export class GameEngine {
     // Exact Numeric HP Readout
     ctx.fillStyle = "#f87171";
     ctx.font = "bold 11px 'Courier New', Courier, monospace";
-    ctx.fillText(`${Math.max(0, p.health)} / ${p.maxHealth} HP`, hudX + Math.min(totalHearts, 10) * 18 + 22, hudY + 45);
+    ctx.fillText(`${Math.max(0, p.health)} / ${p.maxHealth} HP`, hudX + Math.min(totalHearts, 10) * 18 + 22, hudY + 23);
 
-    // Active Item/Weapon Badge
-    ctx.fillStyle = "#fbbf24";
+    // --- 3. SEPARATE FLOATING ACTIVE ITEM BADGE ---
+    const activeBadgeY = hudY + heartsH + 8;
+    const activeBadgeW = 240;
+    const activeBadgeH = 30;
+
+    ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+    ctx.fillRect(hudX, activeBadgeY, activeBadgeW, activeBadgeH);
+    ctx.strokeStyle = "#0284c7";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(hudX, activeBadgeY, activeBadgeW, activeBadgeH);
+
+    ctx.fillStyle = "#38bdf8";
     ctx.font = "bold 11px 'Courier New', Courier, monospace";
     const currentItem = p.hotbar[p.activeSlot];
     let displayItemName = "UNARMED";
@@ -5056,18 +5072,18 @@ export class GameEngine {
     else if (currentItem) {
       displayItemName = currentItem.toUpperCase().replace(/_/g, ' ');
     }
-    ctx.fillText(`ACTIVE: ${displayItemName}`, hudX + 12, hudY + 62 + (heartRows - 1) * 20);
+    ctx.fillText(`ACTIVE: ${displayItemName}`, hudX + 10, activeBadgeY + 19);
 
-    let nextHUDY = hudY + hudH + 12;
+    let nextHUDY = activeBadgeY + activeBadgeH + 8;
 
     // Super Abilities & Buff Panels
     const drawAbilityPanel = (title: string, has: boolean, active: boolean, timer: number, cooldown: number, maxTimer: number, maxCooldown: number, keyChar: string) => {
       if (!has) return;
-      ctx.fillStyle = "rgba(18, 24, 38, 0.88)";
-      ctx.fillRect(hudX, nextHUDY, 240, 36);
-      ctx.strokeStyle = "#7c4a1e";
+      ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+      ctx.fillRect(hudX, nextHUDY, 240, 34);
+      ctx.strokeStyle = "#0284c7";
       ctx.lineWidth = 2;
-      ctx.strokeRect(hudX, nextHUDY, 240, 36);
+      ctx.strokeRect(hudX, nextHUDY, 240, 34);
 
       ctx.fillStyle = "#fff";
       ctx.font = "bold 11px 'Courier New', Courier, monospace";
@@ -5087,7 +5103,7 @@ export class GameEngine {
         ctx.fillStyle = "#22c55e";
         ctx.fillText(`READY [${keyChar}]`, hudX + 130, nextHUDY + 16);
       }
-      nextHUDY += 42;
+      nextHUDY += 40;
     };
 
     drawAbilityPanel("MALEVOLENCE", p.hasMalevolence, p.malevolenceActive, p.malevolenceTimer, p.malevolenceCooldown, 900, 6000, "Q");

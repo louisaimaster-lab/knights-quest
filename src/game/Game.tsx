@@ -360,17 +360,17 @@ export default function Game() {
       </div>
 
       {appState === "menu" && (
-        <div className="absolute inset-0 bg-[#0d0914]/85 z-30 flex flex-col items-center justify-center p-8 backdrop-blur-md">
-          <div className="p-8 bg-[#181224]/95 border-4 border-[#7c4a1e] rounded-xl flex flex-col items-center max-w-md w-full shadow-[0_0_40px_rgba(234,179,8,0.25)] relative">
-            <div className="absolute inset-1.5 border-2 border-[#eab308]/50 rounded-lg pointer-events-none"></div>
-            <h1 className="text-5xl text-yellow-400 font-bold mb-2 tracking-widest text-center drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)]">
-              KNIGHT'S <span className="text-amber-500">QUEST</span>
+        <div className="absolute inset-0 bg-slate-950/50 z-30 flex flex-col items-center justify-center p-8 backdrop-blur-[1px]">
+          <div className="p-8 bg-slate-900/90 border-2 border-cyan-500/60 rounded-xl flex flex-col items-center max-w-md w-full shadow-[0_0_30px_rgba(6,182,212,0.25)] relative">
+            <div className="absolute inset-1 border border-cyan-400/30 rounded-lg pointer-events-none"></div>
+            <h1 className="text-5xl text-white font-bold mb-2 tracking-widest text-center drop-shadow-md">
+              KNIGHT'S <span className="text-cyan-400">QUEST</span>
             </h1>
-            <p className="text-amber-200/80 mb-8 font-semibold tracking-wide">Descend. Survive. Conquer.</p>
+            <p className="text-cyan-200/80 mb-8 font-semibold tracking-wide">Descend. Survive. Conquer.</p>
             <div className="space-y-4 flex flex-col w-full px-4">
               <button
                 onClick={() => setAppState("selectSave")}
-                className="px-6 py-4 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-extrabold text-xl transition-all border-2 border-amber-200 rounded-lg shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
+                className="px-6 py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xl transition-all border-2 border-cyan-300 rounded-lg shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
               >
                 PLAY GAME
               </button>
@@ -380,8 +380,8 @@ export default function Game() {
       )}
 
       {appState === "selectSave" && (
-        <div className="absolute inset-0 bg-[#0d0914]/90 z-30 flex flex-col items-center p-8 backdrop-blur-md overflow-y-auto">
-          <h1 className="text-4xl text-yellow-400 font-bold mt-8 mb-6 drop-shadow-md tracking-wider">
+        <div className="absolute inset-0 bg-slate-950/60 z-30 flex flex-col items-center p-8 backdrop-blur-[1px] overflow-y-auto">
+          <h1 className="text-4xl text-cyan-400 font-bold mt-8 mb-6 drop-shadow-md tracking-wider">
             SELECT KNIGHT SAVE
           </h1>
           <div className="flex flex-wrap gap-6 mb-8 justify-center max-w-4xl">
@@ -390,20 +390,20 @@ export default function Game() {
               return (
                 <div
                   key={save.id}
-                  className="p-6 bg-[#181224]/90 border-4 border-[#7c4a1e] rounded-xl flex flex-col items-center min-w-[270px] shadow-[0_8px_25px_rgba(0,0,0,0.6)] relative group hover:border-amber-500/80 transition-all"
+                  className="p-6 bg-slate-900/90 border-2 border-slate-700 rounded-xl flex flex-col items-center min-w-[270px] shadow-lg relative group hover:border-cyan-500/80 transition-all"
                 >
-                  <div className="absolute inset-1 border border-[#eab308]/40 rounded-lg pointer-events-none"></div>
+                  <div className="absolute inset-1 border border-slate-700/50 rounded-lg pointer-events-none"></div>
 
                   {/* Delete Save Button */}
                   <button
                     onClick={(e) => deleteSave(save.id, e)}
-                    className="absolute top-3 right-3 text-red-400/70 hover:text-red-400 bg-red-950/60 hover:bg-red-900/80 border border-red-800/80 p-1.5 rounded text-xs transition-colors z-20"
+                    className="absolute top-3 right-3 text-red-400/70 hover:text-red-400 bg-red-950/40 hover:bg-red-900/80 border border-red-800/60 p-1.5 rounded text-xs transition-colors z-20"
                     title="Delete Save Slot"
                   >
                     🗑
                   </button>
 
-                  <div className="w-16 h-16 mb-3 relative bg-slate-950 border-2 border-amber-600/70 rounded-lg flex items-center justify-center p-1 shadow-inner">
+                  <div className="w-16 h-16 mb-3 relative bg-slate-950 border-2 border-slate-700 rounded-lg flex items-center justify-center p-1 shadow-inner">
                     {/* Knight Helmet Preview */}
                     <div className="relative w-8 h-8 flex flex-col items-center">
                       <div className="w-7 h-7 bg-slate-300 rounded-t-md relative border border-slate-500 shadow-inner">
@@ -414,13 +414,13 @@ export default function Game() {
                       </div>
                     </div>
                   </div>
-                  <h2 className="text-xl font-bold mb-1 text-amber-100">{save.name}</h2>
-                  <p className="text-xs text-amber-300/80 mb-2 font-semibold">
+                  <h2 className="text-xl font-bold mb-1 text-slate-100">{save.name}</h2>
+                  <p className="text-xs text-cyan-400 mb-2 font-semibold">
                     Max Floor: {save.maxFloorReached}
                   </p>
 
                   {/* Character Color Customization Swatches */}
-                  <p className="text-xs text-amber-200/80 mb-1.5 font-bold">Visor Accent:</p>
+                  <p className="text-xs text-slate-400 mb-1.5 font-bold">Visor Accent:</p>
                   <div className="flex space-x-1.5 mb-4">
                     {[
                       "#ea580c", // Orange
@@ -440,7 +440,7 @@ export default function Game() {
                           );
                           saveToStorage(updatedSaves);
                         }}
-                        className={`w-4 h-4 rounded-full border transition-transform ${save.color === color ? "border-amber-300 scale-125 z-10 shadow-md ring-2 ring-yellow-400/50" : "border-transparent opacity-70 hover:opacity-100"}`}
+                        className={`w-4 h-4 rounded-full border transition-transform ${save.color === color ? "border-cyan-300 scale-125 z-10 shadow-md ring-2 ring-cyan-400/50" : "border-transparent opacity-70 hover:opacity-100"}`}
                         style={{ backgroundColor: color }}
                       />
                     ))}
@@ -450,13 +450,13 @@ export default function Game() {
                     <div className="w-full space-y-2">
                       <button
                         onClick={() => startGame(save, false)}
-                        className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-slate-950 font-extrabold w-full rounded-lg border border-green-300 shadow-md transition-all text-sm"
+                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold w-full rounded-lg border border-emerald-400 shadow-md transition-all text-sm"
                       >
                         CONTINUE (FLOOR {save.savedRun?.floor})
                       </button>
                       <button
                         onClick={() => startGame(save, true)}
-                        className="px-3 py-1.5 bg-amber-950/60 hover:bg-amber-900/80 text-amber-300/80 hover:text-yellow-200 font-bold w-full rounded border border-amber-800/50 text-xs transition-colors"
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold w-full rounded border border-slate-600 text-xs transition-colors"
                       >
                         Start Fresh Run (Floor 1)
                       </button>
@@ -464,7 +464,7 @@ export default function Game() {
                   ) : (
                     <button
                       onClick={() => startGame(save, true)}
-                      className="px-4 py-2.5 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-extrabold w-full rounded-lg border border-amber-300 shadow-md transition-all text-sm"
+                      className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold w-full rounded-lg border border-cyan-400 shadow-md transition-all text-sm"
                     >
                       ENTER CAVE (FLOOR 1)
                     </button>
@@ -477,13 +477,13 @@ export default function Game() {
           <div className="flex space-x-4">
             <button
               onClick={createNewSave}
-              className="px-6 py-3 bg-amber-500/20 text-yellow-300 font-bold border-2 border-amber-500/60 hover:bg-amber-500/30 rounded-lg transition-colors"
+              className="px-6 py-3 bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/50 hover:bg-cyan-500/30 rounded-lg transition-colors"
             >
               CREATE NEW KNIGHT
             </button>
             <button
               onClick={() => setAppState("menu")}
-              className="px-6 py-3 text-amber-200/70 hover:text-amber-100 rounded-lg border border-transparent hover:border-amber-500/40 transition-colors"
+              className="px-6 py-3 text-slate-400 hover:text-slate-200 rounded-lg border border-transparent hover:border-slate-700 transition-colors"
             >
               BACK
             </button>
