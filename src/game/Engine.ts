@@ -4941,45 +4941,31 @@ export class GameEngine {
 
     ctx.textAlign = "left";
 
-    // --- 1. SEPARATE FLOATING FLOOR BADGE (Top Center) ---
-    const floorW = 160;
-    const floorH = 32;
-    const floorX = this.canvasWidth / 2 - floorW / 2;
-    const floorY = 16;
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
 
-    ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
-    ctx.fillRect(floorX, floorY, floorW, floorH);
-    ctx.strokeStyle = "#06b6d4"; // Cyan border
-    ctx.lineWidth = 2;
-    ctx.strokeRect(floorX, floorY, floorW, floorH);
-
-    ctx.fillStyle = "#22d3ee";
-    ctx.font = "bold 14px 'Courier New', Courier, monospace";
+    // --- 1. FREELY FLOATING FLOOR TEXT (Top Center - No Box) ---
+    ctx.fillStyle = "#94a3b8"; // Faded slate-silver
+    ctx.font = "bold 15px 'Courier New', Courier, monospace";
     ctx.textAlign = "center";
-    ctx.fillText(`FLOOR ${this.state.floor} / ${this.state.maxFloor}`, this.canvasWidth / 2, floorY + 21);
+    ctx.fillText(`FLOOR ${this.state.floor} / ${this.state.maxFloor}`, this.canvasWidth / 2, 28);
     ctx.textAlign = "left";
 
-    // --- 2. SEPARATE FLOATING HEARTS PANEL (Top Left) ---
+    // --- 2. FREELY FLOATING 10 HEARTS (Top Left - No Box) ---
     const hudX = 20;
     const hudY = 20;
-    const totalHearts = Math.ceil(p.maxHealth / 20);
-    const heartRows = Math.ceil(totalHearts / 10);
-    const heartsW = Math.max(240, Math.min(10, totalHearts) * 20 + 90);
-    const heartsH = 20 + heartRows * 20;
+    const hpPerHeart = 10; // 100 HP = 10 Hearts total
+    const totalHearts = Math.ceil(p.maxHealth / hpPerHeart);
 
-    ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
-    ctx.fillRect(hudX, hudY, heartsW, heartsH);
-    ctx.strokeStyle = "#0284c7"; // Cyan/blue border
-    ctx.lineWidth = 2;
-    ctx.strokeRect(hudX, hudY, heartsW, heartsH);
-
-    // --- Terraria Heart Containers ---
     const drawHeart = (x: number, y: number, state: 'full' | 'half' | 'empty') => {
       ctx.save();
       ctx.translate(x, y);
 
       // Dark Heart Outline
-      ctx.fillStyle = "#1e080a";
+      ctx.fillStyle = "#1e1b1e";
       ctx.beginPath();
       ctx.moveTo(8, 3);
       ctx.bezierCurveTo(8, 0, 4, 0, 2, 2.5);
@@ -4989,7 +4975,8 @@ export class GameEngine {
       ctx.fill();
 
       if (state === 'full') {
-        ctx.fillStyle = "#ef4444";
+        // Soft Muted Ruby Heart
+        ctx.fillStyle = "#dc2626";
         ctx.beginPath();
         ctx.arc(-2, 3, 3, 0, Math.PI * 2);
         ctx.arc(2, 3, 3, 0, Math.PI * 2);
@@ -4999,10 +4986,10 @@ export class GameEngine {
         ctx.lineTo(0, 11);
         ctx.lineTo(4, 4);
         ctx.fill();
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(-3, 2, 2, 2);
+        ctx.fillStyle = "#f87171";
+        ctx.fillRect(-3, 2, 1.5, 1.5);
       } else if (state === 'half') {
-        ctx.fillStyle = "#ef4444";
+        ctx.fillStyle = "#dc2626";
         ctx.beginPath();
         ctx.arc(-2, 3, 3, Math.PI * 0.5, Math.PI * 1.5);
         ctx.fill();
@@ -5012,14 +4999,12 @@ export class GameEngine {
         ctx.lineTo(0, 11);
         ctx.lineTo(0, 4);
         ctx.fill();
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(-3, 2, 1.5, 1.5);
-        ctx.fillStyle = "#331619";
+        ctx.fillStyle = "#2d1618";
         ctx.beginPath();
         ctx.arc(2, 3, 2.5, -Math.PI * 0.5, Math.PI * 0.5);
         ctx.fill();
       } else {
-        ctx.fillStyle = "#331619";
+        ctx.fillStyle = "#2d1618";
         ctx.beginPath();
         ctx.arc(-2, 3, 2.5, 0, Math.PI * 2);
         ctx.arc(2, 3, 2.5, 0, Math.PI * 2);
@@ -5033,12 +5018,9 @@ export class GameEngine {
       ctx.restore();
     };
 
-    const hpPerHeart = 20;
     for (let i = 0; i < totalHearts; i++) {
-      const col = i % 10;
-      const row = Math.floor(i / 10);
-      const hx = hudX + 16 + col * 18;
-      const hy = hudY + 14 + row * 18;
+      const hx = hudX + i * 20;
+      const hy = hudY;
       const hpInHeart = p.health - i * hpPerHeart;
 
       let state: 'full' | 'half' | 'empty' = 'empty';
@@ -5048,109 +5030,76 @@ export class GameEngine {
       drawHeart(hx, hy, state);
     }
 
-    // Exact Numeric HP Readout
+    // Exact Numeric HP Readout (Faded Muted Red)
     ctx.fillStyle = "#f87171";
-    ctx.font = "bold 11px 'Courier New', Courier, monospace";
-    ctx.fillText(`${Math.max(0, p.health)} / ${p.maxHealth} HP`, hudX + Math.min(totalHearts, 10) * 18 + 22, hudY + 23);
+    ctx.font = "bold 12px 'Courier New', Courier, monospace";
+    ctx.fillText(`${Math.max(0, p.health)} / ${p.maxHealth} HP`, hudX + totalHearts * 20 + 10, hudY + 11);
 
-    // --- 3. SEPARATE FLOATING ACTIVE ITEM BADGE ---
-    const activeBadgeY = hudY + heartsH + 8;
-    const activeBadgeW = 240;
-    const activeBadgeH = 30;
+    // --- 3. FREELY FLOATING ACTIVE ITEM TEXT (No Box) ---
+    const activeBadgeY = hudY + 24;
 
-    ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
-    ctx.fillRect(hudX, activeBadgeY, activeBadgeW, activeBadgeH);
-    ctx.strokeStyle = "#0284c7";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(hudX, activeBadgeY, activeBadgeW, activeBadgeH);
-
-    ctx.fillStyle = "#38bdf8";
-    ctx.font = "bold 11px 'Courier New', Courier, monospace";
+    ctx.fillStyle = "#94a3b8"; // Soft faded slate
+    ctx.font = "bold 12px 'Courier New', Courier, monospace";
     const currentItem = p.hotbar[p.activeSlot];
     let displayItemName = "UNARMED";
     if (p.clawsActive) displayItemName = "RIP & TEAR CLAWS";
     else if (currentItem) {
       displayItemName = currentItem.toUpperCase().replace(/_/g, ' ');
     }
-    ctx.fillText(`ACTIVE: ${displayItemName}`, hudX + 10, activeBadgeY + 19);
+    ctx.fillText(`ACTIVE: ${displayItemName}`, hudX, activeBadgeY + 12);
 
-    let nextHUDY = activeBadgeY + activeBadgeH + 8;
+    let nextHUDY = activeBadgeY + 30;
 
-    // Super Abilities & Buff Panels
+    // Super Abilities & Buff Status (Floating, No Box)
     const drawAbilityPanel = (title: string, has: boolean, active: boolean, timer: number, cooldown: number, maxTimer: number, maxCooldown: number, keyChar: string) => {
       if (!has) return;
-      ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
-      ctx.fillRect(hudX, nextHUDY, 240, 34);
-      ctx.strokeStyle = "#0284c7";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(hudX, nextHUDY, 240, 34);
-
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = "#cbd5e1";
       ctx.font = "bold 11px 'Courier New', Courier, monospace";
-      ctx.fillText(title, hudX + 10, nextHUDY + 16);
+      ctx.fillText(title, hudX, nextHUDY + 12);
 
       if (active) {
-        ctx.fillStyle = "#f59e0b";
-        ctx.fillText(`ACTIVE: ${Math.ceil(timer / 60)}s`, hudX + 130, nextHUDY + 16);
         ctx.fillStyle = "#d97706";
-        ctx.fillRect(hudX + 10, nextHUDY + 24, 220 * (timer / maxTimer), 4);
+        ctx.fillText(`ACTIVE: ${Math.ceil(timer / 60)}s`, hudX + 110, nextHUDY + 12);
       } else if (cooldown > 0) {
         ctx.fillStyle = "#ef4444";
-        ctx.fillText(`CD: ${Math.ceil(cooldown / 60)}s`, hudX + 130, nextHUDY + 16);
-        ctx.fillStyle = "#7f1d1d";
-        ctx.fillRect(hudX + 10, nextHUDY + 24, 220 * (1 - cooldown / maxCooldown), 4);
+        ctx.fillText(`CD: ${Math.ceil(cooldown / 60)}s`, hudX + 110, nextHUDY + 12);
       } else {
         ctx.fillStyle = "#22c55e";
-        ctx.fillText(`READY [${keyChar}]`, hudX + 130, nextHUDY + 16);
+        ctx.fillText(`READY [${keyChar}]`, hudX + 110, nextHUDY + 12);
       }
-      nextHUDY += 40;
+      nextHUDY += 22;
     };
 
     drawAbilityPanel("MALEVOLENCE", p.hasMalevolence, p.malevolenceActive, p.malevolenceTimer, p.malevolenceCooldown, 900, 6000, "Q");
     drawAbilityPanel("IMPENETRABLE", p.hasImpenetrable, p.impenetrableActive, p.impenetrableTimer, p.impenetrableCooldown, 1200, 6600, "Z");
     drawAbilityPanel("SUPERSONIC", p.hasSupersonic, p.supersonicActive, p.supersonicTimer, p.supersonicCooldown, 600, 7500, "X");
 
-    // Speed Potion Swiftness Buff Panel
+    // Speed Potion Swiftness Buff Status
     if (p.speedPotionTimer && p.speedPotionTimer > 0) {
-      ctx.fillStyle = "rgba(18, 24, 38, 0.88)";
-      ctx.fillRect(hudX, nextHUDY, 240, 32);
-      ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(hudX, nextHUDY, 240, 32);
-
       ctx.fillStyle = "#38bdf8";
       ctx.font = "bold 11px 'Courier New', Courier, monospace";
-      ctx.fillText(`SWIFTNESS: ${Math.ceil(p.speedPotionTimer / 60)}s`, hudX + 10, nextHUDY + 16);
-      ctx.fillStyle = "#0284c7";
-      ctx.fillRect(hudX + 10, nextHUDY + 22, 220 * (p.speedPotionTimer / 900), 4);
-      nextHUDY += 38;
+      ctx.fillText(`SWIFTNESS: ${Math.ceil(p.speedPotionTimer / 60)}s`, hudX, nextHUDY + 12);
+      nextHUDY += 22;
     }
 
-    // Poison status panel
+    // Poison status
     if (p.poisonTimer > 0) {
-      ctx.fillStyle = "rgba(18, 24, 38, 0.88)";
-      ctx.fillRect(hudX, nextHUDY, 240, 32);
-      ctx.strokeStyle = "#22c55e";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(hudX, nextHUDY, 240, 32);
-
       ctx.fillStyle = "#22c55e";
       ctx.font = "bold 11px 'Courier New', Courier, monospace";
-      ctx.fillText(`POISONED: ${Math.ceil(p.poisonTimer / 60)}s`, hudX + 10, nextHUDY + 16);
-      ctx.fillStyle = "#15803d";
-      ctx.fillRect(hudX + 10, nextHUDY + 22, 220 * (p.poisonTimer / 300), 4);
-      nextHUDY += 38;
+      ctx.fillText(`POISONED: ${Math.ceil(p.poisonTimer / 60)}s`, hudX, nextHUDY + 12);
+      nextHUDY += 22;
     }
 
     // Diamond status
     if (p.hasDiamond) {
       ctx.fillStyle = COLORS.diamond;
-      ctx.font = "bold 14px 'Courier New', Courier, monospace";
-      ctx.textAlign = "left";
-      ctx.fillText("[TRUE DIAMOND SECURED]", hudX, nextHUDY + 15);
+      ctx.font = "bold 13px 'Courier New', Courier, monospace";
+      ctx.fillText("[TRUE DIAMOND SECURED]", hudX, nextHUDY + 12);
     }
 
-    // --- Terraria Hotbar Slots Rendering (3 SLOTS, Bottom-Center) ---
+    ctx.restore();
+
+    // --- Hotbar Slots Rendering (3 SLOTS, Bottom-Center) ---
     const midX = this.canvasWidth / 2;
     const hotbarY = this.canvasHeight - 75;
     const slotW = 54;
@@ -5164,103 +5113,62 @@ export class GameEngine {
       ctx.translate(x + slotW / 2, y + slotH / 2);
 
       if (type === 'sword') {
-        ctx.strokeStyle = "#cbd5e1";
-        ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(-10, 10); ctx.lineTo(10, -10); ctx.stroke();
-        ctx.fillStyle = "#fbbf24";
-        ctx.fillRect(-12, 8, 4, 4);
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(-2, -14, 4, 18);
+        ctx.fillStyle = "#64748b";
+        ctx.fillRect(-6, 4, 12, 3);
+        ctx.fillStyle = "#78716c";
+        ctx.fillRect(-2, 7, 4, 7);
       } else if (type === 'bow') {
-        ctx.strokeStyle = "#b45309";
-        ctx.lineWidth = 2.5;
-        ctx.beginPath(); ctx.arc(0, 0, 12, -Math.PI * 0.4, Math.PI * 0.4); ctx.stroke();
-        ctx.strokeStyle = "#e2e8f0";
+        ctx.strokeStyle = "#78716c";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, 14, -Math.PI * 0.4, Math.PI * 0.4);
+        ctx.stroke();
+        ctx.strokeStyle = "#cbd5e1";
         ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(5, -10); ctx.lineTo(5, 10); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(8, -12);
+        ctx.lineTo(8, 12);
+        ctx.stroke();
       } else if (type === 'colossal_sword') {
-        ctx.strokeStyle = "#94a3b8";
-        ctx.lineWidth = 5;
-        ctx.beginPath(); ctx.moveTo(-12, 12); ctx.lineTo(12, -12); ctx.stroke();
-        ctx.fillStyle = "#fbbf24";
-        ctx.fillRect(-14, 10, 5, 5);
-      } else if (type === 'dual_daggers') {
-        ctx.strokeStyle = "#cbd5e1";
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(-10, 10); ctx.lineTo(6, -6); ctx.stroke();
-        ctx.fillStyle = "#ea580c"; ctx.fillRect(-12, 10, 3, 3);
-        ctx.strokeStyle = "#cbd5e1";
-        ctx.beginPath(); ctx.moveTo(10, 10); ctx.lineTo(-6, -6); ctx.stroke();
-        ctx.fillStyle = "#ea580c"; ctx.fillRect(9, 10, 3, 3);
-      } else if (type === 'mace') {
-        ctx.strokeStyle = "#78350f";
-        ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(-10, 10); ctx.lineTo(2, -2); ctx.stroke();
-        ctx.fillStyle = "#cbd5e1";
-        ctx.beginPath(); ctx.arc(4, -4, 6, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(4, -12, 2, 2);
-        ctx.fillRect(-4, -4, 2, 2);
-        ctx.fillRect(10, -4, 2, 2);
-      } else if (type === 'battle_axe') {
-        ctx.strokeStyle = "#78350f";
-        ctx.lineWidth = 2.5;
-        ctx.beginPath(); ctx.moveTo(-10, 10); ctx.lineTo(2, -2); ctx.stroke();
-        ctx.fillStyle = "#cbd5e1";
-        ctx.fillRect(1, -9, 7, 7);
-        ctx.fillRect(-6, -9, 7, 7);
         ctx.fillStyle = "#94a3b8";
-        ctx.fillRect(7, -10, 2, 9);
-        ctx.fillRect(-7, -10, 2, 9);
+        ctx.fillRect(-4, -16, 8, 22);
+        ctx.fillStyle = "#475569";
+        ctx.fillRect(-8, 6, 16, 4);
+      } else if (type === 'dual_daggers') {
+        ctx.fillStyle = "#e2e8f0";
+        ctx.fillRect(-8, -10, 3, 12);
+        ctx.fillRect(5, -10, 3, 12);
+      } else if (type === 'mace') {
+        ctx.fillStyle = "#475569";
+        ctx.fillRect(-6, -14, 12, 12);
+      } else if (type === 'battle_axe') {
+        ctx.fillStyle = "#475569";
+        ctx.fillRect(-10, -14, 20, 10);
       } else if (type === 'torch') {
-        ctx.strokeStyle = "#78350f";
-        ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(-6, 8); ctx.lineTo(2, -2); ctx.stroke();
-        ctx.fillStyle = "#fbbf24";
-        ctx.fillRect(1, -5, 3, 3);
-        ctx.fillStyle = "#f97316";
-        ctx.fillRect(0, -9, 5, 4);
-        ctx.fillStyle = "#ef4444";
-        ctx.fillRect(2, -12, 2, 3);
+        ctx.fillStyle = "#78716c";
+        ctx.fillRect(-2, -4, 4, 16);
+        ctx.fillStyle = "#f59e0b";
+        ctx.fillRect(-4, -14, 8, 10);
       } else if (type === 'health_potion') {
-        ctx.fillStyle = "#78350f";
-        ctx.fillRect(-2, -12, 4, 3);
+        ctx.fillStyle = "#f87171";
+        ctx.fillRect(-6, -6, 12, 14);
         ctx.fillStyle = "#ef4444";
-        ctx.fillRect(-7, -9, 14, 16);
-        ctx.fillStyle = "#dc2626";
-        ctx.fillRect(-5, -7, 10, 12);
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(-3, -5, 3, 4);
+        ctx.fillRect(-4, -4, 8, 10);
       } else if (type === 'speed_potion') {
-        ctx.fillStyle = "#78350f";
-        ctx.fillRect(-2, -12, 4, 3);
-        ctx.fillStyle = "#06b6d4";
-        ctx.fillRect(-7, -9, 14, 16);
-        ctx.fillStyle = "#0891b2";
-        ctx.fillRect(-5, -7, 10, 12);
-        ctx.fillStyle = "#a5f3fc";
-        ctx.fillRect(-3, -5, 3, 4);
+        ctx.fillStyle = "#38bdf8";
+        ctx.fillRect(-6, -6, 12, 14);
       } else if (type === 'bomb') {
         ctx.fillStyle = "#1e293b";
         ctx.beginPath();
         ctx.arc(0, 2, 9, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = "#64748b";
-        ctx.fillRect(-3, -2, 3, 3);
-        ctx.strokeStyle = "#eab308";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, -7);
-        ctx.lineTo(4, -12);
-        ctx.stroke();
-        ctx.fillStyle = "#ef4444";
-        ctx.fillRect(4, -13, 3, 3);
       } else if (type === 'shield') {
         ctx.fillStyle = "#475569";
         ctx.fillRect(-9, -11, 18, 20);
         ctx.fillStyle = "#94a3b8";
         ctx.fillRect(-7, -9, 14, 16);
-        ctx.fillStyle = "#fbbf24";
-        ctx.fillRect(-2, -8, 4, 14);
-        ctx.fillRect(-7, -3, 14, 4);
       }
 
       ctx.restore();
@@ -5270,40 +5178,35 @@ export class GameEngine {
       const slotX = startHotbarX + i * (slotW + slotGap);
       const isActive = p.activeSlot === i;
 
-      // Slot Wood/Stone Frame Background
-      ctx.fillStyle = "rgba(16, 22, 34, 0.90)";
+      // Faded Muted Slate Slot Background
+      ctx.fillStyle = "rgba(15, 23, 42, 0.70)";
       ctx.fillRect(slotX, hotbarY, slotW, slotH);
 
       if (isActive) {
-        // Glowing Gold Highlight for Active Slot
-        ctx.strokeStyle = "#facc15";
-        ctx.lineWidth = 3;
-        ctx.strokeRect(slotX, hotbarY, slotW, slotH);
-        ctx.strokeStyle = "#fef08a";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(slotX + 3, hotbarY + 3, slotW - 6, slotH - 6);
-      } else {
-        ctx.strokeStyle = "#653a18";
+        ctx.strokeStyle = "#38bdf8";
         ctx.lineWidth = 2;
+        ctx.strokeRect(slotX, hotbarY, slotW, slotH);
+      } else {
+        ctx.strokeStyle = "#334155";
+        ctx.lineWidth = 1;
         ctx.strokeRect(slotX, hotbarY, slotW, slotH);
       }
 
       // Slot Number Label [1], [2], [3]
-      ctx.fillStyle = isActive ? "#fef08a" : "#a16207";
+      ctx.fillStyle = isActive ? "#38bdf8" : "#64748b";
       ctx.font = "bold 10px 'Courier New', Courier, monospace";
       ctx.textAlign = "left";
       ctx.fillText(`[${i + 1}]`, slotX + 4, hotbarY + 12);
 
-      // Draw item icon if slot is not empty
       const item = p.hotbar[i];
       if (item !== null) {
         drawItemIcon(slotX, hotbarY, item);
       }
     }
 
-    // Terraria Hotbar Label
+    // Faded Muted Hotbar Label
     ctx.textAlign = "center";
-    ctx.fillStyle = "#fef08a";
+    ctx.fillStyle = "#64748b";
     ctx.font = "bold 10px 'Courier New', Courier, monospace";
     ctx.fillText("HOTBAR (1 - 3)", midX, hotbarY - 6);
   }
