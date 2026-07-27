@@ -29,9 +29,22 @@ export default function Game() {
     const stored = localStorage.getItem("deep_mine_saves");
     if (stored) {
       try {
-        setSaves(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSaves(parsed);
+          return;
+        }
       } catch (e) {}
     }
+    // Default initial save so user is never stuck without a save slot
+    const defaultSave: SaveFile = {
+      id: Date.now().toString(),
+      name: "Knight 1",
+      color: "#ea580c",
+      maxFloorReached: 1,
+    };
+    setSaves([defaultSave]);
+    localStorage.setItem("deep_mine_saves", JSON.stringify([defaultSave]));
   }, []);
 
   const saveToStorage = (newSaves: SaveFile[]) => {
@@ -367,12 +380,26 @@ export default function Game() {
               KNIGHT'S <span className="text-cyan-400">QUEST</span>
             </h1>
             <p className="text-cyan-200/80 mb-8 font-semibold tracking-wide">Descend. Survive. Conquer.</p>
-            <div className="space-y-4 flex flex-col w-full px-4">
+            <div className="space-y-3 flex flex-col w-full px-4">
               <button
-                onClick={() => setAppState("selectSave")}
-                className="px-6 py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xl transition-all border-2 border-cyan-300 rounded-lg shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
+                onClick={() => {
+                  const targetSave = saves[0] || {
+                    id: Date.now().toString(),
+                    name: "Knight 1",
+                    color: "#ea580c",
+                    maxFloorReached: 1,
+                  };
+                  startGame(targetSave, false);
+                }}
+                className="px-6 py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xl transition-all border-2 border-cyan-300 rounded-lg shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 text-center"
               >
                 PLAY GAME
+              </button>
+              <button
+                onClick={() => setAppState("selectSave")}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-sm transition-all border border-slate-600 rounded-lg text-center"
+              >
+                SELECT SAVES / CUSTOMIZE
               </button>
             </div>
           </div>
