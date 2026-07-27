@@ -5000,7 +5000,7 @@ export class GameEngine {
       this.lightCanvas.height = this.canvasHeight;
     }
     const lctx = this.lightCanvas.getContext("2d");
-    if (lctx) {
+    if (lctx && !this.isMenuBackground && !this.state.isFloorComplete && this.state.transitionState !== "cards") {
       lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
       lctx.fillStyle = "rgba(0, 0, 0, 0.98)"; // Pitch Black Outside Darkness!
       lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);

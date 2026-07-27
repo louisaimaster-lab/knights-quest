@@ -407,6 +407,9 @@ export function generateCave(floor: number, maxFloor: number) {
     
   let endSpaces = openSpaces.filter(
     s => s.y >= Math.floor(height * 0.70) &&
+         s.y > 1 &&
+         map[s.y][s.x] === 0 &&
+         map[s.y - 1] && map[s.y - 1][s.x] === 0 &&
          map[s.y + 1] &&
          map[s.y + 1][s.x] !== 0 &&
          map[s.y + 1][s.x] !== 4 &&
@@ -414,11 +417,29 @@ export function generateCave(floor: number, maxFloor: number) {
          map[s.y + 1][s.x] !== 21
   );
   if (endSpaces.length === 0) {
-    endSpaces = openSpaces.filter(s => s.y >= Math.floor(height * 0.50));
+    endSpaces = openSpaces.filter(
+      s => s.y >= Math.floor(height * 0.50) &&
+           s.y > 1 &&
+           map[s.y][s.x] === 0 &&
+           map[s.y - 1] && map[s.y - 1][s.x] === 0 &&
+           map[s.y + 1] && map[s.y + 1][s.x] !== 0 && map[s.y + 1][s.x] !== 6 && map[s.y + 1][s.x] !== 21
+    );
   }
   let endPos = endSpaces.length > 0 
     ? endSpaces[Math.floor(Math.random() * endSpaces.length)] 
     : {x: Math.floor(width/2), y: height - 5};
+
+  // Guarantee solid ground underneath endPos and clear air above endPos
+  if (map[endPos.y] && map[endPos.y][endPos.x] !== 0) {
+    map[endPos.y][endPos.x] = 0; // Gate spot must be open air
+  }
+  if (map[endPos.y - 1] && map[endPos.y - 1][endPos.x] !== 0) {
+    map[endPos.y - 1][endPos.x] = 0; // Space above gate must be open air
+  }
+  if (!map[endPos.y + 1] || map[endPos.y + 1][endPos.x] === 0 || map[endPos.y + 1][endPos.x] === 6 || map[endPos.y + 1][endPos.x] === 21) {
+    const solidBlock = biome === 'ice' ? 16 : (biome === 'volcanic' ? 20 : (biome === 'moss' ? 15 : 1));
+    if (map[endPos.y + 1]) map[endPos.y + 1][endPos.x] = solidBlock; // Place solid floor underneath gate
+  }
 
   if (floor < maxFloor) {
       // Exit is handled by Engine via endPos
