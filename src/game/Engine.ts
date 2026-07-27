@@ -250,9 +250,10 @@ export class GameEngine {
     this.isMenuBackground = false;
     const gen = generateCave(floor, this.state.maxFloor);
 
-    // Transition in
-    this.state.transitionState = "in";
-    this.state.transitionRadius = 0;
+    // Immediate start
+    this.state.transitionState = "none";
+    this.state.floorTitleState = "in";
+    this.state.floorTitleTimer = 0;
 
     if (floor > 1) {
       if (this.state.player.health > this.state.player.maxHealth * 0.75) {
@@ -892,8 +893,8 @@ export class GameEngine {
       p.onLadder = true;
 
     const isStunned =
-      this.state.floorTitleState !== "none" ||
-      this.state.transitionState !== "none" ||
+      this.state.transitionState === "out" ||
+      this.state.transitionState === "out_to_cards" ||
       this.state.gateEntered;
 
     if (isStunned) {
