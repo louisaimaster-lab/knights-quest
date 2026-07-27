@@ -5002,7 +5002,7 @@ export class GameEngine {
     const lctx = this.lightCanvas.getContext("2d");
     if (lctx && !this.isMenuBackground && !this.state.isFloorComplete && this.state.transitionState !== "cards") {
       lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-      lctx.fillStyle = "rgba(0, 0, 0, 0.98)"; // Pitch Black Outside Darkness!
+      lctx.fillStyle = "rgba(0, 0, 0, 0.25)"; // 25% Atmospheric Cave Darkness!
       lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
       lctx.globalCompositeOperation = "destination-out";
