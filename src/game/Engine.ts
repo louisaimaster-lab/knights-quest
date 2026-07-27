@@ -4984,6 +4984,7 @@ export class GameEngine {
 
     // Darkness overlay (using offscreen canvas)
     if (this.isMenuBackground) {
+      ctx.restore(); // Restore main camera save state to prevent canvas matrix stack overflow!
       ctx.fillStyle = "rgba(9, 13, 22, 0.30)";
       ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
       return;
