@@ -89,23 +89,25 @@ export default function Game() {
 
     if (engineRef.current) {
       engineRef.current.isMenuBackground = false;
-      engineRef.current.state.player.playerColor = save.color;
 
       if (!newRunOverride && save.savedRun && save.savedRun.hasActiveRun) {
-        // Restore active saved run right where the player was!
+        // Restore active saved run stats & equipment safely!
         engineRef.current.restoreRunState(save.savedRun);
-        engineRef.current.state.player.playerColor = save.color;
       } else {
         // Fresh new run!
         engineRef.current.state = engineRef.current.getInitialState();
-        engineRef.current.state.player.playerColor = save.color;
         engineRef.current.initFloor(1);
       }
+
+      engineRef.current.isMenuBackground = false;
+      engineRef.current.state.player.playerColor = save.color;
       engineRef.current.state.isPaused = false;
+      engineRef.current.state.isFloorComplete = false;
+      engineRef.current.state.transitionState = "none";
     }
     setTimeout(() => {
       containerRef.current?.focus();
-    }, 100);
+    }, 50);
   };
 
   useEffect(() => {

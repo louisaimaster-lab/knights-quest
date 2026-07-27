@@ -77,10 +77,7 @@ export class GameEngine {
     const p = this.state.player;
     const rp = runState.player;
 
-    p.x = rp.x;
-    p.y = rp.y;
-    p.vx = rp.vx;
-    p.vy = rp.vy;
+    // Restore player stats & inventory, but keep safe spawn position from initFloor
     p.health = rp.health;
     p.maxHealth = rp.maxHealth;
     p.coins = rp.coins;
@@ -104,6 +101,8 @@ export class GameEngine {
     this.state.transitionState = "none";
     this.state.floorTitleState = "none";
     this.state.isPaused = false;
+    this.state.isFloorComplete = false;
+    this.isMenuBackground = false;
   }
 
   initMenuBackground() {
