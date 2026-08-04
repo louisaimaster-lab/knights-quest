@@ -405,15 +405,21 @@ export function generateCave(floor: number, maxFloor: number) {
       map[startPos.y + 1][startPos.x] = 5; // Place a platform right beneath spawn
   }
     
+  // Descend gate MUST spawn on the floor of the lower 30% of the cave,
+  // standing on natural solid ground (never water/lava, never floating).
+  const solidGroundBelow = (x: number, y: number) => {
+    if (y >= height || y < 0 || x < 0 || x >= width) return false;
+    const below = map[y + 1] ? map[y + 1][x] : 1;
+    return (below === 1 || below === 7 || below === 8 || below === 11 ||
+            below === 15 || below === 16 || below === 17 || below === 19 || below === 20);
+  };
+
   let endSpaces = openSpaces.filter(
     s => s.y >= Math.floor(height * 0.70) &&
          s.y > 1 &&
          map[s.y][s.x] === 0 &&
          map[s.y - 1] && map[s.y - 1][s.x] === 0 &&
-         map[s.y + 1] &&
-         map[s.y + 1][s.x] !== 0 &&
-         map[s.y + 1][s.x] !== 4 &&
-         map[s.y + 1][s.x] !== 6 &&
+         solidGroundBelow(s.x, s.y) &&
          map[s.y + 1][s.x] !== 21
   );
   if (endSpaces.length === 0) {
@@ -422,7 +428,8 @@ export function generateCave(floor: number, maxFloor: number) {
            s.y > 1 &&
            map[s.y][s.x] === 0 &&
            map[s.y - 1] && map[s.y - 1][s.x] === 0 &&
-           map[s.y + 1] && map[s.y + 1][s.x] !== 0 && map[s.y + 1][s.x] !== 6 && map[s.y + 1][s.x] !== 21
+           solidGroundBelow(s.x, s.y) &&
+           map[s.y + 1][s.x] !== 21
     );
   }
   let endPos = endSpaces.length > 0 
@@ -880,10 +887,19 @@ export function generateCave(floor: number, maxFloor: number) {
       });
   }
 
-  // Descend gate rule: endPos CANNOT spawn inside lava (tile 21) AND MUST spawn on top of solid ground
+  // Descend gate rule: endPos CANNOT spawn inside lava (tile 21) AND MUST spawn on top of solid ground in the lower 30% of the cave
   if (map[endPos.y] && map[endPos.y][endPos.x] === 21) {
-      for (let spot of openSpaces) {
-          if (map[spot.y] && map[spot.y][spot.x] !== 21 && map[spot.y][spot.x] !== 1) {
+      const lower30 = openSpaces.filter(s =>
+          s.y >= Math.floor(height * 0.70) &&
+          s.y > 1 &&
+          map[s.y][s.x] === 0 &&
+          map[s.y - 1] && map[s.y - 1][s.x] === 0 &&
+          map[s.y + 1] && map[s.y + 1][s.x] !== 21 &&
+          solidGroundBelow(s.x, s.y)
+      );
+      const pool = lower30.length > 0 ? lower30 : openSpaces;
+      for (let spot of pool) {
+          if (map[spot.y] && map[spot.y][spot.x] !== 21 && map[spot.y][spot.x] !== 1 && map[spot.y + 1] && map[spot.y + 1][spot.x] !== 21) {
               endPos = spot;
               map[endPos.y][endPos.x] = 2;
               break;
@@ -929,8 +945,9 @@ export function generateCave(floor: number, maxFloor: number) {
   map[endPos.y][endPos.x] = 2;     // Descend trapdoor gate
   if (map[endPos.y + 1]) {
       const tileBelow = map[endPos.y + 1][endPos.x];
-      if (tileBelow !== 1 && tileBelow !== 7 && tileBelow !== 8 && tileBelow !== 11 && tileBelow !== 15 && tileBelow !== 16 && tileBelow !== 17 && tileBelow !== 19 && tileBelow !== 20) {
-          map[endPos.y + 1][endPos.x] = 1; // Create solid ground block underneath gate
+      if (tileBelow !== 1 && tileBelow !== 7 && tileBelow !== 8 && tileBelow !== 11 && tileBelow !== 15 && tileBelow !== 16 && tileBelow !== 17 && tileBelow !== 19 && tileBelow !== 20 && tileBelow !== 21) {
+          const groundBlock = biome === 'ice' ? 16 : (biome === 'volcanic' ? 19 : (biome === 'moss' ? 15 : 1));
+          map[endPos.y + 1][endPos.x] = groundBlock; // Create solid natural ground block underneath gate
       }
   }
 

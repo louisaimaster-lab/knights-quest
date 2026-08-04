@@ -1319,6 +1319,7 @@ export class GameEngine {
         p.isAirAttacking = false;
         p.attackTimer = 18; // Mace swing duration
         p.slashFlipped = !p.slashFlipped;
+        p.attackAngle = Math.atan2(this.state.mouse.worldY - (p.y + p.h / 2), this.state.mouse.worldX - (p.x + p.w / 2));
 
         // Lunge and slight hop
         p.vx = (p.facingRight ? 1 : -1) * (4 + ratio * 10);
@@ -2907,13 +2908,16 @@ export class GameEngine {
         } else {
           const isIceBg = this.state.biome === "ice";
           const isMossBg = this.state.biome === "moss";
+          const isVolcanicBg = this.state.biome === "volcanic";
           const bgHue = isIceBg
             ? 210
             : isMossBg
               ? 120
-              : 15 + ((this.state.floor * 15) % 25);
-          const baseSat = isIceBg ? 30 : isMossBg ? 40 : 15;
-          const baseLight = isIceBg ? 12 : isMossBg ? 6 : 8;
+              : isVolcanicBg
+                ? 18
+                : 15 + ((this.state.floor * 15) % 25);
+          const baseSat = isIceBg ? 30 : isMossBg ? 40 : isVolcanicBg ? 45 : 15;
+          const baseLight = isIceBg ? 12 : isMossBg ? 6 : isVolcanicBg ? 6 : 8;
 
           // Render background in 8x8 chunks for "mini blocks" look
           for (let i = 0; i < 4; i++) {
@@ -2961,6 +2965,17 @@ export class GameEngine {
                     color = "#0d1f0d"; // Very dark moss
                   }
                 }
+              } else if (isVolcanicBg) {
+                // Dark basalt blocks with faint warm tint
+                if (mossNoise > 0) {
+                  if (mossNoise > 0.6) {
+                    color = "#2a1a12"; // dark ember-tinted basalt
+                  } else if (mossNoise > 0.3) {
+                    color = "#1f1109"; // darker
+                  } else {
+                    color = "#160a05"; // very dark
+                  }
+                }
               } else {
                 // Giant lush moss patches
                 if (mossNoise > 0.2) {
@@ -2996,6 +3011,29 @@ export class GameEngine {
                   const sparkY = py + Math.abs(Math.sin(py * 1.3)) * 6;
                   const sparkSize = timeHash > 0.9 ? 2 : 1;
                   ctx.fillRect(sparkX, sparkY, sparkSize, sparkSize);
+                }
+              } else if (isVolcanicBg) {
+                // Glowing ember cracks in the background rock
+                const emberHash = Math.sin(px * 1.3 + py * 1.7);
+                const emberGlow =
+                  Math.sin(px * 2.1 + py * 1.1 + Date.now() * 0.004);
+                if (emberHash > 0.35 && emberGlow > 0.2) {
+                  ctx.fillStyle = emberGlow > 0.7 ? "#ff7b2d" : "#c94f12";
+                  ctx.fillRect(
+                    px + Math.abs(Math.cos(px)) * 6,
+                    py + Math.abs(Math.sin(py)) * 6,
+                    2,
+                    2,
+                  );
+                }
+                if (emberHash < -0.75 && emberGlow > 0.5) {
+                  ctx.fillStyle = "#ff5c1a"; // brighter ember spark
+                  ctx.fillRect(
+                    px + Math.abs(Math.sin(px)) * 6,
+                    py + Math.abs(Math.cos(py)) * 6,
+                    1,
+                    1,
+                  );
                 }
               } else {
                 // Seeded detailing for texture
@@ -4983,7 +5021,9 @@ export class GameEngine {
     }
 
     // Darkness overlay (using offscreen canvas)
-    if (this.isMenuBackground) {
+    // Noli too early-return for card selection: initCardBackground sets
+    // isMenuBackground while isFloorComplete=true, and we still must draw cards.
+    if (this.isMenuBackground && !this.state.isFloorComplete) {
       ctx.restore(); // Restore main camera save state to prevent canvas matrix stack overflow!
       ctx.fillStyle = "rgba(9, 13, 22, 0.30)";
       ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
@@ -5003,7 +5043,7 @@ export class GameEngine {
     const lctx = this.lightCanvas.getContext("2d");
     if (lctx && !this.isMenuBackground && !this.state.isFloorComplete && this.state.transitionState !== "cards") {
       lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-      lctx.fillStyle = "rgba(0, 0, 0, 0.25)"; // 25% Atmospheric Cave Darkness!
+      lctx.fillStyle = "rgba(0, 0, 0, 0.6)"; // 60% Atmospheric Cave Darkness
       lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
       lctx.globalCompositeOperation = "destination-out";
