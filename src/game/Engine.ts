@@ -2920,6 +2920,7 @@ export class GameEngine {
           const baseLight = isIceBg ? 12 : isMossBg ? 6 : isVolcanicBg ? 6 : 8;
 
           // Render background in 8x8 chunks for "mini blocks" look
+          const bgTime = Date.now(); // ponytail: single clock read per tile, not per sub-chunk
           for (let i = 0; i < 4; i++) {
             for (let j = 0; j < 4; j++) {
               const bgX = x * 4 + i;
@@ -2996,7 +2997,7 @@ export class GameEngine {
                 const detailHash = Math.sin(px * 1.3 + py * 1.7);
                 if (detailHash > 0.6 && mossNoise > 0.1) {
                   const timeHash = Math.sin(
-                    px * 3.1 + py * 2.7 + Date.now() * 0.002,
+                    px * 3.1 + py * 2.7 + bgTime * 0.002,
                   );
                   const sparkColor =
                     timeHash > 0.8
@@ -3016,7 +3017,7 @@ export class GameEngine {
                 // Glowing ember cracks in the background rock
                 const emberHash = Math.sin(px * 1.3 + py * 1.7);
                 const emberGlow =
-                  Math.sin(px * 2.1 + py * 1.1 + Date.now() * 0.004);
+                  Math.sin(px * 2.1 + py * 1.1 + bgTime * 0.004);
                 if (emberHash > 0.35 && emberGlow > 0.2) {
                   ctx.fillStyle = emberGlow > 0.7 ? "#ff7b2d" : "#c94f12";
                   ctx.fillRect(
@@ -3492,16 +3493,6 @@ export class GameEngine {
             ctx.fillRect(x * TILE_SIZE + 6, y * TILE_SIZE + 12, TILE_SIZE - 12, 8);
             ctx.fillStyle = "#f97316";
             ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE + 14, TILE_SIZE - 16, 4);
-
-            // Ambient rising fire embers
-            if (!lavaAbove && Math.random() < 0.08) {
-              this.spawnParticles(
-                x * TILE_SIZE + Math.random() * TILE_SIZE,
-                y * TILE_SIZE + 2,
-                "#f97316",
-                1
-              );
-            }
           } else if (tile === 10 || tile === 12) {
             // Torch
             const isPurple = tile === 12;
@@ -5043,7 +5034,7 @@ export class GameEngine {
     const lctx = this.lightCanvas.getContext("2d");
     if (lctx && !this.isMenuBackground && !this.state.isFloorComplete && this.state.transitionState !== "cards") {
       lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-      lctx.fillStyle = "rgba(0, 0, 0, 0.6)"; // 60% Atmospheric Cave Darkness
+      lctx.fillStyle = "rgba(0, 0, 0, 0.97)"; // Pitch black atmospheric cave darkness
       lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
       lctx.globalCompositeOperation = "destination-out";
