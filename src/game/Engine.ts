@@ -5238,7 +5238,8 @@ export class GameEngine {
       ctx.fillStyle = "rgba(9, 13, 22, 0.30)";
       ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
-      // Freely floating header text (NO box container)
+      // The freely floating header text (NO box container)
+      ctx.save();
       ctx.fillStyle = COLORS.diamond;
       ctx.font = "bold 34px 'Courier New', Courier, monospace";
       ctx.textAlign = "center";
@@ -5339,6 +5340,7 @@ export class GameEngine {
         this.canvasWidth / 2,
         this.canvasHeight - 30,
       );
+      ctx.restore();
     }
 
     if (
