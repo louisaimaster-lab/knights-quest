@@ -930,12 +930,13 @@ export function generateCave(floor: number, maxFloor: number) {
       }
   }
 
-  // Any non-solid tile not reachable from startPos becomes solid wall
+  // Any non-solid tile not reachable from startPos becomes solid wall (use biome-appropriate solid AFTER biome conversion!)
+  const biomeSolid = biome === 'ice' ? 16 : (biome === 'moss' ? 15 : (biome === 'volcanic' ? 19 : 1));
   for (let my = 1; my < height - 1; my++) {
       for (let mx = 1; mx < width - 1; mx++) {
           let tile = map[my][mx];
           if ((tile === 0 || tile === 4 || tile === 5 || tile === 6 || tile === 10 || tile === 12 || tile === 13 || tile === 18 || tile === 21) && !reachableFromStart.has(`${mx},${my}`)) {
-              map[my][mx] = 1; // Fill disconnected pocket with solid wall
+              map[my][mx] = biomeSolid; // Fill disconnected pocket with biome solid wall
           }
       }
   }

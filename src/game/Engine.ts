@@ -3014,26 +3014,16 @@ export class GameEngine {
                   ctx.fillRect(sparkX, sparkY, sparkSize, sparkSize);
                 }
               } else if (isVolcanicBg) {
-                // Glowing ember cracks in the background rock
+                // Sparse ember glints in the background rock (matches other biomes' accent density)
                 const emberHash = Math.sin(px * 1.3 + py * 1.7);
-                const emberGlow =
-                  Math.sin(px * 2.1 + py * 1.1 + bgTime * 0.004);
-                if (emberHash > 0.35 && emberGlow > 0.2) {
-                  ctx.fillStyle = emberGlow > 0.7 ? "#ff7b2d" : "#c94f12";
+                const emberGlow = Math.sin(px * 2.1 + py * 1.1 + bgTime * 0.004);
+                if (emberHash > 0.8 && emberGlow > 0.4) {
+                  ctx.fillStyle = "#c94f12";
                   ctx.fillRect(
                     px + Math.abs(Math.cos(px)) * 6,
                     py + Math.abs(Math.sin(py)) * 6,
                     2,
                     2,
-                  );
-                }
-                if (emberHash < -0.75 && emberGlow > 0.5) {
-                  ctx.fillStyle = "#ff5c1a"; // brighter ember spark
-                  ctx.fillRect(
-                    px + Math.abs(Math.sin(px)) * 6,
-                    py + Math.abs(Math.cos(py)) * 6,
-                    1,
-                    1,
                   );
                 }
               } else {
@@ -5102,6 +5092,23 @@ export class GameEngine {
         for (let y = startY; y < endY; y++) {
           for (let x = startX; x < endX; x++) {
             if (this.state.bgMap[y] && this.state.bgMap[y][x] === 9) {
+              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
+            }
+          }
+        }
+      }
+
+      // Lava self-glow: lava tiles stay visible/pulsing in the dark (no light cast on surroundings)
+      if (this.state.biome === "volcanic") {
+        const lvStartX = Math.max(0, Math.floor((this.state.camera.x - this.canvasWidth / 2 / zoom) / TILE_SIZE));
+        const lvEndX = Math.min(this.state.width, Math.ceil((this.state.camera.x + this.canvasWidth / 2 / zoom) / TILE_SIZE));
+        const lvStartY = Math.max(0, Math.floor((this.state.camera.y - this.canvasHeight / 2 / zoom) / TILE_SIZE));
+        const lvEndY = Math.min(this.state.height, Math.ceil((this.state.camera.y + this.canvasHeight / 2 / zoom) / TILE_SIZE));
+        const lavaPulse = 0.5 + Math.sin(Date.now() * 0.005) * 0.15;
+        ctx.fillStyle = `rgba(234, 88, 12, ${lavaPulse})`;
+        for (let y = lvStartY; y < lvEndY; y++) {
+          for (let x = lvStartX; x < lvEndX; x++) {
+            if (this.state.map[y] && this.state.map[y][x] === 21) {
               ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
             }
           }
