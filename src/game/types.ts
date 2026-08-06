@@ -64,6 +64,7 @@ export interface Player extends Entity {
   timeSlowActive?: boolean;
   poisonTimer: number;
   burnTimer: number;
+  burnPulse: number;
   slownessTimer: number;
   redFlashTimer: number;
   oxygen: number;

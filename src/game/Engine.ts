@@ -174,6 +174,7 @@ export class GameEngine {
         superAbilityTimer: 0,
         poisonTimer: 0,
         burnTimer: 0,
+        burnPulse: 0,
         slownessTimer: 0,
         redFlashTimer: 0,
         oxygen: 100,
@@ -1380,16 +1381,28 @@ export class GameEngine {
       }
     }
 
-    // Burn tick (3 HP per 0.5s)
+    // Burn tick (3 HP per 0.5s) + burning particles
     if (p.burnTimer > 0) {
       p.burnTimer--;
-      if (p.burnTimer % 30 === 0 && p.burnTimer > 0) {
+      p.burnPulse++;
+      // Burn particle effect (smoke/fire rising while on fire)
+      if (Math.random() < 0.35) {
+        this.spawnParticles(
+          p.x + p.w / 2 + (Math.random() - 0.5) * p.w,
+          p.y + (Math.random() - 0.5) * p.h,
+          Math.random() < 0.5 ? "#f97316" : "#fbbf24",
+          1,
+        );
+      }
+      if (p.burnPulse % 30 === 0) {
         p.health -= 3;
         if (p.health <= 0) {
           p.health = 0;
           this.state.isGameOver = true;
         }
       }
+    } else {
+      p.burnPulse = 0;
     }
 
     if (p.slownessTimer > 0) p.slownessTimer--;
@@ -3667,13 +3680,13 @@ export class GameEngine {
             if (Math.cos(x * 2.7) > 0)
               ctx.fillRect(x * TILE_SIZE + 18, y * TILE_SIZE + 4, 6, 2);
           } else if (tile === 21) {
-            // Lava (molten rock fluid, no glow)
+            // Lava (glowing molten rock with animated detail)
             const lavaAbove =
               y > 0 &&
               this.state.map[y - 1] &&
               this.state.map[y - 1][x] === 21;
 
-            ctx.fillStyle = "rgba(153, 51, 12, 0.9)"; // dark molten rock, no glow
+            ctx.fillStyle = "rgba(190, 60, 18, 0.95)"; // rich molten lava
             if (lavaAbove) {
               ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
             } else {
@@ -3683,7 +3696,26 @@ export class GameEngine {
                 TILE_SIZE + 1,
                 TILE_SIZE - 4 + 1,
               );
+              // Animated glowing yellow ripples on the surface
+              ctx.fillStyle = "#fbbf24";
+              if (Math.sin(Date.now() * 0.005 + x * 0.8) > 0) {
+                ctx.fillRect(
+                  x * TILE_SIZE + 2,
+                  y * TILE_SIZE + 4,
+                  TILE_SIZE - 4,
+                  3,
+                );
+              }
+              // Orange surface highlight
+              ctx.fillStyle = "#ea580c";
+              ctx.fillRect(x * TILE_SIZE + 2, y * TILE_SIZE + 8, TILE_SIZE - 4, 2);
             }
+
+            // Magma core (warm interior, subtle)
+            ctx.fillStyle = "#c2410c";
+            ctx.fillRect(x * TILE_SIZE + 4, y * TILE_SIZE + 14, TILE_SIZE - 8, 4);
+            ctx.fillStyle = "#f97316";
+            ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE + 15, TILE_SIZE - 16, 2);
           } else if (tile === 10 || tile === 12) {
             // Torch
             const isPurple = tile === 12;
@@ -5328,6 +5360,9 @@ export class GameEngine {
             drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 195 + Math.random() * 18);
           } else if (this.state.map[y] && this.state.map[y][x] === 12) {
             drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 156 + Math.random() * 30);
+          } else if (this.state.biome === "volcanic" && this.state.map[y] && this.state.map[y][x] === 21) {
+            // Lava self-glow: molten rock lights up the dark around it
+            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 150 + Math.random() * 30);
           }
         }
       }
