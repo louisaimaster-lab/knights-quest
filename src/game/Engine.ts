@@ -1128,30 +1128,18 @@ export class GameEngine {
 
     if ((p.airAttackCooldown || 0) > 0) p.airAttackCooldown--;
 
-    // Hotbar: Press 1, 2, or 3 to switch slots / toggle equip
+    // Hotbar: Press 1, 2, or 3 to switch slots / hold the item
     if (keys["1"] && !prevKeys["1"]) {
-      if (p.activeSlot === 0) {
-        p.weaponEquipped = !p.weaponEquipped;
-      } else {
-        p.activeSlot = 0;
-        p.weaponEquipped = true;
-      }
+      p.activeSlot = 0;
+      p.weaponEquipped = true;
       p.weapon = p.hotbar[0] || undefined;
     } else if (keys["2"] && !prevKeys["2"]) {
-      if (p.activeSlot === 1) {
-        p.weaponEquipped = !p.weaponEquipped;
-      } else {
-        p.activeSlot = 1;
-        p.weaponEquipped = true;
-      }
+      p.activeSlot = 1;
+      p.weaponEquipped = true;
       p.weapon = p.hotbar[1] || undefined;
     } else if (keys["3"] && !prevKeys["3"]) {
-      if (p.activeSlot === 2) {
-        p.weaponEquipped = !p.weaponEquipped;
-      } else {
-        p.activeSlot = 2;
-        p.weaponEquipped = true;
-      }
+      p.activeSlot = 2;
+      p.weaponEquipped = true;
       p.weapon = p.hotbar[2] || undefined;
     }
 
@@ -5424,22 +5412,23 @@ export class GameEngine {
 
       for (let y = startRowLight; y < endRowLight; y++) {
         for (let x = startColLight; x < endColLight; x++) {
-          if (this.state.map[y] && this.state.map[y][x] === 10) {
-            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 195 + Math.random() * 18);
-          } else if (this.state.map[y] && this.state.map[y][x] === 12) {
-            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 156 + Math.random() * 30);
-          } else if (this.state.biome === "volcanic" && this.state.map[y] && this.state.map[y][x] === 21) {
+          const tile = this.state.map[y] && this.state.map[y][x];
+          if (tile === 10) {
+            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 204);
+          } else if (tile === 12) {
+            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 171);
+          } else if (this.state.biome === "volcanic" && tile === 21) {
             // Lava self-glow: molten rock emits light into the dark around it
-            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 150 + Math.random() * 30);
+            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 165);
           }
         }
       }
 
       // Draw exit/boss room light
       if (this.state.floor < this.state.maxFloor && this.state.endPos.x >= startColLight && this.state.endPos.x < endColLight && this.state.endPos.y >= startRowLight && this.state.endPos.y < endRowLight) {
-        drawLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 227.5 + Math.random() * 30);
+        drawLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 237);
       } else if (this.state.floor === this.state.maxFloor && !p.hasDiamond && this.state.endPos.x >= startColLight && this.state.endPos.x < endColLight && this.state.endPos.y >= startRowLight && this.state.endPos.y < endRowLight) {
-        drawLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 200 + Math.random() * 20);
+        drawLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 210);
       }
 
       lctx.restore();
