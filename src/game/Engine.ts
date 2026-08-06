@@ -449,6 +449,7 @@ export class GameEngine {
               isGrounded: true,
               invulnerableTimer: 0,
               stateTimer: 0,
+              turnTimer: 0,
               onLadder: false,
               aiState: "idle",
             });
@@ -2235,7 +2236,7 @@ export class GameEngine {
       }
 
       if (proj.type === "magma") {
-        this.spawnParticles(proj.x, proj.y, "#f97316", 1);
+        // Molten trail: embers left behind the fireball, drifting upward
         if (proj.timer !== undefined) {
           proj.timer--;
           if (proj.timer <= 0) {
@@ -2243,6 +2244,16 @@ export class GameEngine {
             continue;
           }
         }
+        this.state.particles.push({
+          x: proj.x + proj.w / 2 - Math.sign(proj.vx) * 6,
+          y: proj.y + proj.h / 2 + (Math.random() - 0.5) * 4,
+          vx: (Math.random() - 0.5) * 0.4,
+          vy: -(0.3 + Math.random() * 0.7),
+          life: Math.random() * 20 + 15,
+          maxLife: 35,
+          color: Math.random() < 0.5 ? "#f97316" : "#fbbf24",
+          size: 2 + Math.random() * 2,
+        });
         if (p.invulnerableTimer <= 0 && rectIntersect({ x: proj.x - 4, y: proj.y - 4, w: 8, h: 8 }, p)) {
           this.damagePlayer(proj.damage, Math.sign(proj.vx) || 1, 8, -4, "#f97316");
           this.spawnParticles(proj.x, proj.y, "#ef4444", 8);
@@ -2640,10 +2651,11 @@ export class GameEngine {
           }
         }
       } else if (e.type === "lava_monster") {
-        // Walks on lava surface, patrolling back and forth
+        // Strafe on lava surface, only turning at the edge
         e.vy += GRAVITY;
         const mDir = e.facingRight ? 1 : -1;
         e.vx = mDir * 2.05;
+        if (e.turnTimer !== undefined && e.turnTimer > 0) e.turnTimer--;
         // Lava (21) is not solid, so bob on the lava surface (partially submerged)
         const surfTx = Math.floor((e.x + e.w / 2) / TILE_SIZE);
         const surfTy = Math.floor((e.y + e.h + 4) / TILE_SIZE);
@@ -2655,34 +2667,44 @@ export class GameEngine {
             8 +
             Math.sin(Date.now() * 0.06 + e.x * 0.05) * 2.5;
         }
-        // Reverse at edge: check for lava below ahead
-        const aheadX = e.x + e.w / 2 + mDir * TILE_SIZE;
-        const belowTx = Math.floor(aheadX / TILE_SIZE);
-        const belowTy = Math.floor((e.y + e.h + 6) / TILE_SIZE);
-        if (!this.state.map[belowTy] || this.state.map[belowTy][belowTx] !== 21) {
+        // Edge turn: only flip when actually at the edge, and only after the
+        // cooldown so it strafes across the pool instead of jittering in place.
+        const aheadX = e.x + (e.facingRight ? e.w + 4 : -4);
+        const aheadTx = Math.floor(aheadX / TILE_SIZE);
+        const aheadTy = Math.floor((e.y + e.h + 4) / TILE_SIZE);
+        const edgeClear =
+          !this.state.map[aheadTy] ||
+          !this.state.map[aheadTy][aheadTx] ||
+          this.state.map[aheadTy][aheadTx] !== 21;
+        if (edgeClear && e.turnTimer <= 0) {
           e.facingRight = !e.facingRight;
+          e.turnTimer = 20;
         }
-        // 6 block vision: shoot fireball that travels 8 blocks
+        // Aim fireball at the player, 3.5 blocks/sec
         const mcx = e.x + e.w / 2;
         const mcy = e.y + e.h / 2;
+        const pxc = p.x + p.w / 2;
+        const pyc = p.y + p.h / 2;
+        const dist = Math.hypot(pxc - mcx, pyc - mcy);
         if (
-          Math.abs(p.x + p.w / 2 - mcx) < 6 * TILE_SIZE &&
-          Math.abs(p.y + p.h / 2 - mcy) < 6 * TILE_SIZE &&
-          e.stateTimer <= 0
+          dist < 6 * TILE_SIZE &&
+          e.stateTimer <= 0 &&
+          e.turnTimer <= 15
         ) {
-          e.stateTimer = 70;
+          e.stateTimer = 60;
+          const speed = (3.5 * TILE_SIZE) / 60; // 3.5 blocks/sec at 60fps
           this.state.projectiles.push({
             id: `magma_${Date.now()}_${Math.random()}`,
             x: mcx - 6,
             y: mcy - 6,
             w: 12,
             h: 12,
-            vx: mDir * 8,
-            vy: 0,
+            vx: ((pxc - mcx) / dist) * speed,
+            vy: ((pyc - mcy) / dist) * speed,
             damage: 10,
             type: "magma",
-            facingRight: mDir > 0,
-            timer: 32, // 8 blocks at 8px/frame (despawn in updateProjectiles)
+            facingRight: pxc >= mcx,
+            timer: Math.ceil((8 * TILE_SIZE) / speed), // travels ~8 blocks then despawns
             ownerId: e.id,
           });
         }
@@ -5290,6 +5312,33 @@ export class GameEngine {
           ctx.fillStyle = "#94a3b8";
           ctx.fillRect(4, -1, 1, 2);
           
+          ctx.restore();
+        } else if (proj.type === 'magma') {
+          const px = Math.round(proj.x * zoom) / zoom;
+          const py = Math.round(proj.y * zoom) / zoom;
+          const pw = proj.w;
+          const ph = proj.h;
+          const pulse = 1 + Math.sin(Date.now() * 0.05 + proj.x) * 0.15;
+
+          ctx.save();
+          ctx.translate(px + pw / 2, py + ph / 2);
+
+          // Molten trail (behind the fireball)
+          ctx.fillStyle = "rgba(249, 115, 22, 0.4)";
+          ctx.fillRect(-10 - pulse * 2, -2, 5 + pulse * 2, 4);
+
+          // Fireball body
+          ctx.fillStyle = "#f97316";
+          ctx.fillRect(-6, -4, 12, 8);
+          ctx.fillStyle = "#fb923c";
+          ctx.fillRect(-4, -3, 8, 6);
+          // Bright core
+          ctx.fillStyle = "#fef08a";
+          ctx.fillRect(-3, -2, 6, 4);
+          // Hot center
+          ctx.fillStyle = "#fff7ed";
+          ctx.fillRect(-1, -1, 3, 2);
+
           ctx.restore();
         }
       }

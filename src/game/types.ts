@@ -125,6 +125,7 @@ export interface Enemy extends Entity {
   stateTimer: number;
   aiState: string;
   trackTimer?: number;
+  turnTimer?: number;
   burnTimer?: number;
   isFrozen?: boolean;
   frozenTimer?: number;
