@@ -223,7 +223,7 @@ export interface GameState {
   isPaused: boolean;
   isFloorComplete: boolean;
   transitionRadius: number;
-  transitionState: 'in' | 'out' | 'none' | 'out_to_cards' | 'out_to_cards_delay' | 'cards';
+  transitionState: 'in' | 'out' | 'none' | 'out_to_cards' | 'out_to_cards_delay' | 'cards' | 'cards_enter';
   floorTitleState: 'in' | 'show' | 'out' | 'none';
   floorTitleTimer: number;
   upgrades: UpgradeChoice[];
@@ -240,7 +240,6 @@ export interface GameState {
   bossCutsceneTimer?: number;
   bossSpawned?: boolean;
   letterboxHeight?: number;
-  introZoomTimer?: number;
   selectedUpgradeIndex?: number;
 }
 

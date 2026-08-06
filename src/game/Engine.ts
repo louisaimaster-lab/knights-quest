@@ -245,7 +245,6 @@ export class GameEngine {
       bossCutsceneTriggered: false,
       bossCutsceneTimer: 0,
       letterboxHeight: 0,
-      introZoomTimer: 0,
       selectedUpgradeIndex: -1,
     };
   }
@@ -288,11 +287,10 @@ export class GameEngine {
     this.state.player.isGrounded = true;
 
     // Reset camera zoom and timer states upon descending
-    this.state.camera.zoom = 1.6; // ponytail: start zoomed in, ease out to 1.0 for the descend intro
+    this.state.camera.zoom = 1;
     this.state.gateEntered = false;
     this.state.gateTimer = 0;
     this.state.frostTimer = 0;
-    this.state.introZoomTimer = 60;
 
     this.state.enemies = [];
     this.state.particles = [];
@@ -577,10 +575,10 @@ export class GameEngine {
             this.state.player.coins -= u.cost;
             u.effect(this.state.player);
             this.state.isFloorComplete = false;
-            this.state.transitionState = "none";
             this.isMenuBackground = false;
             this.state.selectedUpgradeIndex = -1;
-            this.initFloor(this.state.floor + 1);
+            this.state.transitionState = "out";
+            this.state.transitionRadius = this.canvasWidth + this.canvasHeight;
             this.state.mouse.clicked = false;
             return;
           }
@@ -589,9 +587,9 @@ export class GameEngine {
 
       if (this.state.keys["Enter"]) {
         this.state.isFloorComplete = false;
-        this.state.transitionState = "none";
-        this.isMenuBackground = false;
-        this.initFloor(this.state.floor + 1);
+        this.state.selectedUpgradeIndex = -1;
+        this.state.transitionState = "out";
+        this.state.transitionRadius = this.canvasWidth + this.canvasHeight;
       }
       this.state.mouse.clicked = false;
       this.state.prevKeys = { ...this.state.keys };
@@ -682,24 +680,11 @@ export class GameEngine {
         this.state.floorTitleTimer = 0;
       }
       return;
-    } else if (this.state.transitionState === "out") {
-      this.state.transitionRadius -= 25;
-      if (this.state.transitionRadius <= 0) {
-        this.state.isFloorComplete = false;
-        this.initFloor(this.state.floor + 1);
-      }
-      return; // Pause game while transitioning out
     } else if (this.state.transitionState === "out_to_cards") {
       this.state.transitionRadius -= 25;
       if (this.state.transitionRadius <= 0) {
-        this.state.transitionState = "out_to_cards_delay";
-        this.state.transitionDelayTimer = 0;
-      }
-      return;
-    } else if (this.state.transitionState === "out_to_cards_delay") {
-      this.state.transitionDelayTimer = (this.state.transitionDelayTimer || 0) + 1;
-      if (this.state.transitionDelayTimer >= 60) { // 60 frames = 1 second
-        this.state.transitionState = "cards";
+        this.state.transitionState = "cards_enter";
+        this.state.transitionRadius = 0;
         this.state.isFloorComplete = true;
         this.generateUpgrades();
         this.initCardBackground();
@@ -712,6 +697,21 @@ export class GameEngine {
         }
       }
       return;
+    } else if (this.state.transitionState === "cards_enter") {
+      this.state.transitionRadius += 25;
+      if (this.state.transitionRadius > this.canvasWidth + this.canvasHeight) {
+        this.state.transitionState = "cards";
+      }
+      return;
+    } else if (this.state.transitionState === "out") {
+      this.state.transitionRadius -= 25;
+      if (this.state.transitionRadius <= 0) {
+        this.state.isFloorComplete = false;
+        this.initFloor(this.state.floor + 1);
+        this.state.transitionState = "in";
+        this.state.transitionRadius = 0;
+      }
+      return; // Pause game while transitioning out
     }
 
     // Update mouse world pos
@@ -933,8 +933,17 @@ export class GameEngine {
 
     this.state.frameCounter++;
     if (this.state.frameCounter % 300 === 0 && this.state.exitPos) {
-      for (let y = 0; y < this.state.height; y++) {
-        for (let x = 0; x < this.state.width; x++) {
+      // ponytail: only emit torch embers inside the visible view, not the whole map
+      const cx = this.state.camera.x;
+      const cy = this.state.camera.y;
+      const halfW = this.canvasWidth / 2 / this.state.camera.zoom;
+      const halfH = this.canvasHeight / 2 / this.state.camera.zoom;
+      const tx0 = Math.max(0, Math.floor((cx - halfW) / TILE_SIZE));
+      const tx1 = Math.min(this.state.width - 1, Math.ceil((cx + halfW) / TILE_SIZE));
+      const ty0 = Math.max(0, Math.floor((cy - halfH) / TILE_SIZE));
+      const ty1 = Math.min(this.state.height - 1, Math.ceil((cy + halfH) / TILE_SIZE));
+      for (let y = ty0; y <= ty1; y++) {
+        for (let x = tx0; x <= tx1; x++) {
           if (
             this.state.map[y] &&
             (this.state.map[y][x] === 10 || this.state.map[y][x] === 12)
@@ -3072,12 +3081,7 @@ export class GameEngine {
     this.state.camera.y += (targetY - this.state.camera.y) * 0.1;
 
     let targetZoom = 1.0;
-    if (this.state.introZoomTimer > 0) {
-      this.state.introZoomTimer--;
-      if (this.state.introZoomTimer === 0) {
-        this.state.camera.zoom = 1;
-      }
-    } else if (this.state.gateEntered) {
+    if (this.state.gateEntered) {
       targetZoom = 2.5; // Zoom in dramatically upon stepping on the exit gate
     }
     this.state.camera.zoom += (targetZoom - this.state.camera.zoom) * 0.08;
@@ -3781,19 +3785,22 @@ export class GameEngine {
             ctx.fillStyle = "#222";
             ctx.fillRect(x * TILE_SIZE + 12, y * TILE_SIZE + 10, 8, 3); // iron band
 
-            // Fire (slow flicker via time, not per-frame random)
-            const flick = Math.sin(Date.now() * 0.004 + x * 1.7 + y * 1.3);
-            const fireY = y * TILE_SIZE + 4 + Math.max(0, flick) * 3;
+            // Fire
             ctx.fillStyle = isPurple
-              ? `hsl(${260 + (flick > 0 ? 30 : 0)}, 100%, 65%)`
-              : `hsl(${20 + (flick > 0 ? 20 : 0)}, 100%, 55%)`;
-            ctx.fillRect(x * TILE_SIZE + 12, fireY, 8, 8);
+              ? `hsl(${260 + Math.random() * 30}, 100%, 65%)`
+              : `hsl(${20 + Math.random() * 20}, 100%, 55%)`;
+            ctx.fillRect(
+              x * TILE_SIZE + 12,
+              y * TILE_SIZE + 4 + Math.random() * 4,
+              8,
+              8,
+            );
 
             // Core Fire
             ctx.fillStyle = isPurple ? "#fff" : "#ffea00";
             ctx.fillRect(
               x * TILE_SIZE + 14,
-              y * TILE_SIZE + 6 + (flick > 0.3 ? 2 : 0),
+              y * TILE_SIZE + 6 + Math.random() * 2,
               4,
               4,
             );
@@ -3801,8 +3808,8 @@ export class GameEngine {
             // Little spark
             ctx.fillStyle = isPurple ? "#d8b4fe" : "#fcd34d";
             ctx.fillRect(
-              x * TILE_SIZE + 12 + (flick > 0.2 ? 6 : 0),
-              y * TILE_SIZE + (flick > -0.2 ? 3 : 0),
+              x * TILE_SIZE + 12 + Math.random() * 8,
+              y * TILE_SIZE + Math.random() * 6,
               2,
               2,
             );
