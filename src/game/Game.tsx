@@ -375,7 +375,7 @@ export default function Game() {
       </div>
 
       {appState === "menu" && (
-        <div className="absolute inset-0 bg-slate-950/20 z-30 flex flex-col items-center justify-center p-8 backdrop-blur-none">
+        <div className="absolute inset-0 bg-black/20 z-30 flex flex-col items-center justify-center p-8 backdrop-blur-none">
           <div className="p-8 bg-slate-900/50 border-2 border-cyan-500/60 rounded-xl flex flex-col items-center max-w-md w-full shadow-[0_0_30px_rgba(6,182,212,0.25)] relative">
             <div className="absolute inset-1 border border-cyan-400/30 rounded-lg pointer-events-none"></div>
             <h1 className="text-5xl text-white font-bold mb-2 tracking-widest text-center drop-shadow-md">
@@ -409,7 +409,7 @@ export default function Game() {
       )}
 
       {appState === "selectSave" && (
-        <div className="absolute inset-0 bg-slate-950/40 z-30 flex flex-col items-center p-8 backdrop-blur-none overflow-y-auto">
+        <div className="absolute inset-0 bg-black/40 z-30 flex flex-col items-center p-8 backdrop-blur-none overflow-y-auto">
           <h1 className="text-4xl text-cyan-400 font-bold mt-8 mb-6 drop-shadow-md tracking-wider">
             SELECT KNIGHT SAVE
           </h1>

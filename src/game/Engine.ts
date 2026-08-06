@@ -245,6 +245,8 @@ export class GameEngine {
       bossCutsceneTriggered: false,
       bossCutsceneTimer: 0,
       letterboxHeight: 0,
+      introZoomTimer: 0,
+      selectedUpgradeIndex: -1,
     };
   }
 
@@ -286,10 +288,11 @@ export class GameEngine {
     this.state.player.isGrounded = true;
 
     // Reset camera zoom and timer states upon descending
-    this.state.camera.zoom = 1;
+    this.state.camera.zoom = 1.6; // ponytail: start zoomed in, ease out to 1.0 for the descend intro
     this.state.gateEntered = false;
     this.state.gateTimer = 0;
     this.state.frostTimer = 0;
+    this.state.introZoomTimer = 60;
 
     this.state.enemies = [];
     this.state.particles = [];
@@ -535,19 +538,21 @@ export class GameEngine {
           const cx = startX + i * (cardWidth + gap);
           const cy = startY;
 
+          // SELECT button confirmation area
+          const selBtnW = 220;
+          const selBtnH = 52;
+          const selBtnX = this.canvasWidth / 2 - selBtnW / 2;
+          const selBtnY = this.canvasHeight / 2 - cardHeight / 2 + 30 + cardHeight + 18;
+
           if (
             this.state.mouse.x >= cx &&
             this.state.mouse.x <= cx + cardWidth &&
             this.state.mouse.y >= cy &&
             this.state.mouse.y <= cy + cardHeight
           ) {
+            // Clicking a card selects it (does not apply yet)
             if (this.state.player.coins >= u.cost) {
-              this.state.player.coins -= u.cost;
-              u.effect(this.state.player);
-              this.state.isFloorComplete = false;
-              this.state.transitionState = "none";
-              this.isMenuBackground = false;
-              this.initFloor(this.state.floor + 1);
+              this.state.selectedUpgradeIndex = i;
             } else {
               this.state.texts.push({
                 x: this.state.player.x + this.state.player.w / 2,
@@ -557,7 +562,27 @@ export class GameEngine {
                 maxLife: 60
               });
             }
-            break;
+            this.state.mouse.clicked = false;
+            return;
+          }
+
+          // Selected card + clicking SELECT applies it
+          if (
+            this.state.selectedUpgradeIndex === i &&
+            this.state.mouse.x >= selBtnX &&
+            this.state.mouse.x <= selBtnX + selBtnW &&
+            this.state.mouse.y >= selBtnY &&
+            this.state.mouse.y <= selBtnY + selBtnH
+          ) {
+            this.state.player.coins -= u.cost;
+            u.effect(this.state.player);
+            this.state.isFloorComplete = false;
+            this.state.transitionState = "none";
+            this.isMenuBackground = false;
+            this.state.selectedUpgradeIndex = -1;
+            this.initFloor(this.state.floor + 1);
+            this.state.mouse.clicked = false;
+            return;
           }
         }
       }
@@ -1033,7 +1058,7 @@ export class GameEngine {
       p.facingRight = this.state.mouse.worldX > p.x + p.w / 2;
     }
 
-    if (!isStunned) {
+    if (!isStunned && this.state.floorTitleState === "none") {
       const accel = (inLava ? 0.45 : inWater ? 0.8 : 1.5) * effectiveSpeedMulti;
       if (keys["a"] || keys["ArrowLeft"]) {
         p.vx -= accel;
@@ -2034,7 +2059,6 @@ export class GameEngine {
           life: 30,
           maxLife: 30,
         });
-        this.state.shakeTimer = p.clawsActive ? 8 : (p.weapon === 'colossal_sword' ? 12 : 5);
       }
     }
   }
@@ -2276,7 +2300,6 @@ export class GameEngine {
             maxLife: 30,
           });
 
-          this.state.shakeTimer = Math.max(this.state.shakeTimer, 3);
           hitEnemy = true;
           break;
         }
@@ -3049,7 +3072,12 @@ export class GameEngine {
     this.state.camera.y += (targetY - this.state.camera.y) * 0.1;
 
     let targetZoom = 1.0;
-    if (this.state.gateEntered) {
+    if (this.state.introZoomTimer > 0) {
+      this.state.introZoomTimer--;
+      if (this.state.introZoomTimer === 0) {
+        this.state.camera.zoom = 1;
+      }
+    } else if (this.state.gateEntered) {
       targetZoom = 2.5; // Zoom in dramatically upon stepping on the exit gate
     }
     this.state.camera.zoom += (targetZoom - this.state.camera.zoom) * 0.08;
@@ -3082,8 +3110,8 @@ export class GameEngine {
     let shakeX = 0,
       shakeY = 0;
     if (this.state.shakeTimer > 0) {
-      shakeX = (Math.random() - 0.5) * 10;
-      shakeY = (Math.random() - 0.5) * 10;
+      shakeX = (Math.random() - 0.5) * 5;
+      shakeY = (Math.random() - 0.5) * 5;
     }
 
     const zoom = this.state.camera.zoom;
@@ -3753,22 +3781,19 @@ export class GameEngine {
             ctx.fillStyle = "#222";
             ctx.fillRect(x * TILE_SIZE + 12, y * TILE_SIZE + 10, 8, 3); // iron band
 
-            // Fire
+            // Fire (slow flicker via time, not per-frame random)
+            const flick = Math.sin(Date.now() * 0.004 + x * 1.7 + y * 1.3);
+            const fireY = y * TILE_SIZE + 4 + Math.max(0, flick) * 3;
             ctx.fillStyle = isPurple
-              ? `hsl(${260 + Math.random() * 30}, 100%, 65%)`
-              : `hsl(${20 + Math.random() * 20}, 100%, 55%)`;
-            ctx.fillRect(
-              x * TILE_SIZE + 12,
-              y * TILE_SIZE + 4 + Math.random() * 4,
-              8,
-              8,
-            );
+              ? `hsl(${260 + (flick > 0 ? 30 : 0)}, 100%, 65%)`
+              : `hsl(${20 + (flick > 0 ? 20 : 0)}, 100%, 55%)`;
+            ctx.fillRect(x * TILE_SIZE + 12, fireY, 8, 8);
 
             // Core Fire
             ctx.fillStyle = isPurple ? "#fff" : "#ffea00";
             ctx.fillRect(
               x * TILE_SIZE + 14,
-              y * TILE_SIZE + 6 + Math.random() * 2,
+              y * TILE_SIZE + 6 + (flick > 0.3 ? 2 : 0),
               4,
               4,
             );
@@ -3776,8 +3801,8 @@ export class GameEngine {
             // Little spark
             ctx.fillStyle = isPurple ? "#d8b4fe" : "#fcd34d";
             ctx.fillRect(
-              x * TILE_SIZE + 12 + Math.random() * 8,
-              y * TILE_SIZE + Math.random() * 6,
+              x * TILE_SIZE + 12 + (flick > 0.2 ? 6 : 0),
+              y * TILE_SIZE + (flick > -0.2 ? 3 : 0),
               2,
               2,
             );
@@ -5593,7 +5618,7 @@ export class GameEngine {
       this.state.camera.x += 1.2;
 
       // 30% dark backdrop overlay (30% darkness when choosing cards)
-      ctx.fillStyle = "rgba(9, 13, 22, 0.30)";
+      ctx.fillStyle = "rgba(0, 0, 0, 0.30)";
       ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
       // The freely floating header text (NO box container)
@@ -5639,7 +5664,7 @@ export class GameEngine {
 
         // EXACT Legacy Card Styling
         let strokeColor = "#ffffff";
-        let fillStyle = isHover ? "#2a2a35" : "#13131e";
+        let fillStyle = isHover ? "#2c2c2c" : "#1a1a1a";
 
         if (u.isUltimate) {
           const timeCycle = Date.now() / 200;
@@ -5660,6 +5685,13 @@ export class GameEngine {
         ctx.lineWidth = u.isSuper || u.isUltimate ? 3 : 2;
         ctx.fillRect(cx, cy, cardWidth, cardHeight);
         ctx.strokeRect(cx, cy, cardWidth, cardHeight);
+
+        // Darker outline on the selected card
+        if (this.state.selectedUpgradeIndex === i) {
+          ctx.strokeStyle = "#000";
+          ctx.lineWidth = 6;
+          ctx.strokeRect(cx - 3, cy - 3, cardWidth + 6, cardHeight + 6);
+        }
 
         // Title
         ctx.textAlign = "center";
@@ -5699,6 +5731,28 @@ export class GameEngine {
         this.canvasHeight - 30,
       );
       ctx.restore();
+
+      // SELECT confirmation button
+      let selBtnW = 220;
+      let selBtnH = 52;
+      let selBtnX = this.canvasWidth / 2 - selBtnW / 2;
+      let selBtnY = startY + cardHeight + 18;
+      const hasSelection = this.state.selectedUpgradeIndex >= 0;
+      if (hasSelection) {
+        ctx.fillStyle = "#166534";
+        ctx.strokeStyle = "#22c55e";
+        ctx.lineWidth = 2;
+      } else {
+        ctx.fillStyle = "#1f2937";
+        ctx.strokeStyle = "#374151";
+        ctx.lineWidth = 2;
+      }
+      ctx.fillRect(selBtnX, selBtnY, selBtnW, selBtnH);
+      ctx.strokeRect(selBtnX, selBtnY, selBtnW, selBtnH);
+      ctx.fillStyle = hasSelection ? "#ffffff" : "#6b7280";
+      ctx.font = "bold 22px 'Courier New', Courier, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(hasSelection ? "SELECT UPGRADE" : "SELECT A CARD", selBtnX + selBtnW / 2, selBtnY + 34);
     }
 
     if (

@@ -240,6 +240,8 @@ export interface GameState {
   bossCutsceneTimer?: number;
   bossSpawned?: boolean;
   letterboxHeight?: number;
+  introZoomTimer?: number;
+  selectedUpgradeIndex?: number;
 }
 
 export interface SavedRunState {
