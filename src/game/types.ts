@@ -177,6 +177,7 @@ export interface Projectile extends Rect {
   damage: number;
   facingRight: boolean;
   timer?: number;
+  ownerId?: string;
 }
 
 export interface DroppedWeapon extends Rect {

@@ -2253,6 +2253,7 @@ export class GameEngine {
 
       let hitEnemy = false;
       for (const e of this.state.enemies) {
+        if (proj.ownerId && e.id === proj.ownerId) continue;
         if (e.invulnerableTimer > 0) continue;
         if (rectIntersect(proj, e)) {
           const finalDamage = proj.damage * p.damageMulti;
@@ -2643,12 +2644,16 @@ export class GameEngine {
         e.vy += GRAVITY;
         const mDir = e.facingRight ? 1 : -1;
         e.vx = mDir * 2.05;
-        // Float on lava: lava (21) is not solid, so snap to lava surface
+        // Lava (21) is not solid, so bob on the lava surface (partially submerged)
         const surfTx = Math.floor((e.x + e.w / 2) / TILE_SIZE);
         const surfTy = Math.floor((e.y + e.h + 4) / TILE_SIZE);
         if (this.state.map[surfTy] && this.state.map[surfTy][surfTx] === 21) {
           e.vy = 0;
-          e.y = surfTy * TILE_SIZE - e.h;
+          e.y =
+            surfTy * TILE_SIZE -
+            e.h +
+            8 +
+            Math.sin(Date.now() * 0.06 + e.x * 0.05) * 2.5;
         }
         // Reverse at edge: check for lava below ahead
         const aheadX = e.x + e.w / 2 + mDir * TILE_SIZE;
@@ -2678,6 +2683,7 @@ export class GameEngine {
             type: "magma",
             facingRight: mDir > 0,
             timer: 32, // 8 blocks at 8px/frame (despawn in updateProjectiles)
+            ownerId: e.id,
           });
         }
         // Punch: windup 0.7s when close, then hit with 0.3s cd
@@ -3537,10 +3543,9 @@ export class GameEngine {
               );
             }
 
-            // Magma block (tile 20): pulsing glow on exposed edges (outline is separate from the block)
+            // Magma block (tile 20): constant glow on exposed edges (outline is separate from the block)
             if (isMagma) {
-              const magmaPulse = 0.45 + Math.sin(Date.now() * 0.006 + x * 0.5 + y * 0.3) * 0.25;
-              ctx.fillStyle = `rgba(249, 115, 22, ${magmaPulse})`;
+              ctx.fillStyle = "rgba(249, 115, 22, 0.45)";
               if (!top) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE - 2, TILE_SIZE + 1, 3);
               if (!bottom) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + TILE_SIZE - 1, TILE_SIZE + 1, 3);
               if (!left) ctx.fillRect(x * TILE_SIZE - 2, y * TILE_SIZE, 3, TILE_SIZE + 1);
@@ -4103,33 +4108,43 @@ export class GameEngine {
         ctx.fillRect(e.x + 3, e.y + e.h - 4, 6, 2);
         ctx.fillRect(e.x + 15, e.y + e.h - 4, 6, 2);
       } else if (e.type === "lava_monster") {
-        // Lava Monster: molten blob that walks on lava surfaces
+        // Lava Monster: a lumpy blob of molten lava rising from the pool
         const isHitColor = e.invulnerableTimer > 0;
         const ex = e.x;
         const ey = e.y;
         const ew = e.w; // 28
         const eh = e.h; // 20
+        const bob = Math.sin(Date.now() * 0.06 + e.x * 0.05) * 2.5;
 
-        // Ground shadow
-        ctx.fillStyle = "rgba(0,0,0,0.3)";
-        ctx.fillRect(ex + 2, ey + eh - 3, ew - 4, 3);
-
-        // Molten rock shell
+        // Charred crust shell (lumpy dome)
         ctx.fillStyle = isHitColor ? "#fff" : "#431407";
-        ctx.fillRect(ex + 2, ey + 4, ew - 4, eh - 8);
-        ctx.fillRect(ex + 4, ey + 2, ew - 8, eh - 6);
+        ctx.fillRect(ex + 2, ey + 8 + bob, ew - 4, eh - 12);
+        ctx.fillRect(ex + 5, ey + 4 + bob, ew - 10, eh - 8);
+        ctx.fillRect(ex + 8, ey + 1 + bob, ew - 16, eh - 5);
 
-        // Lava core (pulsing)
+        // Glowing molten veins splitting the crust
         ctx.fillStyle = isHitColor ? "#fff" : "#f97316";
-        ctx.fillRect(ex + 6, ey + 6, ew - 12, 4);
-        ctx.fillStyle = isHitColor ? "#fff" : "#fef08a";
-        ctx.fillRect(ex + 9, ey + 7, ew - 18, 2);
+        ctx.fillRect(ex + 4, ey + 10 + bob, 4, 3);
+        ctx.fillRect(ex + 11, ey + 5 + bob, 6, 3);
+        ctx.fillRect(ex + 19, ey + 11 + bob, 4, 3);
 
-        // Ember eyes
-        ctx.fillStyle = isHitColor ? "#fff" : "#fb923c";
-        const eyeX = e.facingRight ? ex + ew - 10 : ex + 4;
-        ctx.fillRect(eyeX, ey + 5, 5, 3);
-        ctx.fillRect(eyeX, ey + 11, 5, 3);
+        // Molten core between cracks (bright)
+        ctx.fillStyle = isHitColor ? "#fff" : "#fbbf24";
+        ctx.fillRect(ex + 10, ey + 9 + bob, 6, 4);
+        ctx.fillRect(ex + 13, ey + 6 + bob, 3, 3);
+
+        // Menacing molten eyes
+        ctx.fillStyle = isHitColor ? "#fff" : "#fef08a";
+        const eyeX = e.facingRight ? ex + ew - 9 : ex + 4;
+        ctx.fillRect(eyeX, ey + 8 + bob, 6, 3);
+        ctx.fillRect(eyeX + (e.facingRight ? 0 : 2), ey + 12 + bob, 4, 3);
+        ctx.fillStyle = isHitColor ? "#fff" : "#7f1d1d";
+        ctx.fillRect(eyeX + (e.facingRight ? 3 : 0), ey + 8 + bob, 2, 3);
+
+        // Dripping lava into the pool
+        ctx.fillStyle = isHitColor ? "#fff" : "#f97316";
+        ctx.fillRect(ex + 6, ey + eh - 4, 2, 5);
+        ctx.fillRect(ex + ew - 9, ey + eh - 3, 2, 4);
       } else if (e.type === "lava_spider") {
         // Lava Spider: ceiling stalker that explodes
         const isHitColor = e.invulnerableTimer > 0;
@@ -5364,6 +5379,9 @@ export class GameEngine {
             drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 195 + Math.random() * 18);
           } else if (this.state.map[y] && this.state.map[y][x] === 12) {
             drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 156 + Math.random() * 30);
+          } else if (this.state.biome === "volcanic" && this.state.map[y] && this.state.map[y][x] === 21) {
+            // Lava self-glow: molten rock emits light into the dark around it
+            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 150 + Math.random() * 30);
           }
         }
       }
@@ -5402,36 +5420,7 @@ export class GameEngine {
         }
       }
 
-    // Lava + magma self-glow: molten rock stays visible in pitch-black, glows without casting light
-    if (this.state.biome === "volcanic") {
-      const gx0 = Math.max(0, Math.floor((this.state.camera.x - this.canvasWidth / 2 / zoom) / TILE_SIZE));
-      const gx1 = Math.min(this.state.width, Math.ceil((this.state.camera.x + this.canvasWidth / 2 / zoom) / TILE_SIZE));
-      const gy0 = Math.max(0, Math.floor((this.state.camera.y - this.canvasHeight / 2 / zoom) / TILE_SIZE));
-      const gy1 = Math.min(this.state.height, Math.ceil((this.state.camera.y + this.canvasHeight / 2 / zoom) / TILE_SIZE));
-      for (let y = gy0; y < gy1; y++) {
-        for (let x = gx0; x < gx1; x++) {
-          const tile = this.state.map[y] && this.state.map[y][x];
-          if (tile === 21) {
-            const pulse = 0.5 + Math.sin(Date.now() * 0.006 + x * 0.6 + y * 0.4) * 0.15;
-            ctx.fillStyle = `rgba(234, 88, 12, ${pulse})`;
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
-          } else if (tile === 20) {
-            const top = y > 0 && this.state.map[y - 1][x] === 20;
-            const bottom = y < this.state.height - 1 && this.state.map[y + 1][x] === 20;
-            const left = x > 0 && this.state.map[y][x - 1] === 20;
-            const right = x < this.state.width - 1 && this.state.map[y][x + 1] === 20;
-            const magmaPulse = 0.45 + Math.sin(Date.now() * 0.006 + x * 0.5 + y * 0.3) * 0.25;
-            ctx.fillStyle = `rgba(249, 115, 22, ${magmaPulse})`;
-            if (!top) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE - 2, TILE_SIZE + 1, 3);
-            if (!bottom) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + TILE_SIZE - 1, TILE_SIZE + 1, 3);
-            if (!left) ctx.fillRect(x * TILE_SIZE - 2, y * TILE_SIZE, 3, TILE_SIZE + 1);
-            if (!right) ctx.fillRect(x * TILE_SIZE + TILE_SIZE - 1, y * TILE_SIZE, 3, TILE_SIZE + 1);
-          }
-        }
-      }
-    }
-
-    ctx.restore(); // Restore from Main Camera save
+        ctx.restore(); // Restore from Main Camera save
 
     // Screen Tints (Supersonic slow-mo and Poison)
     if (p.timeSlowActive) {
