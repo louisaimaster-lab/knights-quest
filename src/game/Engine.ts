@@ -1387,12 +1387,16 @@ export class GameEngine {
       p.burnPulse++;
       // Burn particle effect (smoke/fire rising while on fire)
       if (Math.random() < 0.35) {
-        this.spawnParticles(
-          p.x + p.w / 2 + (Math.random() - 0.5) * p.w,
-          p.y + (Math.random() - 0.5) * p.h,
-          Math.random() < 0.5 ? "#f97316" : "#fbbf24",
-          1,
-        );
+        this.state.particles.push({
+          x: p.x + p.w / 2 + (Math.random() - 0.5) * p.w,
+          y: p.y + Math.random() * p.h,
+          vx: (Math.random() - 0.5) * 0.6,
+          vy: -(0.5 + Math.random() * 1.2),
+          life: Math.random() * 40 + 30,
+          maxLife: 70,
+          color: Math.random() < 0.5 ? "#f97316" : "#fbbf24",
+          size: Math.random() * 3 + 1.5,
+        });
       }
       if (p.burnPulse % 30 === 0) {
         p.health -= 3;
@@ -5360,9 +5364,6 @@ export class GameEngine {
             drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 195 + Math.random() * 18);
           } else if (this.state.map[y] && this.state.map[y][x] === 12) {
             drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 156 + Math.random() * 30);
-          } else if (this.state.biome === "volcanic" && this.state.map[y] && this.state.map[y][x] === 21) {
-            // Lava self-glow: molten rock lights up the dark around it
-            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 150 + Math.random() * 30);
           }
         }
       }
@@ -5400,6 +5401,35 @@ export class GameEngine {
           }
         }
       }
+
+    // Lava + magma self-glow: molten rock stays visible in pitch-black, glows without casting light
+    if (this.state.biome === "volcanic") {
+      const gx0 = Math.max(0, Math.floor((this.state.camera.x - this.canvasWidth / 2 / zoom) / TILE_SIZE));
+      const gx1 = Math.min(this.state.width, Math.ceil((this.state.camera.x + this.canvasWidth / 2 / zoom) / TILE_SIZE));
+      const gy0 = Math.max(0, Math.floor((this.state.camera.y - this.canvasHeight / 2 / zoom) / TILE_SIZE));
+      const gy1 = Math.min(this.state.height, Math.ceil((this.state.camera.y + this.canvasHeight / 2 / zoom) / TILE_SIZE));
+      for (let y = gy0; y < gy1; y++) {
+        for (let x = gx0; x < gx1; x++) {
+          const tile = this.state.map[y] && this.state.map[y][x];
+          if (tile === 21) {
+            const pulse = 0.5 + Math.sin(Date.now() * 0.006 + x * 0.6 + y * 0.4) * 0.15;
+            ctx.fillStyle = `rgba(234, 88, 12, ${pulse})`;
+            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
+          } else if (tile === 20) {
+            const top = y > 0 && this.state.map[y - 1][x] === 20;
+            const bottom = y < this.state.height - 1 && this.state.map[y + 1][x] === 20;
+            const left = x > 0 && this.state.map[y][x - 1] === 20;
+            const right = x < this.state.width - 1 && this.state.map[y][x + 1] === 20;
+            const magmaPulse = 0.45 + Math.sin(Date.now() * 0.006 + x * 0.5 + y * 0.3) * 0.25;
+            ctx.fillStyle = `rgba(249, 115, 22, ${magmaPulse})`;
+            if (!top) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE - 2, TILE_SIZE + 1, 3);
+            if (!bottom) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + TILE_SIZE - 1, TILE_SIZE + 1, 3);
+            if (!left) ctx.fillRect(x * TILE_SIZE - 2, y * TILE_SIZE, 3, TILE_SIZE + 1);
+            if (!right) ctx.fillRect(x * TILE_SIZE + TILE_SIZE - 1, y * TILE_SIZE, 3, TILE_SIZE + 1);
+          }
+        }
+      }
+    }
 
     ctx.restore(); // Restore from Main Camera save
 
