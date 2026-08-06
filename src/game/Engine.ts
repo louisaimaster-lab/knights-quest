@@ -370,7 +370,7 @@ export class GameEngine {
       } else if (this.state.biome === "moss") {
         type = Math.random() > 0.5 ? "bat" : "moss_slime";
       } else if (this.state.biome === "volcanic") {
-        type = Math.random() < 0.4 ? "lava_slime" : "bat"; // 40% lava slime, 60% bat
+        type = "lava_slime"; // replaces all slimes; no bats in volcanic
       } else {
         type = Math.random() > 0.5 ? "bat" : "slime";
       }
@@ -432,7 +432,7 @@ export class GameEngine {
       // Lava monsters walk on lava surfaces
       for (let y = 1; y < this.state.height; y++) {
         for (let x = 1; x < this.state.width; x++) {
-          if (this.state.map[y][x] === 21 && Math.random() < 0.006) {
+          if (this.state.map[y][x] === 21 && Math.random() < 0.05) {
             this.state.enemies.push({
               id: `lava_monster_${Math.random()}`,
               type: "lava_monster",
@@ -3519,6 +3519,16 @@ export class GameEngine {
                 TILE_SIZE - 8,
               );
             }
+
+            // Magma block (tile 20): pulsing glow on exposed edges (outline is separate from the block)
+            if (isMagma) {
+              const magmaPulse = 0.45 + Math.sin(Date.now() * 0.006 + x * 0.5 + y * 0.3) * 0.25;
+              ctx.fillStyle = `rgba(249, 115, 22, ${magmaPulse})`;
+              if (!top) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE - 2, TILE_SIZE + 1, 3);
+              if (!bottom) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + TILE_SIZE - 1, TILE_SIZE + 1, 3);
+              if (!left) ctx.fillRect(x * TILE_SIZE - 2, y * TILE_SIZE, 3, TILE_SIZE + 1);
+              if (!right) ctx.fillRect(x * TILE_SIZE + TILE_SIZE - 1, y * TILE_SIZE, 3, TILE_SIZE + 1);
+            }
           } else if (tile === 4) {
             // Ladder
             const platformAbove =
@@ -3657,13 +3667,13 @@ export class GameEngine {
             if (Math.cos(x * 2.7) > 0)
               ctx.fillRect(x * TILE_SIZE + 18, y * TILE_SIZE + 4, 6, 2);
           } else if (tile === 21) {
-            // Lava (Glowing fiery orange / magma fluid)
+            // Lava (molten rock fluid, no glow)
             const lavaAbove =
               y > 0 &&
               this.state.map[y - 1] &&
               this.state.map[y - 1][x] === 21;
 
-            ctx.fillStyle = "rgba(234, 88, 12, 0.9)"; // Fiery orange magma
+            ctx.fillStyle = "rgba(153, 51, 12, 0.9)"; // dark molten rock, no glow
             if (lavaAbove) {
               ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
             } else {
@@ -3673,23 +3683,7 @@ export class GameEngine {
                 TILE_SIZE + 1,
                 TILE_SIZE - 4 + 1,
               );
-              // Animated glowing yellow magma ripples
-              ctx.fillStyle = "#fef08a";
-              if (Math.sin(Date.now() * 0.005 + x * 0.8) > 0) {
-                ctx.fillRect(
-                  x * TILE_SIZE + 2,
-                  y * TILE_SIZE + 4,
-                  TILE_SIZE - 4,
-                  3,
-                );
-              }
             }
-
-            // Magma core glow
-            ctx.fillStyle = "#ea580c";
-            ctx.fillRect(x * TILE_SIZE + 6, y * TILE_SIZE + 12, TILE_SIZE - 12, 8);
-            ctx.fillStyle = "#f97316";
-            ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE + 14, TILE_SIZE - 16, 4);
           } else if (tile === 10 || tile === 12) {
             // Torch
             const isPurple = tile === 12;
