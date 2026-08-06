@@ -64,6 +64,8 @@ export interface Player extends Entity {
   timeSlowActive?: boolean;
   poisonTimer: number;
   burnTimer: number;
+  slownessTimer: number;
+  redFlashTimer: number;
   oxygen: number;
   maxOxygen: number;
   hasWaterResistance?: boolean;
@@ -115,7 +117,7 @@ export interface UpgradeChoice {
   effect: (p: Player) => void;
 }
 
-export type EnemyType = 'bat' | 'slime' | 'boss' | 'frost_slime' | 'yeti' | 'moss_slime' | 'flytrap' | 'frost_knight' | 'inferno_knight';
+export type EnemyType = 'bat' | 'slime' | 'boss' | 'frost_slime' | 'yeti' | 'moss_slime' | 'flytrap' | 'frost_knight' | 'inferno_knight' | 'lava_slime' | 'lava_monster' | 'lava_spider';
 
 export interface Enemy extends Entity {
   type: EnemyType;

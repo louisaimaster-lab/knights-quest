@@ -174,6 +174,8 @@ export class GameEngine {
         superAbilityTimer: 0,
         poisonTimer: 0,
         burnTimer: 0,
+        slownessTimer: 0,
+        redFlashTimer: 0,
         oxygen: 100,
         maxOxygen: 100,
         hasWaterResistance: false,
@@ -367,6 +369,8 @@ export class GameEngine {
         type = Math.random() < 0.20 ? "yeti" : "frost_slime";
       } else if (this.state.biome === "moss") {
         type = Math.random() > 0.5 ? "bat" : "moss_slime";
+      } else if (this.state.biome === "volcanic") {
+        type = Math.random() < 0.4 ? "lava_slime" : "bat"; // 40% lava slime, 60% bat
       } else {
         type = Math.random() > 0.5 ? "bat" : "slime";
       }
@@ -384,8 +388,8 @@ export class GameEngine {
         h: isBig ? 32 : 20,
         vx: 0,
         vy: 0,
-        health: isBig ? 100 : isTank ? 45 : isFlying ? 20 : 30,
-        maxHealth: isBig ? 100 : isTank ? 45 : isFlying ? 20 : 30,
+        health: isBig ? 100 : isTank ? 45 : isFlying ? 20 : type === "lava_slime" ? 20 : 30,
+        maxHealth: isBig ? 100 : isTank ? 45 : isFlying ? 20 : type === "lava_slime" ? 20 : 30,
         facingRight: Math.random() > 0.5,
         isGrounded: false,
         invulnerableTimer: 0,
@@ -421,6 +425,71 @@ export class GameEngine {
             }
           }
         }
+      }
+    }
+
+    if (this.state.biome === "volcanic") {
+      // Lava monsters walk on lava surfaces
+      for (let y = 1; y < this.state.height; y++) {
+        for (let x = 1; x < this.state.width; x++) {
+          if (this.state.map[y][x] === 21 && Math.random() < 0.006) {
+            this.state.enemies.push({
+              id: `lava_monster_${Math.random()}`,
+              type: "lava_monster",
+              x: x * TILE_SIZE + 2,
+              y: (y - 1) * TILE_SIZE,
+              w: 28,
+              h: 20,
+              vx: 0,
+              vy: 0,
+              health: 45,
+              maxHealth: 45,
+              facingRight: Math.random() > 0.5,
+              isGrounded: true,
+              invulnerableTimer: 0,
+              stateTimer: 0,
+              onLadder: false,
+              aiState: "idle",
+            });
+          }
+        }
+      }
+
+      // Lava spiders hang from structure ceilings (max 3 per floor)
+      let spiderCount = 0;
+      for (let y = 0; y < this.state.height; y++) {
+        for (let x = 0; x < this.state.width; x++) {
+          const hasCeiling = this.state.map[y - 1] && this.state.map[y - 1][x] === 11;
+          if (
+            this.state.bgMap[y] &&
+            this.state.bgMap[y][x] === 9 &&
+            this.state.map[y][x] === 0 &&
+            hasCeiling &&
+            Math.random() < 0.7
+          ) {
+            this.state.enemies.push({
+              id: `lava_spider_${Math.random()}`,
+              type: "lava_spider",
+              x: x * TILE_SIZE + 4,
+              y: (y - 1) * TILE_SIZE,
+              w: 18,
+              h: 14,
+              vx: 0,
+              vy: 0,
+              health: 30,
+              maxHealth: 30,
+              facingRight: Math.random() > 0.5,
+              isGrounded: false,
+              invulnerableTimer: 0,
+              stateTimer: 0,
+              onLadder: false,
+              aiState: "hanging",
+            });
+            spiderCount++;
+            if (spiderCount >= 3) break;
+          }
+        }
+        if (spiderCount >= 3) break;
       }
     }
   }
@@ -905,6 +974,7 @@ export class GameEngine {
 
     // Check if player is in water or on ladder
     let inWater = false;
+    let inLava = false;
     let hitIcicle = false;
     let icicleX = 0;
 
@@ -917,6 +987,7 @@ export class GameEngine {
       for (let tx = leftTile; tx <= rightTile; tx++) {
         const t = this.state.map[ty] && this.state.map[ty][tx];
         if (t === 6 || t === 18) inWater = true;
+        if (t === 21) inLava = true;
         if (this.state.biome === "ice" && t === 13) {
           hitIcicle = true;
           icicleX = tx * TILE_SIZE + TILE_SIZE / 2;
@@ -938,7 +1009,7 @@ export class GameEngine {
     let potionSpeedMult = 1;
     if (p.speedPotionTimer && p.speedPotionTimer > 0) {
       p.speedPotionTimer--;
-      potionSpeedMult = 1.20;
+      potionSpeedMult = 1.10;
       if (p.speedPotionTimer % 6 === 0) {
         this.spawnParticles(p.x + Math.random() * p.w, p.y + p.h, "#38bdf8", 1);
       }
@@ -952,7 +1023,8 @@ export class GameEngine {
       superJumpMult = 1.25;
     }
 
-    const effectiveSpeedMulti = p.speedMulti * weaponSpeedMult * superSpeedMult * potionSpeedMult;
+    const slowMult = p.slownessTimer > 0 ? 0.65 : 1;
+    const effectiveSpeedMulti = p.speedMulti * weaponSpeedMult * superSpeedMult * potionSpeedMult * slowMult;
     const effectiveJumpMulti = p.jumpMulti * weaponJumpMult * superJumpMult;
 
     if (this.state.floorTitleState === "none") {
@@ -960,7 +1032,7 @@ export class GameEngine {
     }
 
     if (!isStunned) {
-      const accel = (inWater ? 0.8 : 1.5) * effectiveSpeedMulti;
+      const accel = (inLava ? 0.45 : inWater ? 0.8 : 1.5) * effectiveSpeedMulti;
       if (keys["a"] || keys["ArrowLeft"]) {
         p.vx -= accel;
       }
@@ -1001,6 +1073,11 @@ export class GameEngine {
       this.state.frostTimer = Math.max(0, (this.state.frostTimer || 0) - 2);
     }
 
+    // Dense lava: refill burn while submerged
+    if (inLava) {
+      p.burnTimer = Math.max(p.burnTimer, 30);
+    }
+
     if (!isStunned && (!p.onLadder || (p.onLadder && justPressedJump))) {
       // Jump
       const isJumpHeld = keys["w"] || keys["ArrowUp"] || keys[" "];
@@ -1012,8 +1089,8 @@ export class GameEngine {
           p.isGrounded = false;
           isClimbing = false;
           this.spawnParticles(p.x + p.w / 2, p.y + p.h, COLORS.wallAccent, 5);
-        } else if (inWater) {
-          p.vy = scaledJump * 0.8; // Better swim jump
+        } else if (inWater || inLava) {
+          p.vy = scaledJump * (inLava ? 0.55 : 0.8); // heavier swim jump from lava
           isClimbing = false;
           this.spawnParticles(p.x + p.w / 2, p.y, "rgba(0, 255, 200, 0.5)", 5);
         } else if (p.wallSliding && p.wallJumpsLeft > 0) {
@@ -1032,7 +1109,7 @@ export class GameEngine {
         }
       }
 
-      if (inWater && isJumpHeld) {
+      if ((inWater || inLava) && isJumpHeld) {
         const scaledJump = JUMP_POWER * effectiveJumpMulti;
         p.vy -= 0.5; // Swim up
         if (p.vy < scaledJump * 0.7) p.vy = scaledJump * 0.7;
@@ -1089,7 +1166,7 @@ export class GameEngine {
     ) {
       if (currentActiveItem === 'health_potion') {
         p.hotbar[p.activeSlot] = null;
-        const healAmt = 40;
+        const healAmt = 20;
         p.health = Math.min(p.maxHealth, p.health + healAmt);
         p.itemUseCooldown = 20;
         this.state.texts.push({
@@ -1102,7 +1179,7 @@ export class GameEngine {
         this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, "#4ade80", 20);
       } else if (currentActiveItem === 'speed_potion') {
         p.hotbar[p.activeSlot] = null;
-        p.speedPotionTimer = 900; // 15 seconds
+        p.speedPotionTimer = 450; // 7.5 seconds
         p.itemUseCooldown = 20;
         this.state.texts.push({
           x: p.x + p.w / 2,
@@ -1303,6 +1380,21 @@ export class GameEngine {
       }
     }
 
+    // Burn tick (3 HP per 0.5s)
+    if (p.burnTimer > 0) {
+      p.burnTimer--;
+      if (p.burnTimer % 30 === 0 && p.burnTimer > 0) {
+        p.health -= 3;
+        if (p.health <= 0) {
+          p.health = 0;
+          this.state.isGameOver = true;
+        }
+      }
+    }
+
+    if (p.slownessTimer > 0) p.slownessTimer--;
+    if (p.redFlashTimer > 0) p.redFlashTimer--;
+
     // Mace charge tracking
     if (p.weapon === 'mace' && p.weaponEquipped && !p.clawsActive && this.state.floorTitleState === "none" && this.state.transitionState === "none") {
       if (this.state.mouse.down && p.attackTimer <= 0 && p.attackCooldown <= 0) {
@@ -1500,9 +1592,12 @@ export class GameEngine {
     }
 
     // physics
-    p.vx *= inWater ? 0.8 : FRICTION;
+    p.vx *= inLava ? 0.75 : inWater ? 0.8 : FRICTION;
     if (!isClimbing) {
-      if (inWater) {
+      if (inLava) {
+        p.vy += GRAVITY * 0.25;
+        if (p.vy > MAX_FALL_SPEED * 0.35) p.vy = MAX_FALL_SPEED * 0.35;
+      } else if (inWater) {
         p.vy += GRAVITY * 0.4;
         if (p.vy > MAX_FALL_SPEED * 0.5) p.vy = MAX_FALL_SPEED * 0.5;
       } else if (p.wallSliding && p.vy > 0) {
@@ -2077,7 +2172,7 @@ export class GameEngine {
         ty < 0 ||
         ty >= this.state.height ||
         (this.state.map[ty] &&
-          [1, 7, 8, 11, 15, 16, 17, 18].includes(this.state.map[ty][tx]))
+          [1, 7, 8, 11, 15, 16, 17, 18, 19, 20].includes(this.state.map[ty][tx]))
       ) {
         hitWall = true;
       }
@@ -2124,6 +2219,13 @@ export class GameEngine {
 
       if (proj.type === "magma") {
         this.spawnParticles(proj.x, proj.y, "#f97316", 1);
+        if (proj.timer !== undefined) {
+          proj.timer--;
+          if (proj.timer <= 0) {
+            this.state.projectiles.splice(i, 1);
+            continue;
+          }
+        }
         if (p.invulnerableTimer <= 0 && rectIntersect({ x: proj.x - 4, y: proj.y - 4, w: 8, h: 8 }, p)) {
           this.damagePlayer(proj.damage, Math.sign(proj.vx) || 1, 8, -4, "#f97316");
           this.spawnParticles(proj.x, proj.y, "#ef4444", 8);
@@ -2426,7 +2528,8 @@ export class GameEngine {
       if (
         e.type === "slime" ||
         e.type === "frost_slime" ||
-        e.type === "moss_slime"
+        e.type === "moss_slime" ||
+        e.type === "lava_slime"
       ) {
         e.vy += GRAVITY;
         if (e.isGrounded && e.stateTimer <= 0) {
@@ -2434,10 +2537,10 @@ export class GameEngine {
           const dir = distToPlayer < 850 ? (p.x > e.x ? 1 : -1) : (Math.random() < 0.5 ? 1 : -1);
           e.facingRight = dir > 0;
           e.vy =
-            e.type === "frost_slime" ? -4 : e.type === "moss_slime" ? -4.5 : -3.5;
+            e.type === "frost_slime" ? -4 : e.type === "moss_slime" ? -4.5 : e.type === "lava_slime" ? -4.5 : -3.5;
           e.vx =
             dir *
-            (e.type === "frost_slime" ? 6 : e.type === "moss_slime" ? 7.5 : 4.5);
+            (e.type === "frost_slime" ? 6 : e.type === "moss_slime" ? 7.5 : e.type === "lava_slime" ? 6.5 : 4.5);
           e.stateTimer = 50 + Math.random() * 25;
         } else if (e.isGrounded) {
           e.vx *= 0.8;
@@ -2517,6 +2620,105 @@ export class GameEngine {
             e.vx += (p.x > e.x ? 1 : -1) * 2.5;
             e.vy += (p.y > e.y ? 1 : -1) * 2.5;
           }
+        }
+      } else if (e.type === "lava_monster") {
+        // Walks on lava surface, patrolling back and forth
+        e.vy += GRAVITY;
+        const mDir = e.facingRight ? 1 : -1;
+        e.vx = mDir * 2.05;
+        // Float on lava: lava (21) is not solid, so snap to lava surface
+        const surfTx = Math.floor((e.x + e.w / 2) / TILE_SIZE);
+        const surfTy = Math.floor((e.y + e.h + 4) / TILE_SIZE);
+        if (this.state.map[surfTy] && this.state.map[surfTy][surfTx] === 21) {
+          e.vy = 0;
+          e.y = surfTy * TILE_SIZE - e.h;
+        }
+        // Reverse at edge: check for lava below ahead
+        const aheadX = e.x + e.w / 2 + mDir * TILE_SIZE;
+        const belowTx = Math.floor(aheadX / TILE_SIZE);
+        const belowTy = Math.floor((e.y + e.h + 6) / TILE_SIZE);
+        if (!this.state.map[belowTy] || this.state.map[belowTy][belowTx] !== 21) {
+          e.facingRight = !e.facingRight;
+        }
+        // 6 block vision: shoot fireball that travels 8 blocks
+        const mcx = e.x + e.w / 2;
+        const mcy = e.y + e.h / 2;
+        if (
+          Math.abs(p.x + p.w / 2 - mcx) < 6 * TILE_SIZE &&
+          Math.abs(p.y + p.h / 2 - mcy) < 6 * TILE_SIZE &&
+          e.stateTimer <= 0
+        ) {
+          e.stateTimer = 70;
+          this.state.projectiles.push({
+            id: `magma_${Date.now()}_${Math.random()}`,
+            x: mcx - 6,
+            y: mcy - 6,
+            w: 12,
+            h: 12,
+            vx: mDir * 8,
+            vy: 0,
+            damage: 10,
+            type: "magma",
+            facingRight: mDir > 0,
+            timer: 32, // 8 blocks at 8px/frame (despawn in updateProjectiles)
+          });
+        }
+        // Punch: windup 0.7s when close, then hit with 0.3s cd
+        if (
+          Math.abs(p.y + p.h / 2 - mcy) < 1.5 * TILE_SIZE &&
+          Math.abs(p.x + p.w / 2 - mcx) < 1.2 * TILE_SIZE
+        ) {
+          if (e.aiState === "idle") {
+            e.aiState = "winding_up";
+            e.stateTimer = 42; // 0.7s windup
+          } else if (e.aiState === "winding_up" && e.stateTimer <= 0) {
+            e.aiState = "idle";
+            if (p.invulnerableTimer <= 0) {
+              this.damagePlayer(8, mDir, 9, -4, "#f97316");
+            }
+          }
+        } else {
+          e.aiState = "idle";
+        }
+      } else if (e.type === "lava_spider") {
+        if (e.aiState === "hanging") {
+          e.vx = 0;
+          e.vy = 0;
+          const dx = p.x + p.w / 2 - (e.x + e.w / 2);
+          if (
+            dx > -4 * TILE_SIZE &&
+            dx < 4 * TILE_SIZE &&
+            Math.abs(p.y - e.y) < 8 * TILE_SIZE
+          ) {
+            e.aiState = "stalking";
+          }
+        } else if (e.aiState === "stalking") {
+          e.vy += GRAVITY * 0.2;
+          const sDir = p.x + p.w / 2 > e.x + e.w / 2 ? 1 : -1;
+          e.vx = sDir * 1.6;
+          if (Math.abs(p.x + p.w / 2 - (e.x + e.w / 2)) < e.w) {
+            e.aiState = "beeping";
+            e.stateTimer = 24; // 3 fast beeps (8 frames each)
+          }
+        } else if (e.aiState === "beeping") {
+          e.vx = 0;
+          e.vy = 0;
+          if (e.stateTimer % 8 === 0) {
+            this.spawnParticles(e.x + e.w / 2, e.y + e.h / 2, "#fb923c", 10);
+          }
+          if (e.stateTimer <= 0) {
+            e.aiState = "explode";
+          }
+        } else if (e.aiState === "explode") {
+          if (p.invulnerableTimer <= 0) {
+            this.damagePlayer(18, 0, 0, 0, "#f97316");
+            p.burnTimer = 300; // 5s burn
+            p.slownessTimer = 240; // 4s slow
+            p.redFlashTimer = 40; // ~0.6s red vignette
+            this.state.shakeTimer = Math.max(this.state.shakeTimer, 25);
+          }
+          this.state.enemies.splice(i, 1);
+          continue;
         }
       } else if (e.type === "yeti") {
         e.vy += GRAVITY;
@@ -2681,12 +2883,17 @@ export class GameEngine {
               ? 12 // Yeti damage adjusted x0.65 (18 -> 12)
               : e.type === "frost_slime"
                 ? 8
-                : 5;
+                : e.type === "lava_slime"
+                  ? 5
+                  : 5;
         const kbDir = p.x + p.w / 2 > e.x + e.w / 2 ? 1 : -1;
         const kbForceX = e.type === "yeti" ? 12 : 8; // Yeti rework: 12 knockback force
         const kbForceY = e.type === "yeti" ? -7 : -5;
-        const pColor = e.type === "slime" || e.type === "frost_slime" || e.type === "moss_slime" ? COLORS.slime : COLORS.blood;
+        const pColor = e.type === "slime" || e.type === "frost_slime" || e.type === "moss_slime" || e.type === "lava_slime" ? COLORS.slime : COLORS.blood;
         this.damagePlayer(damage, kbDir, kbForceX, kbForceY, pColor);
+        if (e.type === "lava_slime") {
+          p.burnTimer = 60; // 1s burn on hit
+        }
       }
     }
   }
@@ -3714,21 +3921,25 @@ export class GameEngine {
                   : e.type === "moss_slime"
                     ? "#1b4a1b"
                     : e.type === "flytrap"
-                      ? "#4a1b1b"
+                    ? "#4a1b1b"
+                    : e.type === "lava_slime"
+                      ? "#f97316"
                       : COLORS.slime;
 
       if (
         e.type === "slime" ||
         e.type === "frost_slime" ||
-        e.type === "moss_slime"
+        e.type === "moss_slime" ||
+        e.type === "lava_slime"
       ) {
         // Clean, Sleek Gelatinous Slime Model (NO EYES, Vibrant Colors)
         const isFrost = e.type === "frost_slime";
         const isMoss = e.type === "moss_slime";
+        const isLava = e.type === "lava_slime";
 
-        const baseColor = isFrost ? "#0284c7" : (isMoss ? "#14532d" : "#6b21a8");
-        const bodyColor = isFrost ? "#38bdf8" : (isMoss ? "#16a34a" : "#a855f7");
-        const coreColor = isFrost ? "#e0f2fe" : (isMoss ? "#bbf7d0" : "#e9d5ff");
+        const baseColor = isFrost ? "#0284c7" : (isMoss ? "#14532d" : (isLava ? "#7f1d1d" : "#6b21a8"));
+        const bodyColor = isFrost ? "#38bdf8" : (isMoss ? "#16a34a" : (isLava ? "#f97316" : "#a855f7"));
+        const coreColor = isFrost ? "#e0f2fe" : (isMoss ? "#bbf7d0" : (isLava ? "#fef08a" : "#e9d5ff"));
 
         // Dynamic squish/stretch
         const squish = !e.isGrounded ? -2 : (Math.sin(Date.now() / 150) * 1);
@@ -3752,6 +3963,13 @@ export class GameEngine {
         // Inner Glowing Core / Nucleus
         ctx.fillStyle = e.invulnerableTimer > 0 ? "#ffffff" : coreColor;
         ctx.fillRect(e.x + e.w / 2 - 3, sy + sh / 2 - 1, 6, 5);
+
+        // Ember flecks for Lava Slime
+        if (isLava && e.invulnerableTimer <= 0) {
+          ctx.fillStyle = "#fbbf24";
+          ctx.fillRect(e.x + 4, sy + 3, 3, 3);
+          ctx.fillRect(e.x + e.w - 8, sy + sh - 6, 3, 3);
+        }
 
         // Moss patches for Moss Slime
         if (isMoss && e.invulnerableTimer <= 0) {
@@ -3854,6 +4072,62 @@ export class GameEngine {
         ctx.fillStyle = "#22c55e";
         ctx.fillRect(e.x + 3, e.y + e.h - 4, 6, 2);
         ctx.fillRect(e.x + 15, e.y + e.h - 4, 6, 2);
+      } else if (e.type === "lava_monster") {
+        // Lava Monster: molten blob that walks on lava surfaces
+        const isHitColor = e.invulnerableTimer > 0;
+        const ex = e.x;
+        const ey = e.y;
+        const ew = e.w; // 28
+        const eh = e.h; // 20
+
+        // Ground shadow
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.fillRect(ex + 2, ey + eh - 3, ew - 4, 3);
+
+        // Molten rock shell
+        ctx.fillStyle = isHitColor ? "#fff" : "#431407";
+        ctx.fillRect(ex + 2, ey + 4, ew - 4, eh - 8);
+        ctx.fillRect(ex + 4, ey + 2, ew - 8, eh - 6);
+
+        // Lava core (pulsing)
+        ctx.fillStyle = isHitColor ? "#fff" : "#f97316";
+        ctx.fillRect(ex + 6, ey + 6, ew - 12, 4);
+        ctx.fillStyle = isHitColor ? "#fff" : "#fef08a";
+        ctx.fillRect(ex + 9, ey + 7, ew - 18, 2);
+
+        // Ember eyes
+        ctx.fillStyle = isHitColor ? "#fff" : "#fb923c";
+        const eyeX = e.facingRight ? ex + ew - 10 : ex + 4;
+        ctx.fillRect(eyeX, ey + 5, 5, 3);
+        ctx.fillRect(eyeX, ey + 11, 5, 3);
+      } else if (e.type === "lava_spider") {
+        // Lava Spider: ceiling stalker that explodes
+        const isHitColor = e.invulnerableTimer > 0;
+        const ex = e.x;
+        const ey = e.y;
+        const ew = e.w; // 18
+        const eh = e.h; // 14
+
+        // Legs
+        ctx.fillStyle = isHitColor ? "#fff" : "#1c1917";
+        ctx.fillRect(ex - 3, ey + 3, 3, 2);
+        ctx.fillRect(ex - 3, ey + 8, 3, 2);
+        ctx.fillRect(ex + ew, ey + 3, 3, 2);
+        ctx.fillRect(ex + ew, ey + 8, 3, 2);
+
+        // Body
+        ctx.fillStyle = isHitColor ? "#fff" : "#7f1d1d";
+        ctx.fillRect(ex + 1, ey + 2, ew - 2, eh - 4);
+
+        // Lava abdomen core (pulses when beeping)
+        const beep = e.aiState === "beeping" && Math.floor(Date.now() / 100) % 2 === 0;
+        ctx.fillStyle = isHitColor ? "#fff" : (beep ? "#fb923c" : "#b91c1c");
+        ctx.fillRect(ex + 4, ey + 5, ew - 8, 4);
+
+        // Eyes (orange)
+        ctx.fillStyle = isHitColor ? "#fff" : "#fef08a";
+        ctx.fillRect(ex + 4, ey + 3, 3, 3);
+        ctx.fillRect(ex + ew - 7, ey + 3, 3, 3);
       } else if (e.type === "yeti") {
         // High-Detail Yeti Beast (Inspired by reference photo)
         const isHitColor = e.invulnerableTimer > 0;
@@ -5098,23 +5372,6 @@ export class GameEngine {
         }
       }
 
-      // Lava self-glow: lava tiles stay visible/pulsing in the dark (no light cast on surroundings)
-      if (this.state.biome === "volcanic") {
-        const lvStartX = Math.max(0, Math.floor((this.state.camera.x - this.canvasWidth / 2 / zoom) / TILE_SIZE));
-        const lvEndX = Math.min(this.state.width, Math.ceil((this.state.camera.x + this.canvasWidth / 2 / zoom) / TILE_SIZE));
-        const lvStartY = Math.max(0, Math.floor((this.state.camera.y - this.canvasHeight / 2 / zoom) / TILE_SIZE));
-        const lvEndY = Math.min(this.state.height, Math.ceil((this.state.camera.y + this.canvasHeight / 2 / zoom) / TILE_SIZE));
-        const lavaPulse = 0.5 + Math.sin(Date.now() * 0.005) * 0.15;
-        ctx.fillStyle = `rgba(234, 88, 12, ${lavaPulse})`;
-        for (let y = lvStartY; y < lvEndY; y++) {
-          for (let x = lvStartX; x < lvEndX; x++) {
-            if (this.state.map[y] && this.state.map[y][x] === 21) {
-              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
-            }
-          }
-        }
-      }
-
     ctx.restore(); // Restore from Main Camera save
 
     // Screen Tints (Supersonic slow-mo and Poison)
@@ -5133,6 +5390,21 @@ export class GameEngine {
     if (p.poisonTimer > 0) {
       ctx.save();
       ctx.fillStyle = "rgba(46, 125, 50, 0.12)";
+      ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+      ctx.restore();
+    }
+
+    // Red vignette flash (lava spider explosion)
+    if (p.redFlashTimer > 0) {
+      ctx.save();
+      const a = Math.min(0.5, p.redFlashTimer / 60);
+      const g = ctx.createRadialGradient(
+        this.canvasWidth / 2, this.canvasHeight / 2, this.canvasHeight * 0.3,
+        this.canvasWidth / 2, this.canvasHeight / 2, this.canvasHeight * 0.7
+      );
+      g.addColorStop(0, "rgba(255, 0, 0, 0)");
+      g.addColorStop(1, `rgba(255, 0, 0, ${a})`);
+      ctx.fillStyle = g;
       ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
       ctx.restore();
     }
@@ -5648,6 +5920,20 @@ export class GameEngine {
       ctx.fillStyle = "#22c55e";
       ctx.font = "bold 16px 'Courier New', Courier, monospace";
       ctx.fillText(`POISONED: ${Math.ceil(p.poisonTimer / 60)}s`, hudX, nextHUDY + 16);
+      nextHUDY += 32;
+    }
+
+    if (p.burnTimer > 0) {
+      ctx.fillStyle = "#f97316";
+      ctx.font = "bold 16px 'Courier New', Courier, monospace";
+      ctx.fillText(`BURNING: ${Math.ceil(p.burnTimer / 60)}s`, hudX, nextHUDY + 16);
+      nextHUDY += 32;
+    }
+
+    if (p.slownessTimer > 0) {
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "bold 16px 'Courier New', Courier, monospace";
+      ctx.fillText(`SLOWED: ${Math.ceil(p.slownessTimer / 60)}s`, hudX, nextHUDY + 16);
       nextHUDY += 32;
     }
 

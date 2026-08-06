@@ -742,6 +742,7 @@ export function generateCave(floor: number, maxFloor: number) {
   for (let my = 1; my < height - 1; my++) {
       for (let mx = 1; mx < width - 1; mx++) {
           if (!inMossBiome(mx, my)) continue;
+          if (biome === 'volcanic') continue; // vines never spawn in volcanic caves
           
           if (map[my][mx] === 0) {
               // If there's dirt/stone/mossgrass above, have a chance to spawn dangling moss/vines
