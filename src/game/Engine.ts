@@ -246,6 +246,7 @@ export class GameEngine {
       bossCutsceneTimer: 0,
       letterboxHeight: 0,
       selectedUpgradeIndex: -1,
+      selectedPulseTimer: 0,
     };
   }
 
@@ -592,6 +593,10 @@ export class GameEngine {
         this.state.transitionRadius = this.canvasWidth + this.canvasHeight;
       }
       this.state.mouse.clicked = false;
+      // Advance the bounce/pulse animation while a card is locked in
+      if (this.state.isFloorComplete) {
+        this.state.selectedPulseTimer = (this.state.selectedPulseTimer || 0) + 1;
+      }
       this.state.prevKeys = { ...this.state.keys };
       return;
     }
@@ -701,7 +706,7 @@ export class GameEngine {
       return;
     } else if (this.state.transitionState === "out_to_cards_delay") {
       this.state.transitionDelayTimer = (this.state.transitionDelayTimer || 0) + 1;
-      if (this.state.transitionDelayTimer >= 45) {
+      if (this.state.transitionDelayTimer >= 60) {
         this.state.transitionState = "cards_enter";
         this.state.transitionRadius = 0;
       }
@@ -716,10 +721,16 @@ export class GameEngine {
     } else if (this.state.transitionState === "out") {
       this.state.transitionRadius -= 25;
       if (this.state.transitionRadius <= 0) {
-        this.state.isFloorComplete = false;
-        this.initFloor(this.state.floor + 1);
-        this.state.transitionState = "in";
         this.state.transitionRadius = 0;
+        // ponytail: hold 1s of black between the outro and the new-floor intro
+        this.state.transitionDelayTimer = (this.state.transitionDelayTimer || 0) + 1;
+        if (this.state.transitionDelayTimer >= 60) {
+          this.state.isFloorComplete = false;
+          this.initFloor(this.state.floor + 1);
+          this.state.transitionState = "in";
+          this.state.transitionRadius = 0;
+          this.state.transitionDelayTimer = 0;
+        }
       }
       return; // Pause game while transitioning out
     }
@@ -3089,6 +3100,13 @@ export class GameEngine {
 
     this.state.camera.x += (targetX - this.state.camera.x) * 0.1;
     this.state.camera.y += (targetY - this.state.camera.y) * 0.1;
+
+    // ponytail: clamp camera to map so the zoomed descend doesn't reveal the black void
+    // beyond the floor edges (looked like the player was flung outside the map)
+    const halfW = this.canvasWidth / 2 / Math.max(1, this.state.camera.zoom);
+    const halfH = this.canvasHeight / 2 / Math.max(1, this.state.camera.zoom);
+    this.state.camera.x = Math.max(halfW, Math.min(this.state.width * TILE_SIZE - halfW, this.state.camera.x));
+    this.state.camera.y = Math.max(halfH, Math.min(this.state.height * TILE_SIZE - halfH, this.state.camera.y));
 
     let targetZoom = 1.0;
     if (this.state.gateEntered) {
@@ -5634,8 +5652,12 @@ export class GameEngine {
       }
     }
 
-    if (this.state.isFloorComplete) {
-      // Pan camera continuously across world generation pane behind card choices
+    const showCards =
+      this.state.isFloorComplete ||
+      this.state.transitionState === "cards_enter" ||
+      this.state.transitionState === "cards";
+    if (showCards) {
+      // Pan camera continuously across world generation pane behind player cards
       this.state.camera.x += 1.2;
 
       // 30% dark backdrop overlay (30% darkness when choosing cards)
@@ -5712,6 +5734,21 @@ export class GameEngine {
           ctx.strokeStyle = "#000";
           ctx.lineWidth = 6;
           ctx.strokeRect(cx - 3, cy - 3, cardWidth + 6, cardHeight + 6);
+        }
+
+        // Bounce + green pulse on the locked-in card
+        if (this.state.selectedUpgradeIndex === i && this.state.isFloorComplete) {
+          const t = this.state.selectedPulseTimer || 0;
+          const bounce = Math.abs(Math.sin(t / 8)) * 14;
+          const pulse = 0.55 + 0.45 * Math.sin(t / 6);
+          ctx.save();
+          ctx.translate(cx + cardWidth / 2, cy + cardHeight / 2);
+          ctx.scale(1 + pulse * 0.04, 1 + pulse * 0.04);
+          ctx.translate(-(cx + cardWidth / 2), -(cy - bounce + cardHeight / 2));
+          ctx.strokeStyle = `rgba(34, 197, 94, ${0.45 + 0.55 * pulse})`;
+          ctx.lineWidth = 6;
+          ctx.strokeRect(cx - 6, cy - 6, cardWidth + 12, cardHeight + 12);
+          ctx.restore();
         }
 
         // Title

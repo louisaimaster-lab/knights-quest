@@ -233,6 +233,7 @@ export interface GameState {
   gateEntered?: boolean;
   gateTimer?: number;
   transitionDelayTimer?: number;
+  selectedPulseTimer?: number;
   structureOverlayAlpha: number;
   timeScale: number;
   timeAccumulator?: number;
