@@ -683,8 +683,9 @@ export class GameEngine {
     } else if (this.state.transitionState === "out_to_cards") {
       this.state.transitionRadius -= 25;
       if (this.state.transitionRadius <= 0) {
-        this.state.transitionState = "cards_enter";
         this.state.transitionRadius = 0;
+        this.state.transitionDelayTimer = 0;
+        this.state.transitionState = "out_to_cards_delay";
         this.generateUpgrades();
         this.initCardBackground();
         if (typeof window !== "undefined") {
@@ -694,6 +695,13 @@ export class GameEngine {
             }),
           );
         }
+      }
+      return;
+    } else if (this.state.transitionState === "out_to_cards_delay") {
+      this.state.transitionDelayTimer = (this.state.transitionDelayTimer || 0) + 1;
+      if (this.state.transitionDelayTimer >= 45) {
+        this.state.transitionState = "cards_enter";
+        this.state.transitionRadius = 0;
       }
       return;
     } else if (this.state.transitionState === "cards_enter") {
