@@ -17,6 +17,7 @@ export default function Game() {
   const engineRef = useRef<GameEngine | null>(null);
   const [showInfo, setShowInfo] = useState(true);
   const [fps, setFps] = useState<number>(60);
+  const [hz, setHz] = useState<number>(60);
 
   const [appState, setAppState] = useState<"menu" | "selectSave" | "playing">(
     "menu",
@@ -259,6 +260,10 @@ export default function Game() {
     // Live refresh-rate (FPS) tracker variables
     let frameCount = 0;
     let lastFpsUpdateTime = performance.now();
+    // Estimate the display's true refresh rate from actual frame deltas (median of recent intervals)
+    const frameDeltas: number[] = [];
+    let lastDeltaTime = lastTime;
+    let hz = 60;
 
     const loop = (currentTime: number = performance.now()) => {
       let deltaTime = currentTime - lastTime;
@@ -282,10 +287,21 @@ export default function Game() {
 
       // Track the actual running refresh rate / FPS
       frameCount++;
+      // Estimate display refresh rate from recent frame intervals (median, robust to spikes)
+      const frameDelta = currentTime - lastDeltaTime;
+      lastDeltaTime = currentTime;
+      frameDeltas.push(frameDelta);
+      if (frameDeltas.length > 30) frameDeltas.shift();
+      if (frameDeltas.length >= 5) {
+        const sorted = [...frameDeltas].sort((a, b) => a - b);
+        const medianDelta = sorted[Math.floor(sorted.length / 2)];
+        if (medianDelta > 0) hz = Math.round(1000 / medianDelta);
+      }
       const elapsed = currentTime - lastFpsUpdateTime;
       if (elapsed >= 500) { // Update FPS counter every 500ms
         const calculatedFps = Math.round((frameCount * 1000) / elapsed);
         setFps(calculatedFps);
+        setHz(hz);
         frameCount = 0;
         lastFpsUpdateTime = currentTime;
       }
@@ -370,7 +386,7 @@ export default function Game() {
       )}
 
       <div className="absolute bottom-0 left-0 w-full flex justify-between text-[10px] opacity-75 px-4 pb-2 border-t border-[#7c4a1e] pt-2 bg-[#120d1a] z-20 font-bold tracking-widest pointer-events-none text-amber-200">
-        <span>FPS: {fps} // HZ: {fps} // LAT: 42.122 // SECURE CONNECTION</span>
+        <span>FPS: {fps} // HZ: {hz} // LAT: 42.122 // SECURE CONNECTION</span>
         <span>VER: 1.0.0-TERRARIA</span>
       </div>
 

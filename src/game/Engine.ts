@@ -5402,24 +5402,27 @@ export class GameEngine {
     if (!this.lightCanvas) {
       this.lightCanvas = document.createElement("canvas");
     }
+    // ponytail: half-res darkness canvas, scaled up on draw — ~4x cheaper, soft light hides the loss
+    const lw = Math.ceil(this.canvasWidth / 2);
+    const lh = Math.ceil(this.canvasHeight / 2);
     if (
-      this.lightCanvas.width !== this.canvasWidth ||
-      this.lightCanvas.height !== this.canvasHeight
+      this.lightCanvas.width !== lw ||
+      this.lightCanvas.height !== lh
     ) {
-      this.lightCanvas.width = this.canvasWidth;
-      this.lightCanvas.height = this.canvasHeight;
+      this.lightCanvas.width = lw;
+      this.lightCanvas.height = lh;
     }
     const lctx = this.lightCanvas.getContext("2d");
     if (lctx && !this.isMenuBackground && !this.state.isFloorComplete && this.state.transitionState !== "cards") {
-      lctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+      lctx.clearRect(0, 0, lw, lh);
       lctx.fillStyle = "rgba(0, 0, 0, 0.97)"; // Pitch black atmospheric cave darkness
-      lctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+      lctx.fillRect(0, 0, lw, lh);
 
       lctx.globalCompositeOperation = "destination-out";
       lctx.save();
-      lctx.translate(Math.round(this.canvasWidth / 2), Math.round(this.canvasHeight / 2));
+      lctx.translate(Math.round(lw / 2), Math.round(lh / 2));
+      lctx.scale(zoom * 0.5, zoom * 0.5);
       lctx.translate(-scaledCamX, -scaledCamY);
-      lctx.scale(zoom, zoom);
 
       const drawLight = (x: number, y: number, radius: number) => {
         const grad = lctx.createRadialGradient(x, y, radius * 0.15, x, y, radius);
@@ -5468,7 +5471,8 @@ export class GameEngine {
 
       ctx.save();
       ctx.resetTransform();
-      ctx.drawImage(this.lightCanvas, 0, 0);
+      ctx.imageSmoothingEnabled = true; // soft upscale for the darkness layer
+      ctx.drawImage(this.lightCanvas, 0, 0, this.canvasWidth, this.canvasHeight);
       ctx.restore();
     }
 
