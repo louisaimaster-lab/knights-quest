@@ -596,7 +596,9 @@ export class GameEngine {
       return;
     }
 
-    if (this.isMenuBackground) {
+    // ponytail: only idle-pan the menu bg when NOT mid-transition, so the
+    // transition state machine below keeps running into "cards"
+    if (this.isMenuBackground && this.state.transitionState === "none") {
       this.state.frameCounter++;
       const panSpeed = 0.6;
       this.state.camera.x += panSpeed;
@@ -5398,10 +5400,10 @@ export class GameEngine {
     }
 
     // Darkness overlay (using offscreen canvas)
-    // Noli too early-return for card selection: initCardBackground sets
-    // isMenuBackground while isFloorComplete=true, and we still must draw cards.
-    if (this.isMenuBackground && !this.state.isFloorComplete) {
-      ctx.restore(); // Restore main camera save state to prevent canvas matrix stack overflow!
+// Nolly: only early-return for the idle menu background when we are NOT
+    // mid-card transition — otherwise the intro ring and the cards never show.
+    if (this.isMenuBackground && !this.state.isFloorComplete && this.state.transitionState !== "cards_enter" && this.state.transitionState !== "cards" && this.state.transitionState !== "out") {
+      ctx.restore(); // Restore main camera save state to prevent canvas matrix stack overflow!!
       ctx.fillStyle = "rgba(9, 13, 22, 0.30)";
       ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
       return;
