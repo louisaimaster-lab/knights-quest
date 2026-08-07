@@ -685,7 +685,6 @@ export class GameEngine {
       if (this.state.transitionRadius <= 0) {
         this.state.transitionState = "cards_enter";
         this.state.transitionRadius = 0;
-        this.state.isFloorComplete = true;
         this.generateUpgrades();
         this.initCardBackground();
         if (typeof window !== "undefined") {
@@ -701,6 +700,7 @@ export class GameEngine {
       this.state.transitionRadius += 25;
       if (this.state.transitionRadius > this.canvasWidth + this.canvasHeight) {
         this.state.transitionState = "cards";
+        this.state.isFloorComplete = true;
       }
       return;
     } else if (this.state.transitionState === "out") {
