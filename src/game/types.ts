@@ -234,6 +234,8 @@ export interface GameState {
   gateTimer?: number;
   transitionDelayTimer?: number;
   selectedPulseTimer?: number;
+  introZoomTimer?: number;
+  panDirection?: number;
   structureOverlayAlpha: number;
   timeScale: number;
   timeAccumulator?: number;

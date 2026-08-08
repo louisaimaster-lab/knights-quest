@@ -120,7 +120,7 @@ export class GameEngine {
     this.state.height = gen.height;
     this.state.camera.x = Math.floor((gen.width * TILE_SIZE) / 2);
     this.state.camera.y = Math.floor((gen.height * TILE_SIZE) / 2);
-    this.state.camera.zoom = 1;
+    this.state.camera.zoom = 1.5; // ponytail: zoomed in more than the legacy 1.0
     this.state.enemies = [];
     this.state.particles = [];
     this.state.projectiles = [];
@@ -247,6 +247,8 @@ export class GameEngine {
       letterboxHeight: 0,
       selectedUpgradeIndex: -1,
       selectedPulseTimer: 0,
+      introZoomTimer: 0,
+      panDirection: 1,
     };
   }
 
@@ -288,10 +290,13 @@ export class GameEngine {
     this.state.player.isGrounded = true;
 
     // Reset camera zoom and timer states upon descending
-    this.state.camera.zoom = 1;
+    this.state.camera.zoom = 1.6; // ponytail: start zoomed in, ease out to 1.0 for the descend intro
+    this.state.camera.x = this.state.player.x + this.state.player.w / 2;
+    this.state.camera.y = this.state.player.y + this.state.player.h / 2;
     this.state.gateEntered = false;
     this.state.gateTimer = 0;
     this.state.frostTimer = 0;
+    this.state.introZoomTimer = 60;
 
     this.state.enemies = [];
     this.state.particles = [];
@@ -523,80 +528,107 @@ export class GameEngine {
         (this.state.mouse.y - this.canvasHeight / 2) / this.state.camera.zoom +
         this.state.camera.y;
 
-      // Handle Upgrade Clicks (320px x 460px)
-      if (this.state.mouse.clicked) {
-        const cardWidth = 320;
-        const cardHeight = 460;
-        const gap = 40;
-        const totalWidth = 3 * cardWidth + 2 * gap;
-        const startX = this.canvasWidth / 2 - totalWidth / 2;
-        const startY = this.canvasHeight / 2 - cardHeight / 2 + 30;
+      if (this.state.transitionState === "cards") {
+        // Handle Upgrade Clicks (320px x 460px)
+        if (this.state.mouse.clicked) {
+          const cardWidth = 320;
+          const cardHeight = 460;
+          const gap = 40;
+          const totalWidth = 3 * cardWidth + 2 * gap;
+          const startX = this.canvasWidth / 2 - totalWidth / 2;
+          const startY = this.canvasHeight / 2 - cardHeight / 2 + 30;
 
-        for (let i = 0; i < this.state.upgrades.length; i++) {
-          const u = this.state.upgrades[i];
-          const cx = startX + i * (cardWidth + gap);
-          const cy = startY;
+          for (let i = 0; i < this.state.upgrades.length; i++) {
+            const u = this.state.upgrades[i];
+            const cx = startX + i * (cardWidth + gap);
+            const cy = startY;
 
-          // SELECT button confirmation area
-          const selBtnW = 220;
-          const selBtnH = 52;
-          const selBtnX = this.canvasWidth / 2 - selBtnW / 2;
-          const selBtnY = this.canvasHeight / 2 - cardHeight / 2 + 30 + cardHeight + 18;
+            // SELECT button confirmation area
+            const selBtnW = 220;
+            const selBtnH = 52;
+            const selBtnX = this.canvasWidth / 2 - selBtnW / 2;
+            const selBtnY = this.canvasHeight / 2 - cardHeight / 2 + 30 + cardHeight + 18;
 
-          if (
-            this.state.mouse.x >= cx &&
-            this.state.mouse.x <= cx + cardWidth &&
-            this.state.mouse.y >= cy &&
-            this.state.mouse.y <= cy + cardHeight
-          ) {
-            // Clicking a card selects it (does not apply yet)
-            if (this.state.player.coins >= u.cost) {
-              this.state.selectedUpgradeIndex = i;
-            } else {
-              this.state.texts.push({
-                x: this.state.player.x + this.state.player.w / 2,
-                y: this.state.player.y - 15,
-                text: "Not enough coins!",
-                life: 60,
-                maxLife: 60
-              });
+            if (
+              this.state.mouse.x >= cx &&
+              this.state.mouse.x <= cx + cardWidth &&
+              this.state.mouse.y >= cy &&
+              this.state.mouse.y <= cy + cardHeight
+            ) {
+              // Clicking a card selects it (does not apply yet)
+              if (this.state.player.coins >= u.cost) {
+                this.state.selectedUpgradeIndex = i;
+              } else {
+                this.state.texts.push({
+                  x: this.state.player.x + this.state.player.w / 2,
+                  y: this.state.player.y - 15,
+                  text: "Not enough coins!",
+                  life: 60,
+                  maxLife: 60
+                });
+              }
+              this.state.mouse.clicked = false;
+              return;
             }
-            this.state.mouse.clicked = false;
-            return;
-          }
 
-          // Selected card + clicking SELECT applies it
-          if (
-            this.state.selectedUpgradeIndex === i &&
-            this.state.mouse.x >= selBtnX &&
-            this.state.mouse.x <= selBtnX + selBtnW &&
-            this.state.mouse.y >= selBtnY &&
-            this.state.mouse.y <= selBtnY + selBtnH
-          ) {
-            this.state.player.coins -= u.cost;
-            u.effect(this.state.player);
-            this.state.isFloorComplete = false;
-            this.isMenuBackground = false;
-            this.state.selectedUpgradeIndex = -1;
-            this.state.transitionState = "out";
-            this.state.transitionRadius = this.canvasWidth + this.canvasHeight;
-            this.state.mouse.clicked = false;
-            return;
+            // Selected card + clicking SELECT applies it
+            if (
+              this.state.selectedUpgradeIndex === i &&
+              this.state.mouse.x >= selBtnX &&
+              this.state.mouse.x <= selBtnX + selBtnW &&
+              this.state.mouse.y >= selBtnY &&
+              this.state.mouse.y <= selBtnY + selBtnH
+            ) {
+              this.state.player.coins -= u.cost;
+              u.effect(this.state.player);
+              // ponytail: keep the menu drawn until the outro ring fully closes
+              this.state.transitionState = "out";
+              this.state.transitionRadius = this.canvasWidth + this.canvasHeight;
+              this.state.transitionDelayTimer = 0;
+              this.state.selectedPulseTimer = 0;
+              this.state.mouse.clicked = false;
+              return;
+            }
           }
+        }
+
+        if (this.state.keys["Enter"]) {
+          // Enter skips (no card chosen) and descends
+          this.state.selectedUpgradeIndex = -1;
+          this.state.transitionState = "out";
+          this.state.transitionRadius = this.canvasWidth + this.canvasHeight;
+          this.state.transitionDelayTimer = 0;
+          this.state.selectedPulseTimer = 0;
+        }
+        this.state.mouse.clicked = false;
+        this.state.prevKeys = { ...this.state.keys };
+        return;
+      }
+
+      // Advance the green pulse while the card is locked in / outro plays
+      this.state.selectedPulseTimer = (this.state.selectedPulseTimer || 0) + 1;
+
+      // ponytail: card outro = brief hold on the selected card, then the ring
+      // closes over the menu, a beat of black, then the new floor's zoom intro
+      if (this.state.transitionState === "out") {
+        this.state.transitionDelayTimer = (this.state.transitionDelayTimer || 0) + 1;
+        if (this.state.transitionDelayTimer < 45) {
+          // hold: cards stay fully visible, green pulse plays on the locked card
+        } else if (this.state.transitionRadius > 0) {
+          this.state.transitionRadius -= 25;
+          if (this.state.transitionRadius <= 0) this.state.transitionRadius = 0;
+        } else if (this.state.transitionDelayTimer >= 45 + 60) {
+          this.state.isFloorComplete = false;
+          this.isMenuBackground = false;
+          this.state.selectedUpgradeIndex = -1;
+          this.initFloor(this.state.floor + 1);
+          this.state.transitionState = "in";
+          this.state.transitionRadius = 0;
+          this.state.transitionDelayTimer = 0;
         }
       }
 
-      if (this.state.keys["Enter"]) {
-        this.state.isFloorComplete = false;
-        this.state.selectedUpgradeIndex = -1;
-        this.state.transitionState = "out";
-        this.state.transitionRadius = this.canvasWidth + this.canvasHeight;
-      }
       this.state.mouse.clicked = false;
-      // Advance the bounce/pulse animation while a card is locked in
-      if (this.state.isFloorComplete) {
-        this.state.selectedPulseTimer = (this.state.selectedPulseTimer || 0) + 1;
-      }
       this.state.prevKeys = { ...this.state.keys };
       return;
     }
@@ -605,12 +637,7 @@ export class GameEngine {
     // transition state machine below keeps running into "cards"
     if (this.isMenuBackground && this.state.transitionState === "none") {
       this.state.frameCounter++;
-      const panSpeed = 0.6;
-      this.state.camera.x += panSpeed;
-      if (this.state.camera.x > (this.state.width * TILE_SIZE) - 400) {
-        this.state.camera.x = 200;
-      }
-      this.state.camera.y = (this.state.height * TILE_SIZE) / 2;
+      this.panMenuCamera(0.6);
       this.updateParticlesAndTexts();
       if (Math.random() < 0.3) {
         this.spawnParticles(
@@ -3094,6 +3121,22 @@ export class GameEngine {
     }
   }
 
+  // ponytail: pan the menu background camera left/right in a ping-pong loop,
+  // zoomed in more than the legacy version; clamped to the map bounds
+  panMenuCamera(speed: number) {
+    const minX = 200;
+    const maxX = this.state.width * TILE_SIZE - 200;
+    this.state.camera.x += speed * (this.state.panDirection || 1);
+    if (this.state.camera.x > maxX) {
+      this.state.camera.x = maxX;
+      this.state.panDirection = -1;
+    } else if (this.state.camera.x < minX) {
+      this.state.camera.x = minX;
+      this.state.panDirection = 1;
+    }
+    this.state.camera.y = (this.state.height * TILE_SIZE) / 2;
+  }
+
   updateCamera() {
     const targetX = this.state.player.x + this.state.player.w / 2;
     const targetY = this.state.player.y + this.state.player.h / 2;
@@ -3109,7 +3152,12 @@ export class GameEngine {
     this.state.camera.y = Math.max(halfH, Math.min(this.state.height * TILE_SIZE - halfH, this.state.camera.y));
 
     let targetZoom = 1.0;
-    if (this.state.gateEntered) {
+    if ((this.state.introZoomTimer || 0) > 0) {
+      this.state.introZoomTimer = (this.state.introZoomTimer || 0) - 1;
+      if (this.state.introZoomTimer === 0) {
+        this.state.camera.zoom = 1;
+      }
+    } else if (this.state.gateEntered) {
       targetZoom = 2.5; // Zoom in dramatically upon stepping on the exit gate
     }
     this.state.camera.zoom += (targetZoom - this.state.camera.zoom) * 0.08;
@@ -5422,7 +5470,9 @@ export class GameEngine {
     // mid-card transition — otherwise the intro ring and the cards never show.
     if (this.isMenuBackground && !this.state.isFloorComplete && this.state.transitionState !== "cards_enter" && this.state.transitionState !== "cards" && this.state.transitionState !== "out") {
       ctx.restore(); // Restore main camera save state to prevent canvas matrix stack overflow!!
-      ctx.fillStyle = "rgba(9, 13, 22, 0.30)";
+      // ponytail: the hold between the descend outro and the cards must be pure
+      // black (not a dimmed cave) so the frame matches the dark screen
+      ctx.fillStyle = this.state.transitionState === "out_to_cards_delay" ? "#000" : "rgba(9, 13, 22, 0.30)";
       ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
       return;
     }
@@ -5655,10 +5705,11 @@ export class GameEngine {
     const showCards =
       this.state.isFloorComplete ||
       this.state.transitionState === "cards_enter" ||
-      this.state.transitionState === "cards";
+      this.state.transitionState === "cards" ||
+      this.state.transitionState === "out";
     if (showCards) {
-      // Pan camera continuously across world generation pane behind player cards
-      this.state.camera.x += 1.2;
+      // Pan camera across the world generation pane behind the player cards
+      this.panMenuCamera(1.2);
 
       // 30% dark backdrop overlay (30% darkness when choosing cards)
       ctx.fillStyle = "rgba(0, 0, 0, 0.30)";
@@ -5729,25 +5780,27 @@ export class GameEngine {
         ctx.fillRect(cx, cy, cardWidth, cardHeight);
         ctx.strokeRect(cx, cy, cardWidth, cardHeight);
 
-        // Darker outline on the selected card
+        // Selected card keeps its own card-color border (not black)
         if (this.state.selectedUpgradeIndex === i) {
-          ctx.strokeStyle = "#000";
-          ctx.lineWidth = 6;
-          ctx.strokeRect(cx - 3, cy - 3, cardWidth + 6, cardHeight + 6);
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = 5;
+          ctx.shadowColor = strokeColor;
+          ctx.shadowBlur = 16;
+          ctx.strokeRect(cx - 4, cy - 4, cardWidth + 8, cardHeight + 8);
+          ctx.shadowBlur = 0;
         }
 
-        // Bounce + green pulse on the locked-in card
-        if (this.state.selectedUpgradeIndex === i && this.state.isFloorComplete) {
+        // Green lock-in pulse plays ONLY while the outro closes (card locked/confirmed)
+        if (this.state.selectedUpgradeIndex === i && this.state.transitionState === "out") {
           const t = this.state.selectedPulseTimer || 0;
-          const bounce = Math.abs(Math.sin(t / 8)) * 14;
           const pulse = 0.55 + 0.45 * Math.sin(t / 6);
           ctx.save();
           ctx.translate(cx + cardWidth / 2, cy + cardHeight / 2);
-          ctx.scale(1 + pulse * 0.04, 1 + pulse * 0.04);
-          ctx.translate(-(cx + cardWidth / 2), -(cy - bounce + cardHeight / 2));
-          ctx.strokeStyle = `rgba(34, 197, 94, ${0.45 + 0.55 * pulse})`;
-          ctx.lineWidth = 6;
-          ctx.strokeRect(cx - 6, cy - 6, cardWidth + 12, cardHeight + 12);
+          ctx.scale(1 + pulse * 0.03, 1 + pulse * 0.03);
+          ctx.translate(-(cx + cardWidth / 2), -(cy + cardHeight / 2));
+          ctx.strokeStyle = `rgba(34, 197, 94, ${0.5 + 0.5 * pulse})`;
+          ctx.lineWidth = 7;
+          ctx.strokeRect(cx - 7, cy - 7, cardWidth + 14, cardHeight + 14);
           ctx.restore();
         }
 
@@ -5817,7 +5870,7 @@ export class GameEngine {
       this.state.transitionState !== "none" &&
       this.state.transitionState !== "cards"
     ) {
-      ctx.fillStyle = "#111";
+      ctx.fillStyle = "#000";
       const r = Math.max(0, this.state.transitionRadius);
       const pxSize = 32;
       for (let y = 0; y < this.canvasHeight; y += pxSize) {
