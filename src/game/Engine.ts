@@ -289,7 +289,7 @@ export class GameEngine {
     this.state.player.vy = 0;
     this.state.player.isGrounded = true;
 
-    // Reset camera zoom and timer states upon descending
+// Reset camera zoom and timer states upon descending
     this.state.camera.zoom = 1.6; // ponytail: start zoomed in, ease out to 1.0 for the descend intro
     this.state.camera.x = this.state.player.x + this.state.player.w / 2;
     this.state.camera.y = this.state.player.y + this.state.player.h / 2;
@@ -3144,12 +3144,19 @@ export class GameEngine {
     this.state.camera.x += (targetX - this.state.camera.x) * 0.1;
     this.state.camera.y += (targetY - this.state.camera.y) * 0.1;
 
-    // ponytail: clamp camera to map so the zoomed descend doesn't reveal the black void
-    // beyond the floor edges (looked like the player was flung outside the map)
-    const halfW = this.canvasWidth / 2 / Math.max(1, this.state.camera.zoom);
-    const halfH = this.canvasHeight / 2 / Math.max(1, this.state.camera.zoom);
-    this.state.camera.x = Math.max(halfW, Math.min(this.state.width * TILE_SIZE - halfW, this.state.camera.x));
-    this.state.camera.y = Math.max(halfH, Math.min(this.state.height * TILE_SIZE - halfH, this.state.camera.y));
+    // ponytail: keep the camera glued to the player. Clamp to the map edges only
+    // when the map is wider than the viewport; otherwise (map fits onscreen) never
+    // fight the player — otherwise the camera pins to the map center and loses X.
+    const halfW = this.canvasWidth / 2 / this.state.camera.zoom;
+    const halfH = this.canvasHeight / 2 / this.state.camera.zoom;
+    const mapW = this.state.width * TILE_SIZE;
+    const mapH = this.state.height * TILE_SIZE;
+    if (mapW >= 2 * halfW) {
+      this.state.camera.x = Math.max(halfW, Math.min(mapW - halfW, this.state.camera.x));
+    }
+    if (mapH >= 2 * halfH) {
+      this.state.camera.y = Math.max(halfH, Math.min(mapH - halfH, this.state.camera.y));
+    }
 
     let targetZoom = 1.0;
     if ((this.state.introZoomTimer || 0) > 0) {
