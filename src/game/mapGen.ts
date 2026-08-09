@@ -76,9 +76,9 @@ export function generateCave(floor: number, maxFloor: number) {
       biome = 'volcanic';
   }
 
-  // Expanded cave map scale 2x (length & height doubled)
-  const width = Math.floor(Math.min(24 + floor * 2, 48) * 1.8 * 3);
-  const height = Math.floor(Math.min(80 + floor * 10, 180) * 1.45 * 3);
+  // Expanded cave map scale by 1.5x
+  const width = Math.floor(Math.min(24 + floor * 2, 48) * 1.8 * 1.5);
+  const height = Math.floor(Math.min(80 + floor * 10, 180) * 1.45 * 1.5);
   
   // 1 = solid wall, 0 = empty, 2 = exit, 3 = diamond, 4 = ladder, 5 = platform
   let map = Array(height).fill(0).map(() => Array(width).fill(1));
