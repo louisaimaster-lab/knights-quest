@@ -30,6 +30,7 @@ export class GameEngine {
   state: GameState;
   ctx: CanvasRenderingContext2D | null = null;
   lightCanvas?: HTMLCanvasElement;
+  lightSprite?: HTMLCanvasElement;
   canvasWidth = 800;
   canvasHeight = 600;
   isMenuBackground = false;
@@ -5487,6 +5488,23 @@ export class GameEngine {
     if (!this.lightCanvas) {
       this.lightCanvas = document.createElement("canvas");
     }
+    if (!this.lightSprite) {
+      // ponytail: one white radial-gradient sprite reused for every light.
+      // stops mirror the old per-light gradient (bright core at 15%, fade to 0).
+      const s = document.createElement("canvas");
+      s.width = 128;
+      s.height = 128;
+      const sc = s.getContext("2d");
+      if (sc) {
+        const g = sc.createRadialGradient(64, 64, 64 * 0.15, 64, 64, 64);
+        g.addColorStop(0, "rgba(255,255,255,1)");
+        g.addColorStop(0.5, "rgba(255,255,255,0.7)");
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        sc.fillStyle = g;
+        sc.fillRect(0, 0, 128, 128);
+      }
+      this.lightSprite = s;
+    }
     // ponytail: half-res darkness canvas, scaled up on draw — ~4x cheaper, soft light hides the loss
     const lw = Math.ceil(this.canvasWidth / 2);
     const lh = Math.ceil(this.canvasHeight / 2);
@@ -5514,14 +5532,11 @@ export class GameEngine {
       lctx.translate(-this.state.camera.x, -this.state.camera.y);
 
       const drawLight = (x: number, y: number, radius: number) => {
-        const grad = lctx.createRadialGradient(x, y, radius * 0.15, x, y, radius);
-        grad.addColorStop(0, "rgba(255,255,255,1)");
-        grad.addColorStop(0.5, "rgba(255,255,255,0.7)");
-        grad.addColorStop(1, "rgba(255,255,255,0)");
-        lctx.fillStyle = grad;
-        lctx.beginPath();
-        lctx.arc(x, y, radius, 0, Math.PI * 2);
-        lctx.fill();
+        // ponytail: pre-rendered radial-gradient sprite, drawImage-scaled per light.
+        // createRadialGradient+arc+fill for every torch/lava tile per frame was the
+        // FPS killer after doubling the caves. The sprite is identical to the old
+        // gradient (stops 0/0.5/1) since scaling preserves the gradient shape.
+        lctx.drawImage(this.lightSprite, x - radius, y - radius, radius * 2, radius * 2);
       };
 
       // Draw Player light (higher radius if holding torch)
@@ -5801,20 +5816,6 @@ export class GameEngine {
           ctx.shadowBlur = 0;
         }
 
-        // Green lock-in pulse plays ONLY while the outro closes (card locked/confirmed)
-        if (this.state.selectedUpgradeIndex === i && this.state.transitionState === "out") {
-          const t = this.state.selectedPulseTimer || 0;
-          const pulse = 0.55 + 0.45 * Math.sin(t / 6);
-          ctx.save();
-          ctx.translate(cx + cardWidth / 2, cy + cardHeight / 2);
-          ctx.scale(1 + pulse * 0.03, 1 + pulse * 0.03);
-          ctx.translate(-(cx + cardWidth / 2), -(cy + cardHeight / 2));
-          ctx.strokeStyle = `rgba(34, 197, 94, ${0.5 + 0.5 * pulse})`;
-          ctx.lineWidth = 7;
-          ctx.strokeRect(cx - 7, cy - 7, cardWidth + 14, cardHeight + 14);
-          ctx.restore();
-        }
-
         // Title
         ctx.textAlign = "center";
         ctx.font = "bold 26px 'Courier New', Courier, monospace";
@@ -5875,6 +5876,21 @@ export class GameEngine {
       ctx.font = "bold 22px 'Courier New', Courier, monospace";
       ctx.textAlign = "center";
       ctx.fillText(hasSelection ? "SELECT UPGRADE" : "SELECT A CARD", selBtnX + selBtnW / 2, selBtnY + 34);
+    }
+
+    // Green pulsing screen-edge border on card lock-in OR skip (agent-select style)
+    if (this.state.transitionState === "out") {
+      const t = this.state.selectedPulseTimer || 0;
+      const pulse = 0.5 + 0.5 * Math.sin(t / 6);
+      const inset = 20 + pulse * 120;
+      const alpha = 0.25 + 0.35 * pulse;
+      ctx.save();
+      ctx.fillStyle = `rgba(34, 197, 94, ${alpha.toFixed(3)})`;
+      ctx.fillRect(0, 0, this.canvasWidth, inset);
+      ctx.fillRect(0, this.canvasHeight - inset, this.canvasWidth, inset);
+      ctx.fillRect(0, 0, inset, this.canvasHeight);
+      ctx.fillRect(this.canvasWidth - inset, 0, inset, this.canvasHeight);
+      ctx.restore();
     }
 
     if (
