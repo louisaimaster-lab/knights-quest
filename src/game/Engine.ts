@@ -5507,11 +5507,7 @@ export class GameEngine {
       lctx.save();
       lctx.translate(Math.round(lw / 2), Math.round(lh / 2));
       lctx.scale(zoom * 0.5, zoom * 0.5);
-      // ponytail: this translate is applied BEFORE the scale above, so it must be
-      // raw world units (camera.x/y), NOT scaledCamX (camera * zoom). Using the
-      // scaled value threw the whole light field off by camera*(zoom-1) at any
-      // zoom > 1 — huge misalignment during the 1.6 intro zoom.
-      lctx.translate(-this.state.camera.x, -this.state.camera.y);
+      lctx.translate(-scaledCamX, -scaledCamY);
 
       const drawLight = (x: number, y: number, radius: number) => {
         const grad = lctx.createRadialGradient(x, y, radius * 0.15, x, y, radius);
