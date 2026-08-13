@@ -30,6 +30,8 @@ export class GameEngine {
   state: GameState;
   ctx: CanvasRenderingContext2D | null = null;
   lightCanvas?: HTMLCanvasElement;
+  staticLightCanvas?: HTMLCanvasElement;
+  staticLightKey = "";
   canvasWidth = 800;
   canvasHeight = 600;
   isMenuBackground = false;
@@ -254,6 +256,7 @@ export class GameEngine {
 
   initFloor(floor: number) {
     this.isMenuBackground = false;
+    this.staticLightKey = ""; // force a re-bake of the static light layer for the new map
     const gen = generateCave(floor, this.state.maxFloor);
 
     // Immediate start
@@ -5499,17 +5502,107 @@ export class GameEngine {
     }
     const lctx = this.lightCanvas.getContext("2d");
     if (lctx && !this.isMenuBackground && !this.state.isFloorComplete && this.state.transitionState !== "cards") {
+      // ponytail: static lights (torches/lava/exit) never move in world space, so bake
+      // them once into a padded half-res canvas and re-bake only when the camera crosses
+      // a tile boundary / zoom bucket / floor / diamond-state changes. Player light is
+      // the only dynamic one, drawn per-frame. This killed the per-frame gradient flood
+      // that tanked FPS after the 2x caves.
+      const PAD = 48; // px; covers max sub-tile blit shift = TILE*zoom*0.5 (40px at gate zoom 2.5)
+      const camBakeX = Math.floor(this.state.camera.x / TILE_SIZE) * TILE_SIZE;
+      const camBakeY = Math.floor(this.state.camera.y / TILE_SIZE) * TILE_SIZE;
+      const zoomBucket = Math.round(zoom * 50);
+      const key = `${camBakeX},${camBakeY},${zoomBucket},${this.state.floor},${this.state.biome},${p.hasDiamond}`;
+      const slw = lw + 2 * PAD;
+      const slh = lh + 2 * PAD;
+
+      if (!this.staticLightCanvas) {
+        this.staticLightCanvas = document.createElement("canvas");
+        this.staticLightCanvas.width = slw;
+        this.staticLightCanvas.height = slh;
+      } else if (this.staticLightCanvas.width !== slw || this.staticLightCanvas.height !== slh) {
+        this.staticLightCanvas.width = slw;
+        this.staticLightCanvas.height = slh;
+        this.staticLightKey = "";
+      }
+
+      if (this.staticLightKey !== key) {
+        this.staticLightKey = key;
+        const sctx = this.staticLightCanvas.getContext("2d");
+        if (sctx) {
+          sctx.clearRect(0, 0, slw, slh);
+          sctx.save();
+          sctx.translate(lw / 2 + PAD, lh / 2 + PAD);
+          sctx.scale(zoom * 0.5, zoom * 0.5);
+          // ponytail: translate applied BEFORE the scale, so it must be raw world
+          // camera units (camBake), NOT camera*zoom — the pre-scale translate gets
+          // scaled again, double-counting zoom otherwise.
+          sctx.translate(-camBakeX, -camBakeY);
+
+          const drawStaticLight = (x: number, y: number, radius: number) => {
+            const grad = sctx.createRadialGradient(x, y, radius * 0.15, x, y, radius);
+            grad.addColorStop(0, "rgba(255,255,255,1)");
+            grad.addColorStop(0.5, "rgba(255,255,255,0.7)");
+            grad.addColorStop(1, "rgba(255,255,255,0)");
+            sctx.fillStyle = grad;
+            sctx.beginPath();
+            sctx.arc(x, y, radius, 0, Math.PI * 2);
+            sctx.fill();
+          };
+
+          // Bake Torches + lava for the tile window around the baked camera
+          const startColLight = Math.max(0, Math.floor((camBakeX - this.canvasWidth / 2 / zoom - 300) / TILE_SIZE));
+          const endColLight = Math.min(this.state.width, Math.ceil((camBakeX + this.canvasWidth / 2 / zoom + 300) / TILE_SIZE));
+          const startRowLight = Math.max(0, Math.floor((camBakeY - this.canvasHeight / 2 / zoom - 300) / TILE_SIZE));
+          const endRowLight = Math.min(this.state.height, Math.ceil((camBakeY + this.canvasHeight / 2 / zoom + 300) / TILE_SIZE));
+
+          for (let y = startRowLight; y < endRowLight; y++) {
+            for (let x = startColLight; x < endColLight; x++) {
+              const tile = this.state.map[y] && this.state.map[y][x];
+              if (tile === 10) {
+                drawStaticLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 204);
+              } else if (tile === 12) {
+                drawStaticLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 171);
+              } else if (this.state.biome === "volcanic" && tile === 21) {
+                // Lava self-glow: molten rock emits light into the dark around it
+                drawStaticLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 165);
+              }
+            }
+          }
+
+          // Bake exit/boss room light
+          if (this.state.floor < this.state.maxFloor && this.state.endPos.x >= startColLight && this.state.endPos.x < endColLight && this.state.endPos.y >= startRowLight && this.state.endPos.y < endRowLight) {
+            drawStaticLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 237);
+          } else if (this.state.floor === this.state.maxFloor && !p.hasDiamond && this.state.endPos.x >= startColLight && this.state.endPos.x < endColLight && this.state.endPos.y >= startRowLight && this.state.endPos.y < endRowLight) {
+            drawStaticLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 210);
+          }
+
+          sctx.restore();
+        }
+      }
+
       lctx.clearRect(0, 0, lw, lh);
       lctx.fillStyle = "rgba(0, 0, 0, 0.97)"; // Pitch black atmospheric cave darkness
       lctx.fillRect(0, 0, lw, lh);
 
       lctx.globalCompositeOperation = "destination-out";
+      // Blit the baked static layer shifted to the current (sub-tile) camera position
+      // static canvas maps p -> lw/2+PAD+z/2*(p-camBake); desired is lw/2+z/2*(p-camera)
+      // => offset = z/2*(camBake-camera) - PAD
+      const dx = (camBakeX - this.state.camera.x) * zoom * 0.5 - PAD;
+      const dy = (camBakeY - this.state.camera.y) * zoom * 0.5 - PAD;
+      lctx.drawImage(this.staticLightCanvas, dx, dy);
+
+      // Player light is dynamic — draw it live with the correct world transform
       lctx.save();
       lctx.translate(Math.round(lw / 2), Math.round(lh / 2));
       lctx.scale(zoom * 0.5, zoom * 0.5);
-      lctx.translate(-scaledCamX, -scaledCamY);
+      // ponytail: this translate is applied BEFORE the scale above, so it must be
+      // raw world units (camera.x/y), NOT scaledCamX (camera * zoom). Using the
+      // scaled value threw the whole light field off by camera*(zoom-1) at any
+      // zoom > 1 — huge misalignment during the 1.6 intro zoom.
+      lctx.translate(-this.state.camera.x, -this.state.camera.y);
 
-      const drawLight = (x: number, y: number, radius: number) => {
+      const drawPlayerLight = (x: number, y: number, radius: number) => {
         const grad = lctx.createRadialGradient(x, y, radius * 0.15, x, y, radius);
         grad.addColorStop(0, "rgba(255,255,255,1)");
         grad.addColorStop(0.5, "rgba(255,255,255,0.7)");
@@ -5519,37 +5612,8 @@ export class GameEngine {
         lctx.arc(x, y, radius, 0, Math.PI * 2);
         lctx.fill();
       };
-
-      // Draw Player light (higher radius if holding torch)
       const pLightRad = (p.weapon === 'torch' && p.weaponEquipped) ? 330.0 : 175.5;
-      drawLight(p.x + p.w / 2, p.y + p.h / 2, pLightRad);
-
-      // Draw Torches light
-      const startColLight = Math.max(0, Math.floor((this.state.camera.x - this.canvasWidth / 2 / zoom - 300) / TILE_SIZE));
-      const endColLight = Math.min(this.state.width, Math.ceil((this.state.camera.x + this.canvasWidth / 2 / zoom + 300) / TILE_SIZE));
-      const startRowLight = Math.max(0, Math.floor((this.state.camera.y - this.canvasHeight / 2 / zoom - 300) / TILE_SIZE));
-      const endRowLight = Math.min(this.state.height, Math.ceil((this.state.camera.y + this.canvasHeight / 2 / zoom + 300) / TILE_SIZE));
-
-      for (let y = startRowLight; y < endRowLight; y++) {
-        for (let x = startColLight; x < endColLight; x++) {
-          const tile = this.state.map[y] && this.state.map[y][x];
-          if (tile === 10) {
-            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 204);
-          } else if (tile === 12) {
-            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 171);
-          } else if (this.state.biome === "volcanic" && tile === 21) {
-            // Lava self-glow: molten rock emits light into the dark around it
-            drawLight(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 165);
-          }
-        }
-      }
-
-      // Draw exit/boss room light
-      if (this.state.floor < this.state.maxFloor && this.state.endPos.x >= startColLight && this.state.endPos.x < endColLight && this.state.endPos.y >= startRowLight && this.state.endPos.y < endRowLight) {
-        drawLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 237);
-      } else if (this.state.floor === this.state.maxFloor && !p.hasDiamond && this.state.endPos.x >= startColLight && this.state.endPos.x < endColLight && this.state.endPos.y >= startRowLight && this.state.endPos.y < endRowLight) {
-        drawLight(this.state.endPos.x * TILE_SIZE + TILE_SIZE / 2, this.state.endPos.y * TILE_SIZE + TILE_SIZE / 2, 210);
-      }
+      drawPlayerLight(p.x + p.w / 2, p.y + p.h / 2, pLightRad);
 
       lctx.restore();
       lctx.globalCompositeOperation = "source-over";
