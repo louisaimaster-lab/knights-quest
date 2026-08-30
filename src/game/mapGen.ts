@@ -856,36 +856,71 @@ export function generateCave(floor: number, maxFloor: number) {
       }
   }
 
-  // 1% Chance for Legendary Castle Structure in Ice Pathways or Volcanic Caverns
-  if ((biome === 'ice' || biome === 'volcanic') && Math.random() < 0.01) {
-      const castleW = 22;
-      const castleH = 14;
-      const castleX = Math.floor(width / 2 - castleW / 2);
-      const castleY = Math.floor(height / 2 - castleH / 2);
-      const brickTile = biome === 'ice' ? 16 : 20;
+  // 1.5% Chance for Rare Biome Structure: Molten Forge (Volcanic) or Ice Citadel (Ice)
+  let rareStructure: { x: number; y: number; w: number; h: number; type: string } | null = null;
+  if (biome === 'volcanic' && Math.random() < 0.015) {
+      const structW = 24;
+      const structH = 14;
+      const structX = Math.floor(width / 2 - structW / 2);
+      const structY = Math.floor(height / 2 - structH / 2);
 
-      // Carve out 2x size Castle interior and build themed brick walls
-      for (let cy = castleY; cy < castleY + castleH; cy++) {
-          for (let cx = castleX; cx < castleX + castleW; cx++) {
-              if (cy === castleY || cy === castleY + castleH - 1 || cx === castleX || cx === castleX + castleW - 1) {
-                  map[cy][cx] = brickTile;
+      // Carve out Molten Forge interior with Basalt (19) and Heated Magma (20)
+      for (let cy = structY; cy < structY + structH; cy++) {
+          for (let cx = structX; cx < structX + structW; cx++) {
+              if (cy === structY || cy === structY + structH - 1 || cx === structX || cx === structX + structW - 1) {
+                  map[cy][cx] = (cx + cy) % 2 === 0 ? 19 : 20; // Basalt & Magma alternating masonry
               } else {
                   map[cy][cx] = 0; // Empty interior
-                  bgMap[cy][cx] = 9; // Wood background
+                  bgMap[cy][cx] = 9; // Dark structure backdrop
               }
           }
       }
 
-      // Add Legendary Castle Chest
-      const chestWeapon = biome === 'ice' ? 'frozen_sword' : 'molten_axe';
-      const chestX = castleX + Math.floor(castleW / 2);
-      const chestY = castleY + castleH - 2;
+      // Interior altar & glowing torches
+      const midX = structX + Math.floor(structW / 2);
+      map[structY + structH - 2][midX - 1] = 20;
+      map[structY + structH - 2][midX] = 20;
+      map[structY + structH - 2][midX + 1] = 20;
+      map[structY + 2][structX + 3] = 10;
+      map[structY + 2][structX + structW - 4] = 10;
+
+      // Add Legendary Molten Chest with Molten Axe
+      chests.push({
+          x: midX,
+          y: structY + structH - 3,
+          weapon: 'molten_axe',
+          isCastleChest: true
+      });
+
+      rareStructure = { x: structX, y: structY, w: structW, h: structH, type: 'molten_forge' };
+  } else if (biome === 'ice' && Math.random() < 0.015) {
+      const structW = 22;
+      const structH = 14;
+      const structX = Math.floor(width / 2 - structW / 2);
+      const structY = Math.floor(height / 2 - structH / 2);
+      const brickTile = 16;
+
+      for (let cy = structY; cy < structY + structH; cy++) {
+          for (let cx = structX; cx < structX + structW; cx++) {
+              if (cy === structY || cy === structY + structH - 1 || cx === structX || cx === structX + structW - 1) {
+                  map[cy][cx] = brickTile;
+              } else {
+                  map[cy][cx] = 0;
+                  bgMap[cy][cx] = 9;
+              }
+          }
+      }
+
+      const chestX = structX + Math.floor(structW / 2);
+      const chestY = structY + structH - 2;
       chests.push({
           x: chestX,
           y: chestY,
-          weapon: chestWeapon,
+          weapon: 'frozen_sword',
           isCastleChest: true
       });
+
+      rareStructure = { x: structX, y: structY, w: structW, h: structH, type: 'ice_citadel' };
   }
 
   // Descend gate rule: endPos CANNOT spawn inside lava (tile 21) AND MUST spawn on top of solid ground in the lower 30% of the cave
@@ -953,6 +988,6 @@ export function generateCave(floor: number, maxFloor: number) {
       }
   }
 
-  return { width, height, map, bgMap, openSpaces, startPos, endPos, biome, chests };
+  return { width, height, map, bgMap, openSpaces, startPos, endPos, biome, chests, rareStructure };
 }
 

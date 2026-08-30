@@ -1,7 +1,7 @@
 @echo off
-echo ==============================================
-echo  Knight's Quest - Auto Sync to GitHub & Vercel
-echo ==============================================
+echo ========================================================
+echo  Knight's Quest - Auto Sync to GitHub & Cloudflare Pages
+echo ========================================================
 echo.
 
 echo [1/3] Staging changes...
@@ -21,6 +21,6 @@ echo [3/3] Pushing to GitHub...
 git push origin main
 
 echo.
-echo ==============================================
-echo  Sync Complete! Vercel is now auto-deploying.
-echo ==============================================
+echo ========================================================
+echo  Sync Complete! Cloudflare Pages is now auto-deploying.
+echo ========================================================

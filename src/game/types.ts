@@ -22,7 +22,7 @@ export interface Entity extends Rect {
   onLadder: boolean;
 }
 
-export type WeaponType = 'sword' | 'bow' | 'colossal_sword' | 'dual_daggers' | 'mace' | 'battle_axe' | 'torch' | 'health_potion' | 'speed_potion' | 'bomb' | 'shield' | 'frozen_sword' | 'molten_axe';
+export type WeaponType = 'sword' | 'bow' | 'colossal_sword' | 'dual_daggers' | 'mace' | 'battle_axe' | 'torch' | 'health_potion' | 'speed_potion' | 'bomb' | 'shield' | 'frozen_sword' | 'molten_axe' | 'lava_flask' | 'magma_orb';
 export type SuperAbilityType = 'malevolence' | 'impenetrable' | 'supersonic' | 'pulsar' | 'supernova';
 
 export interface Afterimage {
@@ -67,6 +67,7 @@ export interface Player extends Entity {
   burnPulse: number;
   slownessTimer: number;
   redFlashTimer: number;
+  fireImmunityTimer: number;
   oxygen: number;
   maxOxygen: number;
   hasWaterResistance?: boolean;

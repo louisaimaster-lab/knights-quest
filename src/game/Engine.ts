@@ -179,6 +179,7 @@ export class GameEngine {
         burnPulse: 0,
         slownessTimer: 0,
         redFlashTimer: 0,
+        fireImmunityTimer: 0,
         oxygen: 100,
         maxOxygen: 100,
         hasWaterResistance: false,
@@ -301,6 +302,7 @@ export class GameEngine {
     this.state.frostTimer = 0;
     this.state.introZoomTimer = 60;
 
+    this.state.player.fireImmunityTimer = 0;
     this.state.enemies = [];
     this.state.particles = [];
     this.state.projectiles = [];
@@ -313,10 +315,16 @@ export class GameEngine {
       if (c.weapon) {
         chestItem = c.weapon as WeaponType;
       } else if (Math.random() < 0.55) {
-        const itemPool: WeaponType[] = ['torch', 'health_potion', 'speed_potion', 'bomb', 'shield'];
+        const itemPool: WeaponType[] = this.state.biome === "volcanic" 
+          ? ['lava_flask', 'magma_orb', 'torch', 'health_potion', 'speed_potion', 'bomb', 'shield']
+          : ['torch', 'health_potion', 'speed_potion', 'bomb', 'shield'];
         chestItem = itemPool[Math.floor(Math.random() * itemPool.length)];
       } else {
-        const weaponPool: WeaponType[] = ['sword', 'bow', 'colossal_sword', 'dual_daggers', 'mace', 'battle_axe'];
+        const weaponPool: WeaponType[] = this.state.biome === "volcanic"
+          ? ['molten_axe', 'sword', 'bow', 'colossal_sword', 'dual_daggers', 'mace', 'battle_axe']
+          : (this.state.biome === "ice"
+            ? ['frozen_sword', 'sword', 'bow', 'colossal_sword', 'dual_daggers', 'mace', 'battle_axe']
+            : ['sword', 'bow', 'colossal_sword', 'dual_daggers', 'mace', 'battle_axe']);
         chestItem = weaponPool[Math.floor(Math.random() * weaponPool.length)];
       }
       return {
@@ -410,6 +418,49 @@ export class GameEngine {
       });
     }
 
+    // Spawn Rare Structure Guardian
+    if (gen.rareStructure) {
+      if (gen.rareStructure.type === 'molten_forge') {
+        this.state.enemies.push({
+          id: `inferno_knight_${Math.random()}`,
+          type: "inferno_knight",
+          x: (gen.rareStructure.x + 6) * TILE_SIZE,
+          y: (gen.rareStructure.y + gen.rareStructure.h - 3) * TILE_SIZE,
+          w: 24,
+          h: 24,
+          vx: 0,
+          vy: 0,
+          health: 120,
+          maxHealth: 120,
+          facingRight: false,
+          isGrounded: true,
+          invulnerableTimer: 0,
+          stateTimer: 0,
+          onLadder: false,
+          aiState: "idle",
+        });
+      } else if (gen.rareStructure.type === 'ice_citadel') {
+        this.state.enemies.push({
+          id: `frost_knight_${Math.random()}`,
+          type: "frost_knight",
+          x: (gen.rareStructure.x + 6) * TILE_SIZE,
+          y: (gen.rareStructure.y + gen.rareStructure.h - 3) * TILE_SIZE,
+          w: 24,
+          h: 24,
+          vx: 0,
+          vy: 0,
+          health: 100,
+          maxHealth: 100,
+          facingRight: false,
+          isGrounded: true,
+          invulnerableTimer: 0,
+          stateTimer: 0,
+          onLadder: false,
+          aiState: "idle",
+        });
+      }
+    }
+
     if (this.state.biome === "moss") {
       for (let y = 1; y < this.state.height; y++) {
         for (let x = 1; x < this.state.width; x++) {
@@ -443,7 +494,7 @@ export class GameEngine {
       // Lava monsters walk on lava surfaces
       for (let y = 1; y < this.state.height; y++) {
         for (let x = 1; x < this.state.width; x++) {
-          if (this.state.map[y][x] === 21 && Math.random() < 0.05) {
+          if (this.state.map[y][x] === 21 && Math.random() < 0.06) {
             this.state.enemies.push({
               id: `lava_monster_${Math.random()}`,
               type: "lava_monster",
@@ -467,23 +518,18 @@ export class GameEngine {
         }
       }
 
-      // Lava spiders hang from structure ceilings (max 3 per floor)
+      // Lava spiders hang from structure ceilings or cavern roofs (max 4 per floor)
       let spiderCount = 0;
-      for (let y = 0; y < this.state.height; y++) {
-        for (let x = 0; x < this.state.width; x++) {
-          const hasCeiling = this.state.map[y - 1] && this.state.map[y - 1][x] === 11;
-          if (
-            this.state.bgMap[y] &&
-            this.state.bgMap[y][x] === 9 &&
-            this.state.map[y][x] === 0 &&
-            hasCeiling &&
-            Math.random() < 0.7
-          ) {
+      for (let y = 1; y < this.state.height - 2; y++) {
+        for (let x = 1; x < this.state.width - 1; x++) {
+          const solidAbove = this.state.map[y - 1] && (this.state.map[y - 1][x] === 11 || this.state.map[y - 1][x] === 19 || this.state.map[y - 1][x] === 20);
+          const isOpen = this.state.map[y][x] === 0;
+          if (solidAbove && isOpen && Math.random() < 0.08) {
             this.state.enemies.push({
               id: `lava_spider_${Math.random()}`,
               type: "lava_spider",
               x: x * TILE_SIZE + 4,
-              y: (y - 1) * TILE_SIZE,
+              y: (y - 1) * TILE_SIZE + 2,
               w: 18,
               h: 14,
               vx: 0,
@@ -498,10 +544,10 @@ export class GameEngine {
               aiState: "hanging",
             });
             spiderCount++;
-            if (spiderCount >= 3) break;
+            if (spiderCount >= 4) break;
           }
         }
-        if (spiderCount >= 3) break;
+        if (spiderCount >= 4) break;
       }
     }
   }
@@ -1091,6 +1137,8 @@ export class GameEngine {
       else if (p.weapon === 'dual_daggers') { weaponSpeedMult = 1.10; weaponJumpMult = 1.10; }
       else if (p.weapon === 'battle_axe') { weaponSpeedMult = 0.90; weaponJumpMult = 0.95; }
       else if (p.weapon === 'mace') { weaponSpeedMult = 0.85; weaponJumpMult = 0.90; }
+      else if (p.weapon === 'molten_axe') { weaponSpeedMult = 0.92; weaponJumpMult = 0.95; }
+      else if (p.weapon === 'frozen_sword') { weaponSpeedMult = 1.05; weaponJumpMult = 1.05; }
     }
 
     let potionSpeedMult = 1;
@@ -1119,7 +1167,8 @@ export class GameEngine {
     }
 
     if (!isStunned && this.state.floorTitleState === "none") {
-      const accel = (inLava ? 0.45 : inWater ? 0.8 : 1.5) * effectiveSpeedMulti;
+      const isFireImmune = (p.fireImmunityTimer || 0) > 0;
+      const accel = (inLava ? (isFireImmune ? 0.8 : 0.45) : inWater ? 0.8 : 1.5) * effectiveSpeedMulti;
       if (keys["a"] || keys["ArrowLeft"]) {
         p.vx -= accel;
       }
@@ -1160,9 +1209,45 @@ export class GameEngine {
       this.state.frostTimer = Math.max(0, (this.state.frostTimer || 0) - 2);
     }
 
-    // Dense lava: refill burn while submerged
-    if (inLava) {
-      p.burnTimer = Math.max(p.burnTimer, 30);
+    // Check standing on heated magma block (tile 20)
+    let standingOnMagma = false;
+    const feetTy = Math.floor((p.y + p.h + 2) / TILE_SIZE);
+    for (let tx = leftTile; tx <= rightTile; tx++) {
+      if (this.state.map[feetTy] && this.state.map[feetTy][tx] === 20) {
+        standingOnMagma = true;
+      }
+    }
+
+    // Fire Immunity & Lava / Magma hazards
+    if (p.fireImmunityTimer && p.fireImmunityTimer > 0) {
+      p.fireImmunityTimer--;
+      p.burnTimer = 0; // Extinguish fire immediately!
+      if (p.fireImmunityTimer % 8 === 0) {
+        this.spawnParticles(p.x + Math.random() * p.w, p.y + p.h, "#f97316", 1);
+        this.spawnParticles(p.x + Math.random() * p.w, p.y + p.h, "#38bdf8", 1);
+      }
+    } else {
+      if (standingOnMagma && p.isGrounded) {
+        if (this.state.frameCounter % 60 === 0) {
+          p.health -= 2;
+          if (p.health <= 0) { p.health = 0; this.state.isGameOver = true; }
+          this.spawnParticles(p.x + p.w / 2, p.y + p.h, "#f97316", 3);
+        }
+        p.burnTimer = Math.max(p.burnTimer, 20);
+      }
+      if (inLava) {
+        p.burnTimer = Math.max(p.burnTimer, 30);
+      }
+    }
+
+    // Ambient volcanic embers and ash drifting in the caverns
+    if (this.state.biome === "volcanic" && Math.random() < 0.35) {
+      this.spawnParticles(
+        this.state.camera.x + (Math.random() - 0.5) * this.canvasWidth,
+        this.state.camera.y + (Math.random() - 0.5) * this.canvasHeight,
+        Math.random() < 0.6 ? "#f97316" : (Math.random() < 0.5 ? "#fbbf24" : "#451a03"),
+        1
+      );
     }
 
     if (!isStunned && (!p.onLadder || (p.onLadder && justPressedJump))) {
@@ -1177,9 +1262,10 @@ export class GameEngine {
           isClimbing = false;
           this.spawnParticles(p.x + p.w / 2, p.y + p.h, COLORS.wallAccent, 5);
         } else if (inWater || inLava) {
-          p.vy = scaledJump * (inLava ? 0.55 : 0.8); // heavier swim jump from lava
+          const isFireImmune = (p.fireImmunityTimer || 0) > 0;
+          p.vy = scaledJump * (inLava ? (isFireImmune ? 0.75 : 0.55) : 0.8); // heavier swim jump from lava
           isClimbing = false;
-          this.spawnParticles(p.x + p.w / 2, p.y, "rgba(0, 255, 200, 0.5)", 5);
+          this.spawnParticles(p.x + p.w / 2, p.y, inLava ? "#f97316" : "rgba(0, 255, 200, 0.5)", 5);
         } else if (p.wallSliding && p.wallJumpsLeft > 0) {
           p.wallJumpsLeft--;
           p.vy = scaledJump * 1.225; // +50% height (sqrt(1.5))
@@ -1264,6 +1350,46 @@ export class GameEngine {
           maxLife: 60
         });
         this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, "#38bdf8", 20);
+      } else if (currentActiveItem === 'lava_flask') {
+        p.hotbar[p.activeSlot] = null;
+        p.fireImmunityTimer = 900; // 15 seconds Fire & Lava Immunity
+        p.burnTimer = 0;
+        p.health = Math.min(p.maxHealth, p.health + 10);
+        p.itemUseCooldown = 20;
+        this.state.texts.push({
+          x: p.x + p.w / 2,
+          y: p.y - 15,
+          text: "FIRE IMMUNITY (15s)!",
+          life: 80,
+          maxLife: 80
+        });
+        this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, "#f97316", 20);
+        this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, "#38bdf8", 15);
+      } else if (currentActiveItem === 'magma_orb') {
+        p.hotbar[p.activeSlot] = null;
+        p.itemUseCooldown = 25;
+        const angle = Math.atan2(this.state.mouse.worldY - (p.y + p.h / 2), this.state.mouse.worldX - (p.x + p.w / 2));
+        const speed = 11;
+        this.state.projectiles.push({
+          id: `magma_orb_${Date.now()}_${Math.random()}`,
+          x: p.x + p.w / 2 - 8,
+          y: p.y + p.h / 2 - 8,
+          w: 16,
+          h: 16,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 3,
+          type: 'magma',
+          damage: 45,
+          facingRight: Math.cos(angle) >= 0,
+          timer: 120
+        });
+        this.state.texts.push({
+          x: p.x + p.w / 2,
+          y: p.y - 15,
+          text: "MAGMA ORB!",
+          life: 50,
+          maxLife: 50
+        });
       } else if (currentActiveItem === 'bomb') {
         p.hotbar[p.activeSlot] = null;
         p.itemUseCooldown = 25;
@@ -1537,6 +1663,37 @@ export class GameEngine {
       }
     }
 
+    // Molten Axe Lava Wave ability (Shift or R)
+    if (p.weapon === 'molten_axe' && p.weaponEquipped && !p.clawsActive && this.state.floorTitleState === "none" && this.state.transitionState === "none") {
+      const pressedSpecial = (keys["r"] || keys["R"] || keys["Shift"]) && !(prevKeys["r"] || prevKeys["R"] || prevKeys["Shift"]);
+      if (pressedSpecial && p.axeSpinCooldown <= 0) {
+        p.axeSpinCooldown = 180; // 3s cooldown
+        const dir = p.facingRight ? 1 : -1;
+        this.state.projectiles.push({
+          id: `lava_wave_${Date.now()}_${Math.random()}`,
+          x: p.x + (p.facingRight ? p.w + 4 : -36),
+          y: p.y + p.h - 24,
+          w: 32,
+          h: 24,
+          vx: dir * 8.0,
+          vy: 0,
+          damage: 50,
+          type: 'lava_wave',
+          facingRight: p.facingRight,
+          timer: 70
+        });
+        this.state.shakeTimer = Math.max(this.state.shakeTimer, 10);
+        this.spawnParticles(p.x + p.w / 2, p.y + p.h, "#f97316", 15);
+        this.state.texts.push({
+          x: p.x + p.w / 2,
+          y: p.y - 15,
+          text: "LAVA WAVE!",
+          life: 50,
+          maxLife: 50
+        });
+      }
+    }
+
     // Spin attack timer tick
     if (p.axeSpinTimer > 0) {
       p.axeSpinTimer--;
@@ -1625,6 +1782,8 @@ export class GameEngine {
       const isColossal = p.clawsActive ? false : p.weapon === 'colossal_sword';
       const isDaggers = p.clawsActive ? false : p.weapon === 'dual_daggers';
       const isAxe = p.clawsActive ? false : p.weapon === 'battle_axe';
+      const isMoltenAxe = p.clawsActive ? false : p.weapon === 'molten_axe';
+      const isFrozen = p.clawsActive ? false : p.weapon === 'frozen_sword';
 
       p.isAttacking = true;
       p.isAirAttacking = false;
@@ -1633,7 +1792,7 @@ export class GameEngine {
       if (p.clawsActive) {
         p.attackTimer = 4;
       } else {
-        p.attackTimer = isColossal ? 20 : (isDaggers ? 6 : (isAxe ? 12 : 10));
+        p.attackTimer = isColossal ? 20 : (isDaggers ? 6 : (isAxe ? 12 : (isMoltenAxe ? 14 : (isFrozen ? 10 : 10))));
       }
       p.slashFlipped = !p.slashFlipped;
       p.comboResetTimer = 120; // 2 seconds
@@ -1648,7 +1807,7 @@ export class GameEngine {
         if (p.clawsActive) {
           p.attackCooldown = 3;
         } else {
-          p.attackCooldown = p.weapon === 'colossal_sword' ? 50 : (p.weapon === 'dual_daggers' ? 5 : (p.weapon === 'battle_axe' ? 15 : 12));
+          p.attackCooldown = p.weapon === 'colossal_sword' ? 50 : (p.weapon === 'dual_daggers' ? 5 : (p.weapon === 'battle_axe' ? 15 : (p.weapon === 'molten_axe' ? 16 : 12)));
         }
       }
     }
@@ -1933,6 +2092,10 @@ export class GameEngine {
           'dual_daggers': 'Dual Daggers',
           'mace': 'Mace',
           'battle_axe': 'Battle Axe',
+          'molten_axe': 'Molten Axe',
+          'frozen_sword': 'Frozen Sword',
+          'lava_flask': 'Obsidian Draught',
+          'magma_orb': 'Magma Orb',
           'torch': 'Torch',
           'health_potion': 'Health Potion',
           'speed_potion': 'Swiftness Potion',
@@ -2074,10 +2237,22 @@ export class GameEngine {
       attackYOffset = -15;
       damage = 35;
       knockback = 8;
+    } else if (p.weapon === 'molten_axe') {
+      attackWidth = 85;
+      attackHeight = p.h + 40;
+      attackYOffset = -20;
+      damage = 45;
+      knockback = 9;
+    } else if (p.weapon === 'frozen_sword') {
+      attackWidth = 70;
+      attackHeight = p.h + 30;
+      attackYOffset = -15;
+      damage = 30;
+      knockback = 6;
     }
 
     if (p.isAirAttacking) {
-      const scaleHeight = p.clawsActive ? 3.0 : (p.weapon === 'colossal_sword' ? 4.5 : (p.weapon === 'dual_daggers' ? 1.5 : 3.0));
+      const scaleHeight = p.clawsActive ? 3.0 : (p.weapon === 'colossal_sword' ? 4.5 : (p.weapon === 'dual_daggers' ? 1.5 : (p.weapon === 'molten_axe' ? 3.5 : 3.0)));
       attackRect = {
         x: p.x - 10 - 2, // 2px outside left
         y: p.y + p.h - 2, // 2px outside top
@@ -2101,21 +2276,30 @@ export class GameEngine {
         e.health -= finalDamage;
         e.invulnerableTimer = p.clawsActive ? 8 : (p.weapon === 'dual_daggers' ? 6 : 10);
         e.vx = p.facingRight ? knockback : -knockback;
-        e.vy = p.clawsActive ? -4 : (p.weapon === 'colossal_sword' ? -5 : -3);
+        e.vy = p.clawsActive ? -4 : (p.weapon === 'colossal_sword' ? -5 : (p.weapon === 'molten_axe' ? -4.5 : -3));
         
+        if (p.weapon === 'molten_axe') {
+          e.burnTimer = 180; // 3 seconds burning
+          this.spawnParticles(e.x + e.w / 2, e.y + e.h / 2, "#f97316", 12);
+        } else if (p.weapon === 'frozen_sword') {
+          e.isFrozen = true;
+          e.frozenTimer = 120; // 2 seconds frozen
+          this.spawnParticles(e.x + e.w / 2, e.y + e.h / 2, "#38bdf8", 12);
+        }
+
         // Claws have red VFX particles!
-        const pColor = p.clawsActive ? "#ff0000" : (e.type === "slime" || e.type === "frost_slime" || e.type === "moss_slime" ? COLORS.slime : COLORS.blood);
+        const pColor = p.clawsActive ? "#ff0000" : (p.weapon === 'molten_axe' ? "#f97316" : (p.weapon === 'frozen_sword' ? "#38bdf8" : (e.type === "slime" || e.type === "frost_slime" || e.type === "moss_slime" ? COLORS.slime : COLORS.blood)));
         this.spawnParticles(
           e.x + e.w / 2,
           e.y + e.h / 2,
           pColor,
-          p.clawsActive ? 15 : (p.weapon === 'colossal_sword' ? 20 : 10)
+          p.clawsActive ? 15 : (p.weapon === 'colossal_sword' ? 20 : (p.weapon === 'molten_axe' ? 18 : 10))
         );
         
         this.state.texts.push({
           x: e.x,
           y: e.y - 10,
-          text: Math.round(finalDamage).toString(),
+          text: Math.round(finalDamage).toString() + (p.weapon === 'molten_axe' ? " [FLAME]" : (p.weapon === 'frozen_sword' ? " [FROST]" : "")),
           life: 30,
           maxLife: 30,
         });
@@ -2267,6 +2451,43 @@ export class GameEngine {
         hitWall = true;
       }
 
+      if (proj.type === 'lava_wave') {
+        proj.timer = (proj.timer || 70) - 1;
+        // Spurt molten ground geysers and ember particles
+        if (Math.random() < 0.8) {
+          this.spawnParticles(proj.x + Math.random() * proj.w, proj.y + proj.h / 2, "#f97316", 2);
+          this.spawnParticles(proj.x + Math.random() * proj.w, proj.y + proj.h / 2, "#fbbf24", 2);
+        }
+
+        if (hitWall || proj.timer <= 0) {
+          this.spawnParticles(proj.x + proj.w / 2, proj.y + proj.h / 2, "#f97316", 15);
+          this.state.projectiles.splice(i, 1);
+          continue;
+        }
+
+        // Piercing hit on enemies
+        for (const e of this.state.enemies) {
+          if (e.invulnerableTimer > 0) continue;
+          if (rectIntersect(proj, e)) {
+            const finalDamage = proj.damage * p.damageMulti;
+            e.health -= finalDamage;
+            e.invulnerableTimer = 14;
+            e.burnTimer = 240; // 4s burn
+            e.vx = proj.vx > 0 ? 6 : -6;
+            e.vy = -3;
+            this.spawnParticles(e.x + e.w / 2, e.y + e.h / 2, "#f97316", 10);
+            this.state.texts.push({
+              x: e.x,
+              y: e.y - 10,
+              text: `${Math.round(finalDamage)} [LAVA WAVE]`,
+              life: 35,
+              maxLife: 35
+            });
+          }
+        }
+        continue; // Lava wave continues traveling
+      }
+
       if (proj.type === 'bomb') {
         proj.vy += 0.25; // gravity
         proj.timer = (proj.timer || 90) - 1;
@@ -2301,36 +2522,93 @@ export class GameEngine {
           this.state.projectiles.splice(i, 1);
           continue;
         }
-      } else if (hitWall) {
+      } else if (hitWall && proj.type !== 'magma') {
         this.spawnParticles(proj.x + (proj.w || 8) / 2, proj.y + (proj.h || 8) / 2, "rgba(200, 200, 200, 0.4)", 4);
         this.state.projectiles.splice(i, 1);
         continue;
       }
 
       if (proj.type === "magma") {
-        // Molten trail: embers left behind the fireball, drifting upward
-        if (proj.timer !== undefined) {
-          proj.timer--;
-          if (proj.timer <= 0) {
+        if (!proj.ownerId) {
+          // Player-thrown Magma Orb
+          proj.vy += 0.22; // slight gravity arc
+          proj.timer = (proj.timer || 120) - 1;
+          this.spawnParticles(proj.x + proj.w / 2, proj.y + proj.h / 2, "#f97316", 1);
+
+          let triggered = hitWall || proj.timer <= 0;
+          if (!triggered) {
+            for (const e of this.state.enemies) {
+              if (rectIntersect(proj, e)) {
+                triggered = true;
+                break;
+              }
+            }
+          }
+
+          if (triggered) {
+            const mx = proj.x + proj.w / 2;
+            const my = proj.y + proj.h / 2;
+            this.state.shakeTimer = 15;
+            this.spawnParticles(mx, my, "#ef4444", 20);
+            this.spawnParticles(mx, my, "#f97316", 20);
+            this.spawnParticles(mx, my, "#fbbf24", 15);
+
+            for (const e of this.state.enemies) {
+              const dist = Math.hypot(e.x + e.w / 2 - mx, e.y + e.h / 2 - my);
+              if (dist < 65) {
+                const dmg = Math.round(proj.damage * p.damageMulti);
+                e.health -= dmg;
+                e.invulnerableTimer = 10;
+                e.burnTimer = 300; // 5 seconds burn!
+                e.vx = (e.x + e.w / 2 > mx ? 1 : -1) * 7;
+                e.vy = -3;
+                this.spawnParticles(e.x + e.w / 2, e.y + e.h / 2, "#f97316", 10);
+                this.state.texts.push({
+                  x: e.x,
+                  y: e.y - 10,
+                  text: `${dmg} [MAGMA BURST]`,
+                  life: 40,
+                  maxLife: 40
+                });
+              }
+            }
             this.state.projectiles.splice(i, 1);
             continue;
           }
-        }
-        this.state.particles.push({
-          x: proj.x + proj.w / 2 - Math.sign(proj.vx) * 6,
-          y: proj.y + proj.h / 2 + (Math.random() - 0.5) * 4,
-          vx: (Math.random() - 0.5) * 0.4,
-          vy: -(0.3 + Math.random() * 0.7),
-          life: Math.random() * 20 + 15,
-          maxLife: 35,
-          color: Math.random() < 0.5 ? "#f97316" : "#fbbf24",
-          size: 2 + Math.random() * 2,
-        });
-        if (p.invulnerableTimer <= 0 && rectIntersect({ x: proj.x - 4, y: proj.y - 4, w: 8, h: 8 }, p)) {
-          this.damagePlayer(proj.damage, Math.sign(proj.vx) || 1, 8, -4, "#f97316");
-          this.spawnParticles(proj.x, proj.y, "#ef4444", 8);
-          this.state.projectiles.splice(i, 1);
-          continue;
+        } else {
+          // Enemy-fired magma fireball
+          if (hitWall) {
+            this.spawnParticles(proj.x + proj.w / 2, proj.y + proj.h / 2, "#f97316", 6);
+            this.state.projectiles.splice(i, 1);
+            continue;
+          }
+
+          if (proj.timer !== undefined) {
+            proj.timer--;
+            if (proj.timer <= 0) {
+              this.state.projectiles.splice(i, 1);
+              continue;
+            }
+          }
+          this.state.particles.push({
+            x: proj.x + proj.w / 2 - Math.sign(proj.vx) * 6,
+            y: proj.y + proj.h / 2 + (Math.random() - 0.5) * 4,
+            vx: (Math.random() - 0.5) * 0.4,
+            vy: -(0.3 + Math.random() * 0.7),
+            life: Math.random() * 20 + 15,
+            maxLife: 35,
+            color: Math.random() < 0.5 ? "#f97316" : "#fbbf24",
+            size: 2 + Math.random() * 2,
+          });
+          if (p.invulnerableTimer <= 0 && rectIntersect({ x: proj.x - 4, y: proj.y - 4, w: 8, h: 8 }, p)) {
+            const hit = this.damagePlayer(proj.damage, Math.sign(proj.vx) || 1, 8, -4, "#f97316");
+            if (hit && (!p.fireImmunityTimer || p.fireImmunityTimer <= 0)) {
+              p.burnTimer = 60;
+            }
+            this.spawnParticles(proj.x, proj.y, "#ef4444", 8);
+            this.state.projectiles.splice(i, 1);
+            continue;
+          }
         }
       }
 
@@ -2600,13 +2878,15 @@ export class GameEngine {
         const coinsGained =
           e.type === "boss"
             ? 50
-            : e.type === "yeti"
-              ? 15
-              : e.type === "frost_slime"
-                ? 10
-                : e.type === "slime"
-                  ? 8
-                  : 5;
+            : e.type === "inferno_knight" || e.type === "frost_knight"
+              ? 25
+              : e.type === "yeti"
+                ? 15
+                : e.type === "frost_slime"
+                  ? 10
+                  : e.type === "slime"
+                    ? 8
+                    : 5;
         this.state.player.coins += coinsGained;
         this.state.texts.push({
           x: e.x,
@@ -2622,6 +2902,23 @@ export class GameEngine {
 
       if (e.invulnerableTimer > 0) e.invulnerableTimer--;
       e.stateTimer--;
+
+      if (e.burnTimer && e.burnTimer > 0) {
+        e.burnTimer--;
+        if (Math.random() < 0.3) {
+          this.spawnParticles(e.x + Math.random() * e.w, e.y + Math.random() * e.h, "#f97316", 1);
+        }
+        if (e.burnTimer % 30 === 0) {
+          e.health -= 3;
+          this.state.texts.push({
+            x: e.x + e.w / 2,
+            y: e.y - 10,
+            text: "-3 [BURN]",
+            life: 30,
+            maxLife: 30,
+          });
+        }
+      }
 
       let distToPlayer = Math.hypot(p.x - e.x, p.y - e.y);
 
@@ -2970,6 +3267,66 @@ export class GameEngine {
             }
           }
         }
+      } else if (e.type === "inferno_knight") {
+        e.vy += GRAVITY;
+        if (e.isGrounded) {
+          if (distToPlayer < 450) {
+            e.facingRight = p.x > e.x;
+            const dir = e.facingRight ? 1 : -1;
+            if (e.stateTimer <= 0) {
+              if (distToPlayer < 70) {
+                // Fiery sword thrust!
+                e.aiState = "thrusting";
+                e.stateTimer = 40;
+                e.vx = dir * 6;
+                if (p.invulnerableTimer <= 0) {
+                  const hit = this.damagePlayer(16, dir, 9, -4, "#f97316");
+                  if (hit && (!p.fireImmunityTimer || p.fireImmunityTimer <= 0)) {
+                    p.burnTimer = 90;
+                  }
+                }
+                this.spawnParticles(e.x + (e.facingRight ? e.w + 6 : -6), e.y + e.h / 2, "#f97316", 8);
+              } else {
+                // Charge toward player
+                e.aiState = "charging";
+                e.stateTimer = 45;
+                e.vx = dir * 3.5;
+              }
+            }
+          } else {
+            e.vx *= 0.8;
+            e.aiState = "idle";
+          }
+        }
+      } else if (e.type === "frost_knight") {
+        e.vy += GRAVITY;
+        if (e.isGrounded) {
+          if (distToPlayer < 450) {
+            e.facingRight = p.x > e.x;
+            const dir = e.facingRight ? 1 : -1;
+            if (e.stateTimer <= 0) {
+              if (distToPlayer < 70) {
+                // Frost slash!
+                e.aiState = "thrusting";
+                e.stateTimer = 40;
+                e.vx = dir * 5.5;
+                if (p.invulnerableTimer <= 0) {
+                  const hit = this.damagePlayer(14, dir, 8, -4, "#38bdf8");
+                  if (hit) p.slownessTimer = 180;
+                }
+                this.spawnParticles(e.x + (e.facingRight ? e.w + 6 : -6), e.y + e.h / 2, "#38bdf8", 8);
+              } else {
+                // Charge toward player
+                e.aiState = "charging";
+                e.stateTimer = 45;
+                e.vx = dir * 3.0;
+              }
+            }
+          } else {
+            e.vx *= 0.8;
+            e.aiState = "idle";
+          }
+        }
       }
 
       if (e.vx > 0) e.facingRight = true;
@@ -2995,20 +3352,26 @@ export class GameEngine {
         let damage =
           e.type === "boss"
             ? 15
-            : e.type === "yeti"
-              ? 12 // Yeti damage adjusted x0.65 (18 -> 12)
-              : e.type === "frost_slime"
-                ? 8
-                : e.type === "lava_slime"
-                  ? 5
-                  : 5;
+            : e.type === "inferno_knight"
+              ? 14
+              : e.type === "frost_knight"
+                ? 12
+                : e.type === "yeti"
+                  ? 12 // Yeti damage adjusted x0.65 (18 -> 12)
+                  : e.type === "frost_slime"
+                    ? 8
+                    : e.type === "lava_slime"
+                      ? 5
+                      : 5;
         const kbDir = p.x + p.w / 2 > e.x + e.w / 2 ? 1 : -1;
-        const kbForceX = e.type === "yeti" ? 12 : 8; // Yeti rework: 12 knockback force
-        const kbForceY = e.type === "yeti" ? -7 : -5;
+        const kbForceX = e.type === "yeti" || e.type === "inferno_knight" ? 12 : 8;
+        const kbForceY = e.type === "yeti" || e.type === "inferno_knight" ? -7 : -5;
         const pColor = e.type === "slime" || e.type === "frost_slime" || e.type === "moss_slime" || e.type === "lava_slime" ? COLORS.slime : COLORS.blood;
         this.damagePlayer(damage, kbDir, kbForceX, kbForceY, pColor);
         if (e.type === "lava_slime") {
-          p.burnTimer = 60; // 1s burn on hit
+          if (!p.fireImmunityTimer || p.fireImmunityTimer <= 0) {
+            p.burnTimer = 60; // 1s burn on hit
+          }
         }
       }
     }
@@ -4758,6 +5121,72 @@ export class GameEngine {
         ctx.fillRect(-9, -7, 3, 8);
         ctx.fillRect(6, -7, 3, 8);
         ctx.restore();
+      } else if (p.weapon === "molten_axe") {
+        const axeX = p.x + p.w - 2;
+        const axeY = p.y + bob;
+        
+        ctx.save();
+        ctx.translate(axeX + 4, axeY + 12);
+        ctx.fillStyle = "#1c1917"; // Obsidian haft
+        ctx.fillRect(-2, -8, 4, 24);
+        ctx.fillStyle = "#fbbf24"; // Gold ring
+        ctx.fillRect(-2.5, 4, 5, 2);
+        ctx.fillStyle = "#7f1d1d"; // Dark magma blade base
+        ctx.fillRect(-10, -10, 20, 6);
+        ctx.fillStyle = "#ea580c"; // Burning blade body
+        ctx.fillRect(-12, -12, 4, 10);
+        ctx.fillRect(8, -12, 4, 10);
+        ctx.fillStyle = "#fef08a"; // Molten hot glowing edge
+        ctx.fillRect(-13, -11, 2, 8);
+        ctx.fillRect(11, -11, 2, 8);
+        ctx.restore();
+      } else if (p.weapon === "frozen_sword") {
+        const sx = p.facingRight ? p.x + p.w - 2 : p.x - 2;
+        const sy = p.y + bob;
+        ctx.save();
+        ctx.translate(sx + 2, sy + 8);
+        if (!p.facingRight) ctx.scale(-1, 1);
+        ctx.fillStyle = "#e0f2fe";
+        ctx.fillRect(-1, -15, 2, 2);
+        ctx.fillStyle = "#38bdf8";
+        ctx.fillRect(-3, -13, 6, 14);
+        ctx.fillStyle = "#7dd3fc";
+        ctx.fillRect(-1, -13, 2, 14);
+        ctx.fillStyle = "#0284c7";
+        ctx.fillRect(-7, 1, 14, 3);
+        ctx.fillStyle = "#0369a1";
+        ctx.fillRect(-2, 4, 4, 5);
+        ctx.fillStyle = "#e0f2fe";
+        ctx.fillRect(-3, 9, 6, 2);
+        ctx.restore();
+      } else if (p.weapon === "lava_flask") {
+        const flaskX = p.x + p.w - 2;
+        const flaskY = p.y + 4 + bob;
+        ctx.save();
+        ctx.translate(flaskX + 2, flaskY);
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-1.5, -6, 3, 2);
+        ctx.fillStyle = "#ea580c";
+        ctx.fillRect(-4, -4, 8, 8);
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillRect(-3, -3, 6, 6);
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        ctx.fillRect(-2, -2, 2, 2);
+        ctx.restore();
+      } else if (p.weapon === "magma_orb") {
+        const orbX = p.x + p.w - 2;
+        const orbY = p.y + 4 + bob;
+        ctx.save();
+        ctx.translate(orbX + 2, orbY);
+        ctx.fillStyle = "#1c1917";
+        ctx.beginPath();
+        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#ea580c";
+        ctx.fillRect(-2, -2, 4, 4);
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillRect(-1, -1, 2, 2);
+        ctx.restore();
       } else if (p.weapon === "torch") {
         const torchX = p.x + p.w - 2;
         const torchY = p.y + bob;
@@ -4844,7 +5273,7 @@ export class GameEngine {
 
     // Draw pixel slash animation if attacking
     if (p.isAttacking && p.weapon !== "bow") {
-      const duration = p.weapon === "colossal_sword" ? 20 : (p.weapon === "dual_daggers" ? 6 : 10);
+      const duration = p.weapon === "colossal_sword" ? 20 : (p.weapon === "dual_daggers" ? 6 : (p.weapon === "molten_axe" ? 14 : 10));
       const progress = 1 - p.attackTimer / duration;
       const dir = p.facingRight ? 1 : -1;
       let ox = p.facingRight ? p.x + p.w : p.x;
@@ -4867,8 +5296,8 @@ export class GameEngine {
         ctx.scale(1, -1);
       }
       // +15% slash size for all weapons; dual daggers enlarged & centered
-      let scaleX = p.weapon === "colossal_sword" ? 4.37 : (p.weapon === "dual_daggers" ? 2.53 : 2.76);
-      let scaleY = p.weapon === "colossal_sword" ? 0.80 : (p.weapon === "dual_daggers" ? 0.46 : 0.52);
+      let scaleX = p.weapon === "colossal_sword" ? 4.37 : (p.weapon === "dual_daggers" ? 2.53 : (p.weapon === "molten_axe" ? 3.80 : 2.76));
+      let scaleY = p.weapon === "colossal_sword" ? 0.80 : (p.weapon === "dual_daggers" ? 0.46 : (p.weapon === "molten_axe" ? 0.75 : 0.52));
       if (p.clawsActive) {
         scaleX = 3.68;
         scaleY = 0.69;
@@ -4905,7 +5334,7 @@ export class GameEngine {
       };
 
       const drawSparks = (angle: number, radius: number, count: number) => {
-        ctx.fillStyle = p.clawsActive ? "#ff5500" : "#ffffff";
+        ctx.fillStyle = p.clawsActive ? "#ff5500" : (p.weapon === "molten_axe" ? "#f97316" : (p.weapon === "frozen_sword" ? "#38bdf8" : "#ffffff"));
         for (let i = 0; i < count; i++) {
           const spread = (Math.random() - 0.5) * 0.4;
           const dist = radius + Math.random() * 20;
@@ -4913,9 +5342,9 @@ export class GameEngine {
           const py = Math.round((Math.sin(angle + spread) * dist) / PIX) * PIX;
           ctx.fillRect(px, py, PIX, PIX);
           if (Math.random() < 0.5) {
-            ctx.fillStyle = p.clawsActive ? "#ff0000" : "#f3e1f5"; // red vs pink spark
+            ctx.fillStyle = p.clawsActive ? "#ff0000" : (p.weapon === "molten_axe" ? "#fbbf24" : (p.weapon === "frozen_sword" ? "#e0f2fe" : "#f3e1f5"));
             ctx.fillRect(px + PIX, py, PIX, PIX);
-            ctx.fillStyle = p.clawsActive ? "#ff5500" : "#ffffff";
+            ctx.fillStyle = p.clawsActive ? "#ff5500" : (p.weapon === "molten_axe" ? "#f97316" : (p.weapon === "frozen_sword" ? "#38bdf8" : "#ffffff"));
           }
         }
       };
@@ -4929,6 +5358,14 @@ export class GameEngine {
         white = "#ffffff";
         pink = "#ff5500";
         purple = "#990000";
+      } else if (p.weapon === "molten_axe") {
+        white = "#fef08a";
+        pink = "#ea580c";
+        purple = "#7f1d1d";
+      } else if (p.weapon === "frozen_sword") {
+        white = "#e0f2fe";
+        pink = "#38bdf8";
+        purple = "#0284c7";
       }
 
       // Animate headAngle and tailLength
@@ -5359,6 +5796,50 @@ export class GameEngine {
           ctx.fillStyle = "#fbbf24";
           ctx.fillRect(-1, -4, 2, 8);
           ctx.fillRect(-4, -1, 8, 2);
+        } else if (type === 'molten_axe') {
+          ctx.strokeStyle = "#1c1917";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(-7, 7);
+          ctx.lineTo(2, -2);
+          ctx.stroke();
+
+          ctx.fillStyle = "#ea580c";
+          ctx.fillRect(0, -7, 6, 6);
+          ctx.fillRect(-6, -7, 6, 6);
+          ctx.fillStyle = "#fef08a";
+          ctx.fillRect(5, -8, 2, 8);
+          ctx.fillRect(-7, -8, 2, 8);
+        } else if (type === 'frozen_sword') {
+          ctx.strokeStyle = "#0284c7";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(-6, 6);
+          ctx.lineTo(6, -6);
+          ctx.stroke();
+
+          ctx.fillStyle = "#38bdf8";
+          ctx.fillRect(0, -6, 6, 6);
+          ctx.fillStyle = "#e0f2fe";
+          ctx.fillRect(2, -8, 2, 2);
+        } else if (type === 'lava_flask') {
+          ctx.fillStyle = "#78350f";
+          ctx.fillRect(-2, -8, 4, 3);
+          ctx.fillStyle = "#ea580c";
+          ctx.fillRect(-5, -5, 10, 11);
+          ctx.fillStyle = "#fbbf24";
+          ctx.fillRect(-4, -4, 8, 9);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(-3, -3, 2, 3);
+        } else if (type === 'magma_orb') {
+          ctx.fillStyle = "#1c1917";
+          ctx.beginPath();
+          ctx.arc(0, 2, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#ea580c";
+          ctx.fillRect(-2, 0, 4, 4);
+          ctx.fillStyle = "#fef08a";
+          ctx.fillRect(-1, 1, 2, 2);
         }
         
         ctx.restore();
@@ -5375,6 +5856,10 @@ export class GameEngine {
             'dual_daggers': 'Dual Daggers',
             'mace': 'Mace',
             'battle_axe': 'Battle Axe',
+            'molten_axe': 'Molten Axe',
+            'frozen_sword': 'Frozen Sword',
+            'lava_flask': 'Obsidian Draught',
+            'magma_orb': 'Magma Orb',
             'torch': 'Torch',
             'health_potion': 'Health Potion',
             'speed_potion': 'Swiftness Potion',
@@ -5445,6 +5930,44 @@ export class GameEngine {
           ctx.fillStyle = "#fff7ed";
           ctx.fillRect(-1, -1, 3, 2);
 
+          ctx.restore();
+        } else if (proj.type === 'lava_wave') {
+          const px = Math.round(proj.x * zoom) / zoom;
+          const py = Math.round(proj.y * zoom) / zoom;
+          const pw = proj.w;
+          const ph = proj.h;
+          const dir = proj.facingRight ? 1 : -1;
+
+          ctx.save();
+          ctx.translate(px + pw / 2, py + ph / 2);
+          if (dir === -1) ctx.scale(-1, 1);
+
+          // Searing Molten Wave Crest
+          ctx.fillStyle = "rgba(127, 29, 29, 0.85)";
+          ctx.fillRect(-16, -10, 32, 20);
+          ctx.fillStyle = "#ea580c";
+          ctx.fillRect(-14, -8, 28, 16);
+          ctx.fillStyle = "#f97316";
+          ctx.fillRect(-10, -6, 22, 12);
+          ctx.fillStyle = "#fef08a";
+          ctx.fillRect(-4, -4, 14, 8);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, -2, 8, 4);
+
+          ctx.restore();
+        } else if (proj.type === 'bomb') {
+          const px = Math.round(proj.x * zoom) / zoom;
+          const py = Math.round(proj.y * zoom) / zoom;
+          ctx.save();
+          ctx.translate(px + proj.w / 2, py + proj.h / 2);
+          ctx.fillStyle = "#1e293b";
+          ctx.beginPath();
+          ctx.arc(0, 0, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#f59e0b";
+          ctx.fillRect(-1, -8, 2, 3);
+          ctx.fillStyle = "#ef4444";
+          ctx.fillRect(0, -9, 2, 2);
           ctx.restore();
         }
       }
@@ -6229,6 +6752,14 @@ export class GameEngine {
     drawAbilityPanel("IMPENETRABLE", p.hasImpenetrable, p.impenetrableActive, p.impenetrableTimer, p.impenetrableCooldown, 1200, 6600, "Z");
     drawAbilityPanel("SUPERSONIC", p.hasSupersonic, p.supersonicActive, p.supersonicTimer, p.supersonicCooldown, 600, 7500, "X");
 
+    // Fire Immunity status
+    if (p.fireImmunityTimer && p.fireImmunityTimer > 0) {
+      ctx.fillStyle = "#f97316";
+      ctx.font = "bold 16px 'Courier New', Courier, monospace";
+      ctx.fillText(`FIRE IMMUNITY: ${Math.ceil(p.fireImmunityTimer / 60)}s`, hudX, nextHUDY + 16);
+      nextHUDY += 32;
+    }
+
     // Speed Potion Swiftness Buff Status
     if (p.speedPotionTimer && p.speedPotionTimer > 0) {
       ctx.fillStyle = "#38bdf8";
@@ -6444,6 +6975,32 @@ export class GameEngine {
         ctx.fillRect(-6, -6, 12, 12);
         ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
         ctx.fillRect(-5, -5, 2, 5);
+      } else if (type === 'lava_flask') {
+        // Glowing Obsidian Draught Fire Immunity Flask
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-2, -14, 4, 3);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+        ctx.fillRect(-3, -11, 6, 4);
+        ctx.fillStyle = "#7f1d1d";
+        ctx.fillRect(-7, -7, 14, 14);
+        ctx.fillStyle = "#ea580c";
+        ctx.fillRect(-6, -6, 12, 12);
+        ctx.fillStyle = "#fef08a";
+        ctx.fillRect(-3, -2, 6, 6);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+        ctx.fillRect(-5, -5, 2, 5);
+      } else if (type === 'magma_orb') {
+        // Crackling Incendiary Magma Bomb Orb
+        ctx.fillStyle = "#1c1917";
+        ctx.beginPath();
+        ctx.arc(0, 0, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#ea580c";
+        ctx.fillRect(-5, -3, 10, 6);
+        ctx.fillStyle = "#fef08a";
+        ctx.fillRect(-3, -1, 6, 2);
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillRect(-1, -5, 2, 10);
       } else if (type === 'bomb') {
         // High-Detail Cast Iron Bomb & Sparking Fuse
         ctx.fillStyle = "#d97706";

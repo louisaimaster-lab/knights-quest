@@ -1,7 +1,7 @@
-# Knight's Quest - Auto Sync to GitHub & Vercel
-Write-Host "==============================================" -ForegroundColor Cyan
-Write-Host " Knight's Quest - Auto Sync to GitHub & Vercel" -ForegroundColor Cyan
-Write-Host "==============================================" -ForegroundColor Cyan
+# Knight's Quest - Auto Sync to GitHub & Cloudflare Pages
+Write-Host "========================================================" -ForegroundColor Cyan
+Write-Host " Knight's Quest - Auto Sync to GitHub & Cloudflare Pages" -ForegroundColor Cyan
+Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host ""
 
 # 1. Stage changes
@@ -18,6 +18,6 @@ Write-Host "[3/3] Pushing to GitHub..." -ForegroundColor Yellow
 git push origin main
 
 Write-Host ""
-Write-Host "==============================================" -ForegroundColor Green
-Write-Host " Sync Complete! Vercel is now auto-deploying." -ForegroundColor Green
-Write-Host "==============================================" -ForegroundColor Green
+Write-Host "========================================================" -ForegroundColor Green
+Write-Host " Sync Complete! Cloudflare Pages is now auto-deploying." -ForegroundColor Green
+Write-Host "========================================================" -ForegroundColor Green
