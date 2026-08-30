@@ -221,7 +221,7 @@ export class GameEngine {
       chests: [],
       projectiles: [],
       droppedWeapons: [],
-      camera: { x: 0, y: 0, zoom: 1 },
+      camera: { x: 0, y: 0, zoom: 1.5 },
       keys: {},
       prevKeys: {},
       mouse: { x: 0, y: 0, down: false, worldX: 0, worldY: 0, clicked: false },
@@ -294,7 +294,7 @@ export class GameEngine {
     this.state.player.isGrounded = true;
 
 // Reset camera zoom and timer states upon descending
-    this.state.camera.zoom = 1.6; // ponytail: start zoomed in, ease out to 1.0 for the descend intro
+    this.state.camera.zoom = 2.2; // ponytail: start zoomed in, ease out to 1.5 for the descend intro
     this.state.camera.x = this.state.player.x + this.state.player.w / 2;
     this.state.camera.y = this.state.player.y + this.state.player.h / 2;
     this.state.gateEntered = false;
@@ -3572,11 +3572,11 @@ export class GameEngine {
       this.state.camera.y = Math.max(halfH, Math.min(mapH - halfH, this.state.camera.y));
     }
 
-    let targetZoom = 1.0;
+    let targetZoom = 1.5;
     if ((this.state.introZoomTimer || 0) > 0) {
       this.state.introZoomTimer = (this.state.introZoomTimer || 0) - 1;
       if (this.state.introZoomTimer === 0) {
-        this.state.camera.zoom = 1;
+        this.state.camera.zoom = 1.5;
       }
     } else if (this.state.gateEntered) {
       targetZoom = 2.5; // Zoom in dramatically upon stepping on the exit gate
@@ -6183,7 +6183,7 @@ export class GameEngine {
         lctx.arc(x, y, radius, 0, Math.PI * 2);
         lctx.fill();
       };
-      const pLightRad = (p.weapon === 'torch' && p.weaponEquipped) ? 205.0 : 115.0;
+      const pLightRad = (p.weapon === 'torch' && p.weaponEquipped) ? 260.0 : 150.0;
       drawPlayerLight(p.x + p.w / 2, p.y + p.h / 2, pLightRad);
 
       lctx.restore();
