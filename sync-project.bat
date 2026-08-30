@@ -1,6 +1,6 @@
 @echo off
 echo ========================================================
-echo  Knight's Quest - Auto Sync to GitHub & Cloudflare Pages
+echo  Knight's Quest - Auto Sync to GitHub ^& Cloudflare Pages
 echo ========================================================
 echo.
 
