@@ -3599,6 +3599,7 @@ export class GameEngine {
   draw() {
     if (!this.ctx) return;
     const ctx = this.ctx;
+    ctx.imageSmoothingEnabled = false; // Razor-sharp pixel-art rendering
     const p = this.state.player;
 
     // Clear bg
@@ -3659,20 +3660,60 @@ export class GameEngine {
     // Draw Background Walls
     for (let y = startRow; y < endRow; y++) {
       for (let x = startCol; x < endCol; x++) {
+        const px = x * TILE_SIZE;
+        const py = y * TILE_SIZE;
+
         if (this.state.bgMap[y] && this.state.bgMap[y][x] === 9) {
-          // Rustic Wooden Planks Background
-          ctx.fillStyle = "#3b2518"; // dark wood background
-          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1); // ponytail: overlap to prevent gaps
-          ctx.fillStyle = "#26170e"; // darker plank gaps
-          // Draw horizontal plank lines
-          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 7, TILE_SIZE + 1, 2);
-          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 15, TILE_SIZE + 1, 2);
-          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 23, TILE_SIZE + 1, 2);
-          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 31, TILE_SIZE + 1, 2);
-          // Draw vertical nails or plank ends occasionally
-          ctx.fillStyle = "#1c100a";
-          if ((x + y) % 3 === 0) {
-            ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE, 2, TILE_SIZE + 1);
+          // Weathered Medieval Timber & Overgrown Masonry Background
+          ctx.fillStyle = "#2d1b10"; // Dark rich timber base
+          ctx.fillRect(px, py, TILE_SIZE + 1, TILE_SIZE + 1);
+
+          // Wood plank bands
+          ctx.fillStyle = "#3e2617";
+          ctx.fillRect(px, py + 1, TILE_SIZE + 1, 6);
+          ctx.fillRect(px, py + 9, TILE_SIZE + 1, 6);
+          ctx.fillRect(px, py + 17, TILE_SIZE + 1, 6);
+          ctx.fillRect(px, py + 25, TILE_SIZE + 1, 6);
+
+          // Deep recessed shadow seams between planks
+          ctx.fillStyle = "#170e08";
+          ctx.fillRect(px, py + 7, TILE_SIZE + 1, 2);
+          ctx.fillRect(px, py + 15, TILE_SIZE + 1, 2);
+          ctx.fillRect(px, py + 23, TILE_SIZE + 1, 2);
+          ctx.fillRect(px, py + 31, TILE_SIZE + 1, 2);
+
+          // Woodgrain fibers
+          ctx.fillStyle = "#4a2e1b";
+          const grainSeed = (x * 7 + y * 13) % 4;
+          if (grainSeed === 0) {
+            ctx.fillRect(px + 4, py + 3, 12, 1);
+            ctx.fillRect(px + 18, py + 11, 10, 1);
+            ctx.fillRect(px + 6, py + 19, 14, 1);
+          } else if (grainSeed === 1) {
+            ctx.fillRect(px + 10, py + 4, 16, 1);
+            ctx.fillRect(px + 2, py + 12, 12, 1);
+            ctx.fillRect(px + 16, py + 27, 12, 1);
+          }
+
+          // Wrought-iron square nails
+          ctx.fillStyle = "#111827";
+          ctx.fillRect(px + 3, py + 3, 2, 2);
+          ctx.fillRect(px + 27, py + 3, 2, 2);
+          ctx.fillRect(px + 3, py + 19, 2, 2);
+          ctx.fillRect(px + 27, py + 19, 2, 2);
+          ctx.fillStyle = "#6b7280"; // nail highlight glint
+          ctx.fillRect(px + 3, py + 3, 1, 1);
+          ctx.fillRect(px + 27, py + 3, 1, 1);
+
+          // Creeping green moss / lichen tendrils on timber
+          const mossSeed = (x * 19 + y * 23) % 7;
+          if (mossSeed < 3) {
+            ctx.fillStyle = "#14532d"; // dark moss
+            ctx.fillRect(px + 8, py + 6, 6, 3);
+            ctx.fillRect(px + 12, py + 14, 8, 3);
+            ctx.fillStyle = "#22c55e"; // bright moss sprout
+            ctx.fillRect(px + 9, py + 7, 3, 1);
+            ctx.fillRect(px + 14, py + 15, 3, 1);
           }
         } else {
           const isIceBg = this.state.biome === "ice";
@@ -3681,143 +3722,93 @@ export class GameEngine {
           const bgHue = isIceBg
             ? 210
             : isMossBg
-              ? 120
+              ? 125
               : isVolcanicBg
                 ? 18
-                : 15 + ((this.state.floor * 15) % 25);
-          const baseSat = isIceBg ? 30 : isMossBg ? 40 : isVolcanicBg ? 45 : 15;
-          const baseLight = isIceBg ? 12 : isMossBg ? 6 : isVolcanicBg ? 6 : 8;
+                : 25 + ((this.state.floor * 12) % 20);
+          const baseSat = isIceBg ? 32 : isMossBg ? 42 : isVolcanicBg ? 48 : 18;
+          const baseLight = isIceBg ? 12 : isMossBg ? 7 : isVolcanicBg ? 7 : 9;
 
           // Render background in 8x8 chunks for "mini blocks" look
-          const bgTime = Date.now(); // ponytail: single clock read per tile, not per sub-chunk
+          const bgTime = Date.now();
           for (let i = 0; i < 4; i++) {
             for (let j = 0; j < 4; j++) {
               const bgX = x * 4 + i;
               const bgY = y * 4 + j;
+              const subPx = px + i * 8;
+              const subPy = py + j * 8;
 
-              // Using sine patterns as a pseudo noise
+              // Smooth pseudo noise for natural strata
               const baseNoise =
-                Math.sin(bgX * 0.2 + bgY * 0.15) *
-                Math.cos(bgX * 0.3 - bgY * 0.1);
+                Math.sin(bgX * 0.22 + bgY * 0.16) *
+                Math.cos(bgX * 0.31 - bgY * 0.12);
               const mossNoise =
-                Math.sin(bgX * 0.05 + bgY * 0.08) *
-                  Math.cos(bgX * 0.1 - bgY * 0.04) +
-                Math.sin(bgX * 0.15 + bgY * 0.2) * 0.5;
+                Math.sin(bgX * 0.06 + bgY * 0.09) *
+                  Math.cos(bgX * 0.12 - bgY * 0.05) +
+                Math.sin(bgX * 0.16 + bgY * 0.22) * 0.5;
 
-              let color = `hsl(${bgHue}, ${baseSat}%, ${baseLight}%)`; // Default dark rock
+              let color = `hsl(${bgHue}, ${baseSat}%, ${baseLight}%)`;
 
-              if (baseNoise > 0.4) {
-                color = `hsl(${bgHue}, ${baseSat}%, ${baseLight - 2}%)`; // slightly darker
-              } else if (baseNoise < -0.4) {
-                color = `hsl(${bgHue}, ${baseSat}%, ${baseLight + 2}%)`; // slightly lighter
+              if (baseNoise > 0.35) {
+                color = `hsl(${bgHue}, ${baseSat}%, ${baseLight - 3}%)`;
+              } else if (baseNoise < -0.35) {
+                color = `hsl(${bgHue}, ${baseSat}%, ${baseLight + 3}%)`;
               }
 
-              const px = x * TILE_SIZE + i * 8;
-              const py = y * TILE_SIZE + j * 8;
-
               if (isIceBg) {
-                if (mossNoise > 0.2) {
-                  if (mossNoise > 0.6) {
-                    color = "#1b3252"; // dark icy blue
-                  } else if (mossNoise > 0.4) {
-                    color = "#132338"; // darker blue
-                  } else {
-                    color = "#0b1420"; // very dark blue
-                  }
+                if (mossNoise > 0.15) {
+                  color = mossNoise > 0.55 ? "#1e3a5f" : (mossNoise > 0.35 ? "#132742" : "#0c1829");
                 }
               } else if (isMossBg) {
                 if (mossNoise > -0.2) {
-                  if (mossNoise > 0.6) {
-                    color = "#163116"; // Mid-dark moss
-                  } else if (mossNoise > 0.3) {
-                    color = "#102510"; // Dark moss
-                  } else {
-                    color = "#0d1f0d"; // Very dark moss
-                  }
+                  color = mossNoise > 0.55 ? "#143814" : (mossNoise > 0.25 ? "#0e240e" : "#091709");
                 }
               } else if (isVolcanicBg) {
-                // Dark basalt blocks with faint warm tint
                 if (mossNoise > 0) {
-                  if (mossNoise > 0.6) {
-                    color = "#2a1a12"; // dark ember-tinted basalt
-                  } else if (mossNoise > 0.3) {
-                    color = "#1f1109"; // darker
-                  } else {
-                    color = "#160a05"; // very dark
-                  }
+                  color = mossNoise > 0.55 ? "#2e1910" : (mossNoise > 0.25 ? "#20100a" : "#140905");
                 }
               } else {
-                // Giant lush moss patches
-                if (mossNoise > 0.2) {
-                  if (mossNoise > 0.6) {
-                    color = "#254220"; // Mid-bright moss
-                  } else if (mossNoise > 0.4) {
-                    color = "#1e331b"; // Dark moss
-                  } else {
-                    color = "#182b15"; // Very dark moss
-                  }
+                if (mossNoise > 0.15) {
+                  color = mossNoise > 0.55 ? "#23401e" : (mossNoise > 0.35 ? "#1a3016" : "#142411");
                 }
               }
 
               ctx.fillStyle = color;
-              ctx.fillRect(px, py, 9, 9); // ponytail: overlap to prevent gaps
+              ctx.fillRect(subPx, subPy, 9, 9); // overlap to prevent gaps
 
+              // Micro nature accents per biome
               if (isIceBg) {
-                const detailHash = Math.sin(px * 1.3 + py * 1.7);
-                if (detailHash > 0.6 && mossNoise > 0.1) {
-                  const timeHash = Math.sin(
-                    px * 3.1 + py * 2.7 + bgTime * 0.002,
-                  );
-                  const sparkColor =
-                    timeHash > 0.8
-                      ? "#ffffff"
-                      : detailHash > 0.95
-                        ? "#ffffff"
-                        : detailHash > 0.8
-                          ? "#8bd3ff"
-                          : "#4585ad";
-                  ctx.fillStyle = sparkColor; // bright ice accent / sparkle
-                  const sparkX = px + Math.abs(Math.cos(px * 2.1)) * 6;
-                  const sparkY = py + Math.abs(Math.sin(py * 1.3)) * 6;
-                  const sparkSize = timeHash > 0.9 ? 2 : 1;
-                  ctx.fillRect(sparkX, sparkY, sparkSize, sparkSize);
+                const sparkleHash = Math.sin(subPx * 1.3 + subPy * 1.7);
+                if (sparkleHash > 0.72) {
+                  const pulse = Math.sin(subPx * 2.5 + subPy * 2.1 + bgTime * 0.003);
+                  ctx.fillStyle = pulse > 0.6 ? "#ffffff" : (sparkleHash > 0.9 ? "#bae6fd" : "#38bdf8");
+                  ctx.fillRect(subPx + 3, subPy + 3, pulse > 0.8 ? 2 : 1, pulse > 0.8 ? 2 : 1);
                 }
               } else if (isVolcanicBg) {
-                // Sparse ember glints in the background rock (matches other biomes' accent density)
-                const emberHash = Math.sin(px * 1.3 + py * 1.7);
-                const emberGlow = Math.sin(px * 2.1 + py * 1.1 + bgTime * 0.004);
-                if (emberHash > 0.8 && emberGlow > 0.4) {
-                  ctx.fillStyle = "#c94f12";
-                  ctx.fillRect(
-                    px + Math.abs(Math.cos(px)) * 6,
-                    py + Math.abs(Math.sin(py)) * 6,
-                    2,
-                    2,
-                  );
+                const emberHash = Math.sin(subPx * 1.3 + subPy * 1.7);
+                const emberGlow = Math.sin(subPx * 2.1 + subPy * 1.1 + bgTime * 0.004);
+                if (emberHash > 0.78 && emberGlow > 0.3) {
+                  ctx.fillStyle = emberGlow > 0.8 ? "#fbbf24" : "#ea580c";
+                  ctx.fillRect(subPx + 3, subPy + 3, 2, 2);
                 }
               } else {
-                // Seeded detailing for texture
-                const detailHash = Math.sin(px * 1.3 + py * 1.7);
-                if (detailHash > 0.8 && mossNoise > 0.3) {
-                  ctx.fillStyle = "#2d5a27"; // Bright moss accent
-                  ctx.fillRect(
-                    px + Math.abs(Math.cos(px)) * 6,
-                    py + Math.abs(Math.sin(py)) * 6,
-                    2,
-                    2,
-                  );
+                // Natural moss flecks & hanging cave roots
+                const mossDot = Math.sin(subPx * 1.4 + subPy * 1.8);
+                if (mossDot > 0.75 && mossNoise > 0.2) {
+                  ctx.fillStyle = "#16a34a"; // emerald moss dot
+                  ctx.fillRect(subPx + 2, subPy + 2, 2, 2);
+                  ctx.fillStyle = "#4ade80";
+                  ctx.fillRect(subPx + 2, subPy + 2, 1, 1);
                 }
 
-                // Occasional hanging background vines from the 8x8 blocks
-                const vineHash = Math.cos(px * 1.7 + py * 2.3);
-                if (mossNoise > 0.5 && j < 3 && vineHash > 0.6) {
-                  ctx.fillStyle = "#1e331b";
-                  ctx.fillRect(
-                    px + 2,
-                    py + 8,
-                    2,
-                    4 + Math.abs(Math.sin(px + py)) * 8,
-                  );
+                // Hanging roots / vine tendrils from background ledges
+                const vineHash = Math.cos(subPx * 1.6 + subPy * 2.2);
+                if (mossNoise > 0.45 && j < 3 && vineHash > 0.58) {
+                  ctx.fillStyle = "#15803d";
+                  const vineLen = 4 + Math.abs(Math.sin(subPx + subPy)) * 8;
+                  ctx.fillRect(subPx + 3, subPy + 7, 2, vineLen);
+                  ctx.fillStyle = "#4ade80"; // leaf tip
+                  ctx.fillRect(subPx + 2, subPy + 7 + vineLen, 3, 2);
                 }
               }
             }
@@ -3847,118 +3838,6 @@ export class GameEngine {
             const isBasalt = tile === 19;
             const isMagma = tile === 20;
 
-            let baseColor, darkColor, highlightColor, strokeColor;
-
-            if (isBasalt) {
-              baseColor = "#262626";
-              darkColor = "#171717";
-              highlightColor = "#404040";
-              strokeColor = "#0a0a0a";
-            } else if (isMagma) {
-              baseColor = "#451a03";
-              darkColor = "#1c1917";
-              highlightColor = "#f97316";
-              strokeColor = "#ef4444";
-            } else if (isStoneBrick) {
-              baseColor = `hsl(${hue}, 5%, 35%)`;
-              darkColor = `hsl(${hue}, 5%, 22%)`;
-              highlightColor = `hsl(${hue}, 5%, 45%)`;
-              strokeColor = `hsl(${hue}, 5%, 15%)`;
-            } else if (isStone) {
-              baseColor = `#4a4a50`;
-              darkColor = `#2e2e34`;
-              highlightColor = `#6b6b75`;
-              strokeColor = `#1c1c20`;
-            } else if (isIce) {
-              baseColor = `#1e3a5f`;
-              darkColor = `#0e203b`;
-              highlightColor = `#4fa1d6`;
-              strokeColor = `#0a1526`;
-            } else if (isSnow) {
-              if (this.state.biome === "ice_fortress") {
-                baseColor = "#1e293b";      // Dark slate fortress brick
-                darkColor = "#0f172a";      // Deep void slate
-                highlightColor = "#38bdf8"; // Cyan icy glow accent
-                strokeColor = "#020617";
-              } else {
-                baseColor = `#11223d`; // very dark icy rock
-                darkColor = `#07101f`; // nearly black
-                highlightColor = `#2e5885`; // frosty edge
-                strokeColor = `#030810`;
-              }
-            } else {
-              // Dirt / Cavern base for 1, 7, 15
-              baseColor = `hsl(${hue}, 15%, 28%)`;
-              darkColor = `hsl(${hue}, 15%, 20%)`;
-              highlightColor = `hsl(${hue}, 15%, 38%)`;
-              strokeColor = `hsl(${hue}, 20%, 10%)`;
-            }
-
-            // Fill block interior
-            ctx.fillStyle = darkColor;
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1); // ponytail: overlap to prevent gaps
-
-            // Base texture for interior
-            ctx.fillStyle = baseColor;
-            if (isMagma) {
-              // Glowing magma cracks inside
-              ctx.fillRect(x * TILE_SIZE + 4, y * TILE_SIZE + 4, 12, 12);
-              ctx.fillStyle = "#f97316";
-              ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE + 8, 4, 4);
-            } else if (!isStoneBrick) {
-              if ((x * 11 + y * 7) % 3 === 0)
-                ctx.fillRect(x * TILE_SIZE + 4, y * TILE_SIZE + 4, 8, 8);
-              if ((x * 13 + y * 5) % 4 === 0)
-                ctx.fillRect(x * TILE_SIZE + 20, y * TILE_SIZE + 16, 12, 8);
-              if ((x * 7 + y * 19) % 5 === 0)
-                ctx.fillRect(x * TILE_SIZE + 12, y * TILE_SIZE + 8, 4, 4);
-            } else {
-              // brick pattern
-              ctx.fillRect(
-                x * TILE_SIZE + 2,
-                y * TILE_SIZE + 2,
-                TILE_SIZE - 4,
-                10,
-              );
-              ctx.fillRect(
-                x * TILE_SIZE + 2,
-                y * TILE_SIZE + 14,
-                TILE_SIZE / 2 - 4,
-                10,
-              );
-              ctx.fillRect(
-                x * TILE_SIZE + TILE_SIZE / 2 + 2,
-                y * TILE_SIZE + 14,
-                TILE_SIZE / 2 - 4,
-                10,
-              );
-              ctx.fillRect(
-                x * TILE_SIZE + 2,
-                y * TILE_SIZE + 26,
-                TILE_SIZE - 4,
-                6,
-              );
-            }
-
-            if (isMossy) {
-              const seed = x * 31 + y * 17;
-              ctx.fillStyle = "#1e4d1b";
-              if (seed % 3 === 0)
-                ctx.fillRect(x * TILE_SIZE + 4, y * TILE_SIZE + 4, 12, 12);
-              if (seed % 5 === 0)
-                ctx.fillRect(x * TILE_SIZE + 16, y * TILE_SIZE + 12, 12, 16);
-              if (seed % 2 === 0)
-                ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE + 20, 16, 8);
-
-              ctx.fillStyle = "#2d8d2d";
-              if (seed % 4 === 0)
-                ctx.fillRect(x * TILE_SIZE + 6, y * TILE_SIZE + 6, 8, 8);
-              if (seed % 7 === 0)
-                ctx.fillRect(x * TILE_SIZE + 20, y * TILE_SIZE + 16, 6, 8);
-              if (seed % 3 === 1)
-                ctx.fillRect(x * TILE_SIZE + 10, y * TILE_SIZE + 2, 8, 6);
-            }
-
             const isSolid = (t: number | undefined) =>
               t === 1 ||
               t === 7 ||
@@ -3974,203 +3853,375 @@ export class GameEngine {
             const left = isSolid(this.state.map[y][x - 1]);
             const right = isSolid(this.state.map[y][x + 1]);
 
-            // Outside Details (Outer Shell)
-            if (!top) {
-              const topHighlight =
-                isGrass || isSnow
-                  ? isSnow
-                    ? "#ffffff"
-                    : "#44aa44"
-                  : isMossy
-                    ? "#2d6a27"
-                    : highlightColor;
-              const topBase =
-                isGrass || isSnow
-                  ? isSnow
-                    ? "#e2e8f0"
-                    : "#2d8d2d"
-                  : isMossy
-                    ? "#1e4d1b"
-                    : baseColor;
+            let baseColor, darkColor, highlightColor, strokeColor;
 
-              ctx.fillStyle = topHighlight;
-              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, 4); // ponytail: overlap to prevent gaps
-              ctx.fillStyle = topBase;
-              ctx.fillRect(
-                x * TILE_SIZE + 4,
-                y * TILE_SIZE + 4,
-                TILE_SIZE - 8,
-                4,
-              );
+            if (isBasalt) {
+              baseColor = "#262626";
+              darkColor = "#141414";
+              highlightColor = "#404040";
+              strokeColor = "#0a0a0a";
+            } else if (isMagma) {
+              baseColor = "#451a03";
+              darkColor = "#1c1917";
+              highlightColor = "#f97316";
+              strokeColor = "#7f1d1d";
+            } else if (isStoneBrick) {
+              baseColor = `hsl(${hue}, 8%, 36%)`;
+              darkColor = `hsl(${hue}, 8%, 20%)`;
+              highlightColor = `hsl(${hue}, 8%, 48%)`;
+              strokeColor = `hsl(${hue}, 10%, 14%)`;
+            } else if (isStone) {
+              baseColor = "#475569";
+              darkColor = "#1e293b";
+              highlightColor = "#64748b";
+              strokeColor = "#0f172a";
+            } else if (isIce) {
+              baseColor = "#0369a1";
+              darkColor = "#082f49";
+              highlightColor = "#38bdf8";
+              strokeColor = "#021c30";
+            } else if (isSnow) {
+              if (this.state.biome === "ice_fortress") {
+                baseColor = "#1e293b";
+                darkColor = "#0f172a";
+                highlightColor = "#38bdf8";
+                strokeColor = "#020617";
+              } else {
+                baseColor = "#0f233f";
+                darkColor = "#071324";
+                highlightColor = "#38bdf8";
+                strokeColor = "#030a14";
+              }
+            } else {
+              // Dirt / Cavern natural rock (tile 1, 7, 15)
+              baseColor = `hsl(${hue}, 18%, 28%)`;
+              darkColor = `hsl(${hue}, 18%, 18%)`;
+              highlightColor = `hsl(${hue}, 18%, 40%)`;
+              strokeColor = `hsl(${hue}, 22%, 10%)`;
+            }
 
-              if (isGrass || isMossy || isSnow) {
-                // Overhangs
-                ctx.fillStyle = topHighlight;
-                if (x % 2 === 0)
-                  ctx.fillRect(x * TILE_SIZE + 2, y * TILE_SIZE + 8, 4, 4);
-                if (x % 3 === 0)
-                  ctx.fillRect(x * TILE_SIZE + 22, y * TILE_SIZE + 8, 4, 2);
-                // Grass/Snow top bumps sticking up
-                for (let g = 0; g < 3; g++) {
-                  if ((x * g) % 2 === 0)
-                    ctx.fillRect(
-                      x * TILE_SIZE + 4 + g * 8,
-                      y * TILE_SIZE - 4,
-                      2,
-                      4,
-                    );
-                }
-              } else if (!isStoneBrick && x % 2 === 0) {
-                // Jagged edges for natural cave
-                ctx.fillStyle = strokeColor;
-                ctx.fillRect(
-                  x * TILE_SIZE + Math.abs((x * 7) % TILE_SIZE),
-                  y * TILE_SIZE,
-                  4,
-                  4,
-                );
+            // Fill block interior base
+            ctx.fillStyle = darkColor;
+            ctx.fillRect(px, py, TILE_SIZE + 1, TILE_SIZE + 1);
+
+            // Natural texture & strata inside block
+            ctx.fillStyle = baseColor;
+            if (isMagma) {
+              // Hardened obsidian plates with pulsating magma veins
+              ctx.fillRect(px + 3, py + 3, 10, 10);
+              ctx.fillRect(px + 17, py + 3, 12, 10);
+              ctx.fillRect(px + 3, py + 17, 12, 12);
+              ctx.fillRect(px + 19, py + 17, 10, 12);
+
+              // Molten veins glowing between plates
+              ctx.fillStyle = "#ea580c";
+              ctx.fillRect(px + 13, py, 4, TILE_SIZE);
+              ctx.fillRect(px, py + 13, TILE_SIZE, 4);
+              ctx.fillStyle = "#fef08a"; // intense hot core
+              ctx.fillRect(px + 14, py + 2, 2, TILE_SIZE - 4);
+              ctx.fillRect(px + 2, py + 14, TILE_SIZE - 4, 2);
+            } else if (isStoneBrick) {
+              // High-detail beveled ashlar masonry
+              // Row 1 (Full block)
+              ctx.fillStyle = baseColor;
+              ctx.fillRect(px + 2, py + 2, TILE_SIZE - 4, 12);
+              ctx.fillStyle = highlightColor; // top/left brick bevel
+              ctx.fillRect(px + 2, py + 2, TILE_SIZE - 4, 2);
+              ctx.fillRect(px + 2, py + 2, 2, 12);
+              ctx.fillStyle = darkColor; // shadow bevel
+              ctx.fillRect(px + 2, py + 12, TILE_SIZE - 4, 2);
+              ctx.fillRect(px + TILE_SIZE - 4, py + 2, 2, 12);
+
+              // Row 2 (Split blocks)
+              const half = Math.floor(TILE_SIZE / 2);
+              // Left half brick
+              ctx.fillStyle = baseColor;
+              ctx.fillRect(px + 2, py + 16, half - 3, 14);
+              ctx.fillStyle = highlightColor;
+              ctx.fillRect(px + 2, py + 16, half - 3, 2);
+              ctx.fillRect(px + 2, py + 16, 2, 14);
+              // Right half brick
+              ctx.fillStyle = baseColor;
+              ctx.fillRect(px + half + 1, py + 16, half - 3, 14);
+              ctx.fillStyle = highlightColor;
+              ctx.fillRect(px + half + 1, py + 16, half - 3, 2);
+              ctx.fillRect(px + half + 1, py + 16, 2, 14);
+
+              // Moss / Lichen growing in mortar joints
+              const brickMoss = (x * 13 + y * 17) % 5;
+              if (brickMoss < 2) {
+                ctx.fillStyle = "#15803d";
+                ctx.fillRect(px + half - 2, py + 14, 4, 5);
+                ctx.fillStyle = "#4ade80";
+                ctx.fillRect(px + half - 1, py + 15, 2, 2);
+              }
+            } else if (isStone) {
+              // Fractured secret stone with jagged cracks & crystals
+              ctx.fillRect(px + 4, py + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+              // Fissure cracks
+              ctx.fillStyle = "#0f172a";
+              ctx.fillRect(px + 8, py + 2, 2, 10);
+              ctx.fillRect(px + 10, py + 10, 8, 2);
+              ctx.fillRect(px + 16, py + 12, 2, 12);
+              ctx.fillRect(px + 18, py + 22, 8, 2);
+              // Mineral specks (quartz / gold)
+              ctx.fillStyle = "#fef08a";
+              ctx.fillRect(px + 6, py + 20, 2, 2);
+              ctx.fillStyle = "#38bdf8";
+              ctx.fillRect(px + 22, py + 6, 2, 2);
+            } else if (isBasalt) {
+              // Columnar basalt blocks with sharp vertical cleavage
+              ctx.fillRect(px + 2, py + 2, 8, TILE_SIZE - 4);
+              ctx.fillRect(px + 12, py + 2, 8, TILE_SIZE - 4);
+              ctx.fillRect(px + 22, py + 2, 8, TILE_SIZE - 4);
+              ctx.fillStyle = highlightColor;
+              ctx.fillRect(px + 2, py + 2, 2, TILE_SIZE - 4);
+              ctx.fillRect(px + 12, py + 2, 2, TILE_SIZE - 4);
+              ctx.fillRect(px + 22, py + 2, 2, TILE_SIZE - 4);
+            } else if (isIce || isSnow) {
+              // Glacial crystal ice interior
+              ctx.fillRect(px + 3, py + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+              // Frosted internal fissures
+              ctx.fillStyle = "#bae6fd";
+              ctx.fillRect(px + 6, py + 8, 12, 1);
+              ctx.fillRect(px + 17, py + 9, 1, 8);
+              ctx.fillRect(px + 12, py + 17, 10, 1);
+              ctx.fillStyle = "#ffffff"; // sparkle
+              ctx.fillRect(px + 6, py + 8, 2, 2);
+            } else {
+              // Natural stratified cave dirt / stone (1, 7, 15)
+              const seed = (x * 17 + y * 29);
+              ctx.fillRect(px + 3, py + 4, 12, 8);
+              ctx.fillRect(px + 17, py + 14, 12, 8);
+              ctx.fillRect(px + 6, py + 20, 18, 6);
+
+              // Organic mineral flecks (amber, mica, gold)
+              ctx.fillStyle = "#fbbf24";
+              if (seed % 4 === 0) ctx.fillRect(px + 10, py + 8, 2, 2);
+              if (seed % 7 === 0) ctx.fillRect(px + 22, py + 22, 2, 2);
+              ctx.fillStyle = "#94a3b8"; // slate pebble
+              if (seed % 3 === 0) ctx.fillRect(px + 18, py + 6, 3, 3);
+            }
+
+            // Moss details for Tile 15
+            if (isMossy) {
+              const mSeed = x * 31 + y * 17;
+              ctx.fillStyle = "#14532d"; // deep moss
+              ctx.fillRect(px + 3, py + 3, 14, 12);
+              ctx.fillRect(px + 15, py + 12, 14, 14);
+              ctx.fillStyle = "#16a34a"; // mid moss
+              ctx.fillRect(px + 5, py + 5, 10, 8);
+              ctx.fillRect(px + 17, py + 14, 10, 10);
+              ctx.fillStyle = "#4ade80"; // bright sprouts
+              ctx.fillRect(px + 7, py + 7, 4, 4);
+              ctx.fillRect(px + 19, py + 16, 4, 4);
+              // Spore blossoms (tiny yellow/red spores)
+              if (mSeed % 2 === 0) {
+                ctx.fillStyle = "#fde047";
+                ctx.fillRect(px + 8, py + 4, 2, 2);
+              }
+              if (mSeed % 3 === 0) {
+                ctx.fillStyle = "#f87171";
+                ctx.fillRect(px + 20, py + 13, 2, 2);
               }
             }
-            if (!bottom) {
-              ctx.fillStyle = strokeColor;
-              ctx.fillRect(
-                x * TILE_SIZE,
-                y * TILE_SIZE + TILE_SIZE - 4,
-                TILE_SIZE + 1, // ponytail: overlap to prevent gaps
-                4,
-              );
-              ctx.fillStyle = darkColor;
-              ctx.fillRect(
-                x * TILE_SIZE + 4,
-                y * TILE_SIZE + TILE_SIZE - 8,
-                TILE_SIZE - 8,
-                4,
-              );
-            }
-            if (!left) {
-              ctx.fillStyle =
-                isGrass || isMossy || isSnow
-                  ? isSnow
-                    ? "#e2e8f0"
-                    : "#2d8d2d"
-                  : highlightColor;
-              if (top && (isGrass || isMossy || isSnow))
-                ctx.fillStyle = strokeColor; // Top layer doesn't go all the way down sides if it's connected
-              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, 4, TILE_SIZE + 1); // ponytail: overlap to prevent gaps
-              ctx.fillStyle = baseColor;
-              ctx.fillRect(
-                x * TILE_SIZE + 4,
-                y * TILE_SIZE + 4,
-                4,
-                TILE_SIZE - 8,
-              );
-            }
-            if (!right) {
-              ctx.fillStyle = strokeColor;
-              ctx.fillRect(
-                x * TILE_SIZE + TILE_SIZE - 4,
-                y * TILE_SIZE,
-                4,
-                TILE_SIZE + 1, // ponytail: overlap to prevent gaps
-              );
-              ctx.fillStyle = darkColor;
-              ctx.fillRect(
-                x * TILE_SIZE + TILE_SIZE - 8,
-                y * TILE_SIZE + 4,
-                4,
-                TILE_SIZE - 8,
-              );
+
+            // === Outer Surface Nature Edges & Overhangs ===
+            if (!top) {
+              // Top exposed surface
+              if (isGrass || isMossy) {
+                // Lush multi-tiered organic grass blades popping out
+                ctx.fillStyle = "#14532d"; // dark grass roots
+                ctx.fillRect(px, py, TILE_SIZE + 1, 6);
+                ctx.fillStyle = "#16a34a"; // vibrant grass body
+                ctx.fillRect(px, py - 2, TILE_SIZE + 1, 4);
+                ctx.fillStyle = "#4ade80"; // bright sunlit tips
+                ctx.fillRect(px, py - 3, TILE_SIZE + 1, 2);
+
+                // Individual grass blades & tufts sticking up naturally
+                for (let g = 0; g < 4; g++) {
+                  const gx = px + 2 + g * 8;
+                  const gHeight = 3 + ((x * 3 + g * 7) % 3);
+                  ctx.fillStyle = "#16a34a";
+                  ctx.fillRect(gx, py - gHeight, 2, gHeight);
+                  ctx.fillStyle = "#4ade80"; // tip
+                  ctx.fillRect(gx, py - gHeight, 2, 1);
+                }
+
+                // Hanging roots / grass fringe dangling downward
+                ctx.fillStyle = "#15803d";
+                if (x % 2 === 0) ctx.fillRect(px + 4, py + 6, 3, 4);
+                if (x % 3 === 0) ctx.fillRect(px + 18, py + 6, 3, 5);
+                ctx.fillStyle = "#78350f"; // woody micro-root
+                if (x % 4 === 0) ctx.fillRect(px + 12, py + 6, 1, 6);
+              } else if (isSnow) {
+                // Frosted fluffy snow blanket with crystal sparkle
+                ctx.fillStyle = "#e2e8f0";
+                ctx.fillRect(px, py, TILE_SIZE + 1, 5);
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(px, py - 3, TILE_SIZE + 1, 4);
+                // Snow drifts
+                for (let g = 0; g < 3; g++) {
+                  const gx = px + 3 + g * 10;
+                  ctx.fillStyle = "#ffffff";
+                  ctx.fillRect(gx, py - 4, 4, 2);
+                  ctx.fillStyle = "#bae6fd"; // shadow
+                  ctx.fillRect(gx, py - 2, 4, 1);
+                }
+              } else if (isMagma) {
+                // Scorched incandescent top heat ridge
+                ctx.fillStyle = "#f97316";
+                ctx.fillRect(px, py - 1, TILE_SIZE + 1, 3);
+                ctx.fillStyle = "#fef08a";
+                ctx.fillRect(px + 4, py - 2, TILE_SIZE - 8, 2);
+              } else {
+                // Natural stone top bevel
+                ctx.fillStyle = highlightColor;
+                ctx.fillRect(px, py, TILE_SIZE + 1, 3);
+                ctx.fillStyle = baseColor;
+                ctx.fillRect(px + 2, py + 3, TILE_SIZE - 4, 2);
+              }
             }
 
-            // Magma block (tile 20): constant glow on exposed edges (outline is separate from the block)
+            if (!bottom) {
+              // Bottom exposed surface with natural stone bevel & shadow
+              ctx.fillStyle = strokeColor;
+              ctx.fillRect(px, py + TILE_SIZE - 3, TILE_SIZE + 1, 4);
+              ctx.fillStyle = darkColor;
+              ctx.fillRect(px + 2, py + TILE_SIZE - 6, TILE_SIZE - 4, 3);
+              // Hanging stalactite pebble / root
+              if ((isGrass || isMossy) && x % 3 === 0) {
+                ctx.fillStyle = "#78350f"; // root
+                ctx.fillRect(px + 14, py + TILE_SIZE, 2, 4);
+              }
+            }
+
+            if (!left) {
+              ctx.fillStyle = (isGrass || isMossy) ? "#16a34a" : (isSnow ? "#e2e8f0" : highlightColor);
+              ctx.fillRect(px, py, 3, TILE_SIZE + 1);
+              ctx.fillStyle = baseColor;
+              ctx.fillRect(px + 3, py + 2, 2, TILE_SIZE - 4);
+            }
+
+            if (!right) {
+              ctx.fillStyle = strokeColor;
+              ctx.fillRect(px + TILE_SIZE - 3, py, 4, TILE_SIZE + 1);
+              ctx.fillStyle = darkColor;
+              ctx.fillRect(px + TILE_SIZE - 5, py + 2, 2, TILE_SIZE - 4);
+            }
+
+            // Magma glow halo on exposed edges
             if (isMagma) {
-              ctx.fillStyle = "rgba(249, 115, 22, 0.45)";
-              if (!top) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE - 2, TILE_SIZE + 1, 3);
-              if (!bottom) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + TILE_SIZE - 1, TILE_SIZE + 1, 3);
-              if (!left) ctx.fillRect(x * TILE_SIZE - 2, y * TILE_SIZE, 3, TILE_SIZE + 1);
-              if (!right) ctx.fillRect(x * TILE_SIZE + TILE_SIZE - 1, y * TILE_SIZE, 3, TILE_SIZE + 1);
+              ctx.fillStyle = "rgba(249, 115, 22, 0.55)";
+              if (!top) ctx.fillRect(px, py - 3, TILE_SIZE + 1, 3);
+              if (!bottom) ctx.fillRect(px, py + TILE_SIZE, TILE_SIZE + 1, 3);
+              if (!left) ctx.fillRect(px - 3, py, 3, TILE_SIZE + 1);
+              if (!right) ctx.fillRect(px + TILE_SIZE, py, 3, TILE_SIZE + 1);
             }
           } else if (tile === 4) {
-            // Ladder
+            // Ladder (Hemp Rope Ladder with Knots & Ivy Tendrils)
             const platformAbove =
               y > 0 && this.state.map[y - 1] && this.state.map[y - 1][x] === 5;
 
-            const sideColor = "#a68c69"; // rope/tan color
-            const rungColor = "#6b4c3a"; // lighter brown
-            const shadowColor = "#4a3325"; // dark brown
+            const ropeBase = "#a16207"; // Rich golden hemp rope
+            const ropeLight = "#ca8a04";
+            const ropeShadow = "#713f12";
+            const rungWood = "#78350f"; // Rich oak wood rung
+            const rungLight = "#b45309";
+            const rungShadow = "#451a03";
 
             const startY = platformAbove ? 10 : 0;
 
-            // Ropes (side rails)
-            ctx.fillStyle = sideColor;
-            ctx.fillRect(
-              x * TILE_SIZE + 6,
-              y * TILE_SIZE + startY,
-              2,
-              TILE_SIZE - startY + 1, // ponytail: overlap to prevent gaps
-            );
-            ctx.fillRect(
-              x * TILE_SIZE + 24,
-              y * TILE_SIZE + startY,
-              2,
-              TILE_SIZE - startY + 1, // ponytail: overlap to prevent gaps
-            );
+            // Rope Rails
+            ctx.fillStyle = ropeShadow;
+            ctx.fillRect(px + 5, py + startY, 4, TILE_SIZE - startY + 1);
+            ctx.fillRect(px + 23, py + startY, 4, TILE_SIZE - startY + 1);
+            ctx.fillStyle = ropeBase;
+            ctx.fillRect(px + 6, py + startY, 2, TILE_SIZE - startY + 1);
+            ctx.fillRect(px + 24, py + startY, 2, TILE_SIZE - startY + 1);
+            ctx.fillStyle = ropeLight;
+            ctx.fillRect(px + 6, py + startY, 1, TILE_SIZE - startY + 1);
+            ctx.fillRect(px + 24, py + startY, 1, TILE_SIZE - startY + 1);
 
-            // If there's a platform above, draw the knots attaching to the platform
+            // Knots attaching to platform
             if (platformAbove) {
-              ctx.fillStyle = sideColor;
-              // Tie knot left
-              ctx.fillRect(x * TILE_SIZE + 5, y * TILE_SIZE, 4, 10);
-              // Tie knot right
-              ctx.fillRect(x * TILE_SIZE + 23, y * TILE_SIZE, 4, 10);
-              // Cross wraps
-              ctx.fillStyle = shadowColor;
-              ctx.fillRect(x * TILE_SIZE + 6, y * TILE_SIZE + 2, 2, 2);
-              ctx.fillRect(x * TILE_SIZE + 24, y * TILE_SIZE + 2, 2, 2);
+              ctx.fillStyle = ropeShadow;
+              ctx.fillRect(px + 4, py, 6, 10);
+              ctx.fillRect(px + 22, py, 6, 10);
+              ctx.fillStyle = ropeBase;
+              ctx.fillRect(px + 5, py + 1, 4, 8);
+              ctx.fillRect(px + 23, py + 1, 4, 8);
+              ctx.fillStyle = ropeLight;
+              ctx.fillRect(px + 5, py + 2, 2, 2);
+              ctx.fillRect(px + 23, py + 2, 2, 2);
             }
 
-            // Rungs
+            // Natural Timber Rungs with Woodgrain
             for (let i = 4; i < TILE_SIZE; i += 10) {
               if (i < startY) continue;
-              ctx.fillStyle = rungColor;
-              ctx.fillRect(x * TILE_SIZE + 7, y * TILE_SIZE + i, 18, 3); // ponytail: overlap to prevent gaps
-              ctx.fillStyle = shadowColor;
-              ctx.fillRect(x * TILE_SIZE + 7, y * TILE_SIZE + i + 3, 18, 2); // ponytail: overlap to prevent gaps
+              ctx.fillStyle = rungShadow;
+              ctx.fillRect(px + 6, py + i + 3, 20, 2);
+              ctx.fillStyle = rungWood;
+              ctx.fillRect(px + 6, py + i, 20, 3);
+              ctx.fillStyle = rungLight;
+              ctx.fillRect(px + 7, py + i, 18, 1);
+              // Wood peg fasteners
+              ctx.fillStyle = "#1c1917";
+              ctx.fillRect(px + 7, py + i + 1, 1, 1);
+              ctx.fillRect(px + 24, py + i + 1, 1, 1);
+            }
+
+            // Natural ivy vine winding around the left rope
+            const vineSeed = (x * 11 + y * 19) % 3;
+            if (vineSeed === 0) {
+              ctx.fillStyle = "#15803d";
+              ctx.fillRect(px + 4, py + 8, 3, 6);
+              ctx.fillRect(px + 7, py + 18, 3, 5);
+              ctx.fillStyle = "#4ade80"; // leaf bud
+              ctx.fillRect(px + 2, py + 10, 3, 2);
+              ctx.fillRect(px + 9, py + 20, 3, 2);
             }
           } else if (tile === 5) {
-            // Platform (Rope Bridge / Scaffold)
-            // Top Logs
-            ctx.fillStyle = "#6b4c3a"; // lighter brown
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 2, TILE_SIZE + 1, 6); // ponytail: overlap to prevent gaps
-            ctx.fillStyle = "#4a3325"; // dark brown bottom
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 8, TILE_SIZE + 1, 2); // ponytail: overlap to prevent gaps
+            // Platform (Hewn Timber Scaffold Bridge with Hanging Foliage)
+            // Main Timber Log Beam
+            ctx.fillStyle = "#451a03"; // Dark bark shadow
+            ctx.fillRect(px, py + 8, TILE_SIZE + 1, 3);
+            ctx.fillStyle = "#78350f"; // Rich aged wood core
+            ctx.fillRect(px, py + 2, TILE_SIZE + 1, 6);
+            ctx.fillStyle = "#b45309"; // Top log highlight
+            ctx.fillRect(px, py + 2, TILE_SIZE + 1, 2);
 
-            // Planks / Gaps
-            ctx.fillStyle = "#222";
-            ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE + 2, 2, 8);
-            ctx.fillRect(x * TILE_SIZE + 20, y * TILE_SIZE + 2, 2, 8);
+            // Plank dividers
+            ctx.fillStyle = "#1c1917";
+            ctx.fillRect(px + 8, py + 2, 2, 9);
+            ctx.fillRect(px + 21, py + 2, 2, 9);
 
-            // Rope Binding
-            ctx.fillStyle = "#d2b48c"; // tan (rope)
-            ctx.fillRect(x * TILE_SIZE + 2, y * TILE_SIZE + 2, 4, 9);
-            ctx.fillRect(x * TILE_SIZE + 26, y * TILE_SIZE + 2, 4, 9);
+            // Wrought-iron forged nail heads
+            ctx.fillStyle = "#0f172a";
+            ctx.fillRect(px + 4, py + 4, 2, 2);
+            ctx.fillRect(px + 15, py + 4, 2, 2);
+            ctx.fillRect(px + 26, py + 4, 2, 2);
 
-            // Hanging rope/strands
-            ctx.fillStyle = "#a68c69"; // dark tan
-            ctx.fillRect(
-              x * TILE_SIZE + 4,
-              y * TILE_SIZE + 9, // ponytail: overlap to prevent gaps
-              2,
-              5 + Math.random() * 2,
-            );
-            ctx.fillRect(
-              x * TILE_SIZE + 28,
-              y * TILE_SIZE + 9, // ponytail: overlap to prevent gaps
-              2,
-              5 + Math.random() * 2,
-            );
+            // Hemp rope lashings on ends
+            ctx.fillStyle = "#ca8a04";
+            ctx.fillRect(px + 2, py + 2, 3, 9);
+            ctx.fillRect(px + 27, py + 2, 3, 9);
+            ctx.fillStyle = "#713f12";
+            ctx.fillRect(px + 2, py + 5, 3, 1);
+            ctx.fillRect(px + 27, py + 5, 3, 1);
+
+            // Hanging foliage tendrils / leaf buds drooping under platform
+            const folSeed = (x * 13 + y * 7) % 4;
+            if (folSeed < 3) {
+              ctx.fillStyle = "#15803d";
+              ctx.fillRect(px + 5, py + 11, 2, 4 + folSeed * 2);
+              ctx.fillRect(px + 17, py + 11, 2, 3 + folSeed);
+              ctx.fillStyle = "#4ade80"; // leaf tip
+              ctx.fillRect(px + 4, py + 14 + folSeed * 2, 3, 2);
+              ctx.fillRect(px + 16, py + 13 + folSeed, 3, 2);
+            }
           } else if (tile === 6) {
-            // Water
+            // Water (Crystalline Aquatic Ripples & Lily Algae)
             const waterAbove =
               y > 0 &&
               this.state.map[y - 1] &&
@@ -4179,139 +4230,159 @@ export class GameEngine {
             const isIce = this.state.biome === "ice";
 
             ctx.fillStyle = isIce
-              ? "rgba(100, 200, 255, 0.6)"
-              : "rgba(0, 180, 150, 0.5)"; // Icy water or jungle water
+              ? "rgba(14, 116, 144, 0.75)"
+              : "rgba(13, 148, 136, 0.70)";
             if (waterAbove) {
-              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1); // ponytail: overlap to prevent gaps
+              ctx.fillRect(px, py, TILE_SIZE + 1, TILE_SIZE + 1);
             } else {
-              ctx.fillRect(
-                x * TILE_SIZE,
-                y * TILE_SIZE + 4,
-                TILE_SIZE + 1, // ponytail: overlap to prevent gaps
-                TILE_SIZE - 4 + 1,
-              );
-              // Little waves
-              ctx.fillStyle = isIce
-                ? "rgba(255, 255, 255, 0.5)"
-                : "rgba(255, 255, 255, 0.3)";
-              if (Math.sin(Date.now() * 0.002 + x) > 0) {
-                ctx.fillRect(
-                  x * TILE_SIZE + 4,
-                  y * TILE_SIZE + 4,
-                  TILE_SIZE - 8,
-                  2,
-                );
+              ctx.fillRect(px, py + 4, TILE_SIZE + 1, TILE_SIZE - 4 + 1);
+              // Animated crystalline wave crests
+              const wTime = Date.now() * 0.003 + x * 0.6;
+              ctx.fillStyle = isIce ? "#e0f2fe" : "#ccfbf1";
+              if (Math.sin(wTime) > -0.2) {
+                ctx.fillRect(px + 2, py + 4, TILE_SIZE - 4, 2);
+              }
+              // Secondary caustics ripple
+              ctx.fillStyle = isIce ? "#38bdf8" : "#2dd4bf";
+              ctx.fillRect(px + 4, py + 7, TILE_SIZE - 8, 2);
+
+              // Floating surface lily pad or algae spec
+              const lilySeed = (x * 19 + y * 7) % 5;
+              if (lilySeed === 0 && !isIce) {
+                ctx.fillStyle = "#15803d";
+                ctx.fillRect(px + 8, py + 3, 6, 3);
+                ctx.fillStyle = "#4ade80";
+                ctx.fillRect(px + 10, py + 3, 2, 2);
+                ctx.fillStyle = "#f472b6"; // tiny pink water lily flower
+                ctx.fillRect(px + 11, py + 2, 2, 2);
               }
             }
 
-            // Soft glow below surface
-            if (!waterAbove) {
-              ctx.fillStyle = isIce
-                ? "rgba(200, 230, 255, 0.3)"
-                : "rgba(0, 255, 200, 0.2)";
-              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 6, TILE_SIZE + 1, 8); // ponytail: overlap to prevent gaps
-            }
+            // Sub-surface aquatic depth gradient
+            ctx.fillStyle = isIce ? "rgba(7, 89, 133, 0.4)" : "rgba(15, 118, 110, 0.4)";
+            ctx.fillRect(px, py + 12, TILE_SIZE + 1, TILE_SIZE - 12);
           } else if (tile === 18) {
-            // Thin ice covering water
-            // First draw water
-            ctx.fillStyle = "rgba(100, 200, 255, 0.6)";
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1); // ponytail: overlap to prevent gaps
+            // Thin Surface Ice over Water
+            // Sub-surface water
+            ctx.fillStyle = "rgba(14, 116, 144, 0.75)";
+            ctx.fillRect(px, py, TILE_SIZE + 1, TILE_SIZE + 1);
 
-            // Then draw the thin ice crust
-            ctx.fillStyle = "rgba(180, 230, 255, 0.8)";
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, 8); // ponytail: overlap to prevent gaps
-            ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, 2); // ponytail: overlap to prevent gaps
-            ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
-            if (Math.sin(x * 1.3) > 0)
-              ctx.fillRect(x * TILE_SIZE + 4, y * TILE_SIZE + 2, 4, 4);
-            if (Math.cos(x * 2.7) > 0)
-              ctx.fillRect(x * TILE_SIZE + 18, y * TILE_SIZE + 4, 6, 2);
+            // Thin frosted ice sheet
+            ctx.fillStyle = "rgba(186, 230, 253, 0.85)";
+            ctx.fillRect(px, py, TILE_SIZE + 1, 8);
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(px, py, TILE_SIZE + 1, 2);
+
+            // Jagged frost fracture lines
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(px + 4, py + 2, 6, 2);
+            ctx.fillRect(px + 16, py + 3, 8, 2);
+            ctx.fillStyle = "#0284c7"; // deep blue ice crack
+            ctx.fillRect(px + 8, py + 4, 12, 1);
           } else if (tile === 21) {
-            // Lava (glowing molten rock with animated detail)
+            // Searing Molten Lava (Viscous Thermal Magma & Floating Crusts)
             const lavaAbove =
               y > 0 &&
               this.state.map[y - 1] &&
               this.state.map[y - 1][x] === 21;
 
-            ctx.fillStyle = "rgba(190, 60, 18, 0.95)"; // rich molten lava
+            ctx.fillStyle = "#9a3412"; // Deep rich molten base
             if (lavaAbove) {
-              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
+              ctx.fillRect(px, py, TILE_SIZE + 1, TILE_SIZE + 1);
             } else {
-              ctx.fillRect(
-                x * TILE_SIZE,
-                y * TILE_SIZE + 4,
-                TILE_SIZE + 1,
-                TILE_SIZE - 4 + 1,
-              );
-              // Animated glowing yellow ripples on the surface
-              ctx.fillStyle = "#fbbf24";
-              if (Math.sin(Date.now() * 0.005 + x * 0.8) > 0) {
-                ctx.fillRect(
-                  x * TILE_SIZE + 2,
-                  y * TILE_SIZE + 4,
-                  TILE_SIZE - 4,
-                  3,
-                );
+              ctx.fillRect(px, py + 4, TILE_SIZE + 1, TILE_SIZE - 4 + 1);
+
+              // Animated incandescent magma crests
+              const lTime = Date.now() * 0.004 + x * 0.7;
+              ctx.fillStyle = "#f97316";
+              ctx.fillRect(px + 2, py + 4, TILE_SIZE - 4, 4);
+
+              // Searing hot yellow wave peaks
+              ctx.fillStyle = "#fef08a";
+              if (Math.sin(lTime) > -0.3) {
+                ctx.fillRect(px + 4, py + 4, TILE_SIZE - 8, 2);
               }
-              // Orange surface highlight
-              ctx.fillStyle = "#ea580c";
-              ctx.fillRect(x * TILE_SIZE + 2, y * TILE_SIZE + 8, TILE_SIZE - 4, 2);
+
+              // Drifting dark cooling crust islands
+              const crustSeed = (x * 23 + y * 13) % 4;
+              if (crustSeed === 0) {
+                ctx.fillStyle = "#292524";
+                ctx.fillRect(px + 8, py + 5, 8, 3);
+                ctx.fillStyle = "#44403c";
+                ctx.fillRect(px + 9, py + 5, 6, 1);
+              }
             }
 
-            // Magma core (warm interior, subtle)
-            ctx.fillStyle = "#c2410c";
-            ctx.fillRect(x * TILE_SIZE + 4, y * TILE_SIZE + 14, TILE_SIZE - 8, 4);
-            ctx.fillStyle = "#f97316";
-            ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE + 15, TILE_SIZE - 16, 2);
+            // Molten thermal core veins
+            ctx.fillStyle = "#ea580c";
+            ctx.fillRect(px + 3, py + 12, TILE_SIZE - 6, 6);
+            ctx.fillStyle = "#fbbf24";
+            ctx.fillRect(px + 6, py + 14, TILE_SIZE - 12, 2);
           } else if (tile === 10 || tile === 12) {
-            // Torch
+            // Wall Torch (10) or Arcane Lantern (12)
             const isPurple = tile === 12;
 
-            // Base/Bracket
-            ctx.fillStyle = "#1c1c1c";
-            ctx.fillRect(x * TILE_SIZE + 10, y * TILE_SIZE + 22, 12, 6);
-            ctx.fillStyle = "#333";
-            ctx.fillRect(x * TILE_SIZE + 12, y * TILE_SIZE + 24, 8, 2);
+            if (isPurple) {
+              // Ornate Gothic Wrought-Iron Lantern Cage
+              // Wall bracket arm
+              ctx.fillStyle = "#1e293b";
+              ctx.fillRect(px + 8, py + 6, 16, 3);
+              ctx.fillRect(px + 8, py + 8, 3, 8);
+              ctx.fillStyle = "#475569";
+              ctx.fillRect(px + 9, py + 6, 14, 1);
 
-            // Pole Core
-            ctx.fillStyle = "#6b4c3a"; // lighter wood
-            ctx.fillRect(x * TILE_SIZE + 13, y * TILE_SIZE + 10, 6, 13); // ponytail: overlap to prevent gaps
-            ctx.fillStyle = "#4a3325"; // dark wood shadow
-            ctx.fillRect(x * TILE_SIZE + 17, y * TILE_SIZE + 10, 2, 13); // ponytail: overlap to prevent gaps
-            ctx.fillStyle = "#222";
-            ctx.fillRect(x * TILE_SIZE + 12, y * TILE_SIZE + 10, 8, 3); // iron band
+              // Lantern housing cage
+              ctx.fillStyle = "#0f172a";
+              ctx.fillRect(px + 11, py + 9, 10, 14);
+              ctx.fillStyle = "#334155";
+              ctx.strokeRect(px + 11, py + 9, 10, 14);
 
-            // Fire
-            ctx.fillStyle = isPurple
-              ? `hsl(${260 + Math.random() * 30}, 100%, 65%)`
-              : `hsl(${20 + Math.random() * 20}, 100%, 55%)`;
-            ctx.fillRect(
-              x * TILE_SIZE + 12,
-              y * TILE_SIZE + 4 + Math.random() * 4,
-              8,
-              8,
-            );
+              // Arcane Soulfire Core
+              const animCycle = (Date.now() / 120) % 4;
+              ctx.fillStyle = "#7e22ce";
+              ctx.fillRect(px + 13, py + 12, 6, 8);
+              ctx.fillStyle = "#a855f7";
+              ctx.fillRect(px + 14, py + 13 + (animCycle % 2), 4, 6);
+              ctx.fillStyle = "#f0abfc";
+              ctx.fillRect(px + 15, py + 14, 2, 4);
+              ctx.fillStyle = "#ffffff";
+              ctx.fillRect(px + 15, py + 14, 1, 2);
+            } else {
+              // Hand-Forged Rustic Wall Torch
+              // Soot charcoal wash on wall behind torch
+              ctx.fillStyle = "rgba(15, 23, 42, 0.45)";
+              ctx.fillRect(px + 9, py + 2, 14, 14);
 
-            // Core Fire
-            ctx.fillStyle = isPurple ? "#fff" : "#ffea00";
-            ctx.fillRect(
-              x * TILE_SIZE + 14,
-              y * TILE_SIZE + 6 + Math.random() * 2,
-              4,
-              4,
-            );
+              // Iron wall bracket
+              ctx.fillStyle = "#1c1917";
+              ctx.fillRect(px + 9, py + 20, 14, 6);
+              ctx.fillStyle = "#57534e"; // rivet highlight
+              ctx.fillRect(px + 11, py + 22, 2, 2);
 
-            // Little spark
-            ctx.fillStyle = isPurple ? "#d8b4fe" : "#fcd34d";
-            ctx.fillRect(
-              x * TILE_SIZE + 12 + Math.random() * 8,
-              y * TILE_SIZE + Math.random() * 6,
-              2,
-              2,
-            );
+              // Wooden sconce handle
+              ctx.fillStyle = "#451a03";
+              ctx.fillRect(px + 13, py + 10, 6, 12);
+              ctx.fillStyle = "#78350f";
+              ctx.fillRect(px + 14, py + 10, 3, 12);
+              ctx.fillStyle = "#1c1917"; // iron binding ring
+              ctx.fillRect(px + 12, py + 10, 8, 3);
+
+              // Animated 3-Tier Ember Flame
+              const fOffset = Math.sin(Date.now() * 0.02 + x) * 2;
+              // Outer red ember
+              ctx.fillStyle = "#ef4444";
+              ctx.fillRect(px + 11, py + 4 + fOffset, 10, 8);
+              // Mid orange flame
+              ctx.fillStyle = "#f97316";
+              ctx.fillRect(px + 13, py + 5 + fOffset, 6, 6);
+              // Hot white/yellow core
+              ctx.fillStyle = "#fef08a";
+              ctx.fillRect(px + 14, py + 6 + fOffset, 4, 4);
+              ctx.fillStyle = "#ffffff";
+              ctx.fillRect(px + 15, py + 7 + fOffset, 2, 2);
+            }
           } else if (tile === 13) {
-            // Moss/Vines or Icicles
+            // Hanging Vines & Foliage (Normal/Moss) or Crystalline Icicles (Ice)
             const isIce = this.state.biome === "ice";
             const hasVineBelow =
               y < this.state.height - 1 &&
@@ -4320,105 +4391,89 @@ export class GameEngine {
             const hasVineAbove =
               y > 0 && this.state.map[y - 1] && this.state.map[y - 1][x] === 13;
 
-            const px = x * TILE_SIZE;
-            const py = y * TILE_SIZE;
-
             if (isIce) {
-              // Draw Connected Pixel Icicles
-              ctx.fillStyle = "#b0e0e6"; // light icy blue
-
+              // High-Detail Crystalline Faceted Icicles
               if (!hasVineAbove) {
-                ctx.fillRect(px, py, TILE_SIZE + 1, 4); // ponytail: overlap to prevent gaps
+                ctx.fillStyle = "#bae6fd";
+                ctx.fillRect(px, py, TILE_SIZE + 1, 4);
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(px, py, TILE_SIZE + 1, 1);
               }
 
-              const drawPixelIcicle = (
-                vx: number,
-                baseThick: number,
-                len: number,
-              ) => {
-                ctx.fillStyle = "#b0e0e6";
+              const drawPixelIcicle = (vx: number, baseThick: number, len: number) => {
                 let curThick = baseThick;
-                let currentY = 0;
-
-                while (currentY < len && curThick > 0) {
-                  ctx.fillRect(
-                    px + vx + Math.floor((baseThick - curThick) / 2),
-                    py + 4 + currentY,
-                    curThick,
-                    5, // ponytail: overlap to prevent gaps
-                  );
-                  currentY += 4;
-                  curThick -= 2; // Fixed taper
+                let curY = 0;
+                while (curY < len && curThick > 0) {
+                  ctx.fillStyle = "#0284c7"; // shadow side
+                  ctx.fillRect(px + vx, py + 4 + curY, curThick, 4);
+                  ctx.fillStyle = "#38bdf8"; // crystal body
+                  ctx.fillRect(px + vx, py + 4 + curY, curThick - 1, 4);
+                  ctx.fillStyle = "#bae6fd"; // highlight edge
+                  ctx.fillRect(px + vx, py + 4 + curY, 1, 4);
+                  curY += 4;
+                  curThick -= 1;
                 }
-
-                // Glint
+                // Needle tip sparkle
                 ctx.fillStyle = "#ffffff";
-                ctx.fillRect(px + vx + Math.floor(baseThick / 2), py + 4, 2, 4);
+                ctx.fillRect(px + vx, py + 4 + curY, 1, 2);
               };
 
-              const hash1 = Math.abs(Math.sin(px * 1.1 + py * 1.3));
-              const hash2 = Math.abs(Math.sin(px * 1.7 + py * 1.9));
-              const hash3 = Math.abs(Math.sin(px * 2.3 + py * 0.7));
+              const h1 = Math.abs(Math.sin(px * 1.1 + py * 1.3));
+              const h2 = Math.abs(Math.sin(px * 1.7 + py * 1.9));
+              const h3 = Math.abs(Math.sin(px * 2.3 + py * 0.7));
 
-              const bottom1 = hasVineBelow
-                ? TILE_SIZE - 4
-                : TILE_SIZE - 4 - hash1 * 8;
-              const bottom2 = hasVineBelow
-                ? TILE_SIZE - 4
-                : TILE_SIZE - 2 - hash2 * 6;
-              const bottom3 = hasVineBelow
-                ? TILE_SIZE - 4
-                : TILE_SIZE - 8 - hash3 * 12;
+              const bot1 = hasVineBelow ? TILE_SIZE : TILE_SIZE - 4 - h1 * 8;
+              const bot2 = hasVineBelow ? TILE_SIZE : TILE_SIZE - 2 - h2 * 6;
+              const bot3 = hasVineBelow ? TILE_SIZE : TILE_SIZE - 8 - h3 * 12;
 
-              drawPixelIcicle(2, 6, bottom1);
-              drawPixelIcicle(12, 8, bottom2);
-              drawPixelIcicle(22, 6, bottom3);
+              drawPixelIcicle(3, 5, bot1);
+              drawPixelIcicle(13, 6, bot2);
+              drawPixelIcicle(23, 5, bot3);
             } else {
-              // Draw wavy green lines and leaves
-              const drawVine = (
-                vx: number,
-                waveOffset: number,
-                thick: number,
-                len: number,
-              ) => {
-                ctx.fillStyle = "#1e3c1a"; // Dark green vine stem
-                // We draw it in chunky segments
+              // Serpentine Jungle Vines with Leaf Clusters & Wild Flowers
+              const drawVine = (vx: number, waveOffset: number, len: number) => {
                 for (let step = 0; step < len; step += 4) {
                   const wave = Math.round(
-                    Math.sin(px * 0.1 + py * 0.1 + step * 0.3 + waveOffset) * 2,
+                    Math.sin(px * 0.12 + py * 0.12 + step * 0.28 + waveOffset) * 2,
                   );
-                  ctx.fillRect(px + vx + wave, py + step, thick, 5); // ponytail: overlap to prevent gaps
+                  // Vine stem
+                  ctx.fillStyle = "#14532d";
+                  ctx.fillRect(px + vx + wave, py + step, 3, 5);
+                  ctx.fillStyle = "#16a34a";
+                  ctx.fillRect(px + vx + wave + 1, py + step, 1, 4);
 
-                  // Occasional leaf based on position hash
-                  const leafHash = Math.cos(
-                    px * 1.3 + py * 2.1 + step * 1.7 + waveOffset * 3.1,
-                  );
-                  if (leafHash > 0.4) {
-                    ctx.fillStyle = "#2d8d2d"; // Bright leaf
-                    const leafDir = leafHash > 0.7 ? -3 : thick;
-                    ctx.fillRect(px + vx + wave + leafDir, py + step, 3, 3);
-                    ctx.fillStyle = "#1e3c1a"; // Switch back to stem
+                  // Leaf cluster
+                  const leafHash = Math.cos(px * 1.4 + py * 2.3 + step * 1.8 + waveOffset * 3.2);
+                  if (leafHash > 0.3) {
+                    ctx.fillStyle = "#16a34a";
+                    const lDir = leafHash > 0.65 ? -3 : 3;
+                    ctx.fillRect(px + vx + wave + lDir, py + step, 4, 3);
+                    ctx.fillStyle = "#4ade80"; // sunlit leaf tip
+                    ctx.fillRect(px + vx + wave + lDir + (lDir > 0 ? 2 : 0), py + step, 2, 2);
+
+                    // Tiny blooming wild cave flower
+                    if (leafHash > 0.82) {
+                      const fColor = (step + vx) % 2 === 0 ? "#c084fc" : "#fde047";
+                      ctx.fillStyle = fColor;
+                      ctx.fillRect(px + vx + wave + lDir * 1.5, py + step + 1, 3, 3);
+                      ctx.fillStyle = "#ffffff";
+                      ctx.fillRect(px + vx + wave + lDir * 1.5 + 1, py + step + 2, 1, 1);
+                    }
                   }
                 }
               };
 
-              const hash1 = Math.abs(Math.sin(px * 1.1 + py * 1.3));
-              const hash2 = Math.abs(Math.sin(px * 1.7 + py * 1.9));
-              const hash3 = Math.abs(Math.sin(px * 2.3 + py * 0.7));
+              const h1 = Math.abs(Math.sin(px * 1.1 + py * 1.3));
+              const h2 = Math.abs(Math.sin(px * 1.7 + py * 1.9));
+              const h3 = Math.abs(Math.sin(px * 2.3 + py * 0.7));
 
-              const bottom1 = hasVineBelow
-                ? TILE_SIZE
-                : TILE_SIZE - 4 - hash1 * 8;
-              const bottom2 = hasVineBelow
-                ? TILE_SIZE
-                : TILE_SIZE - 2 - hash2 * 6;
-              const bottom3 = hasVineBelow
-                ? TILE_SIZE
-                : TILE_SIZE - 8 - hash3 * 12;
+              const bot1 = hasVineBelow ? TILE_SIZE : TILE_SIZE - 4 - h1 * 8;
+              const bot2 = hasVineBelow ? TILE_SIZE : TILE_SIZE - 2 - h2 * 6;
+              const bot3 = hasVineBelow ? TILE_SIZE : TILE_SIZE - 8 - h3 * 12;
 
-              drawVine(4, 0, 3, bottom1);
-              drawVine(14, 2, 2, bottom2);
-              drawVine(24, 1, 3, bottom3);
+              drawVine(4, 0, bot1);
+              drawVine(14, 2.1, bot2);
+              drawVine(24, 1.2, bot3);
             }
           }
         }
@@ -4429,49 +4484,75 @@ export class GameEngine {
     const ex = this.state.endPos.x;
     const ey = this.state.endPos.y;
     if (this.state.floor < this.state.maxFloor) {
-      // Trapdoor Exit
+      // High-Detail Medieval Oak Trapdoor Exit
       const px = ex * TILE_SIZE;
       const py = ey * TILE_SIZE;
 
-      // Ladder inside the hole
-      ctx.fillStyle = "#1c1917"; // hole background
-      ctx.fillRect(px, py + TILE_SIZE - 8, 32, 9); // ponytail: overlap to prevent gaps
-      ctx.fillStyle = "#78350f"; // ladder rails inside hole
-      ctx.fillRect(px + 8, py + TILE_SIZE - 8, 2, 9); // ponytail: overlap to prevent gaps
-      ctx.fillRect(px + 22, py + TILE_SIZE - 8, 2, 9); // ponytail: overlap to prevent gaps
-      ctx.fillStyle = "#b45309"; // ladder rung
-      ctx.fillRect(px + 10, py + TILE_SIZE - 4, 12, 2);
+      // Stone well frame rim with creeping moss
+      ctx.fillStyle = "#1e293b";
+      ctx.fillRect(px, py + TILE_SIZE - 10, TILE_SIZE + 1, 11);
+      ctx.fillStyle = "#475569";
+      ctx.fillRect(px, py + TILE_SIZE - 10, TILE_SIZE + 1, 2);
+      ctx.fillStyle = "#15803d"; // moss fringe
+      ctx.fillRect(px + 4, py + TILE_SIZE - 9, 6, 2);
+      ctx.fillRect(px + 20, py + TILE_SIZE - 9, 8, 2);
 
-      // Wood trapdoor propped open
-      ctx.fillStyle = "#5ac"; // trapdoor edge highlight
-      ctx.fillRect(px - 4, py - 12, 4, 32);
+      // Descending dark abyss hole
+      ctx.fillStyle = "#090d16";
+      ctx.fillRect(px + 2, py + TILE_SIZE - 8, TILE_SIZE - 4, 9);
 
-      ctx.fillStyle = "#381c00"; // dark wood
-      ctx.fillRect(px, py - 12, 8, 32);
-      ctx.fillStyle = "#542a00"; // light wood planks
-      ctx.fillRect(px + 2, py - 10, 2, 28);
-      ctx.fillRect(px + 6, py - 10, 2, 28);
+      // Wooden ladder rails inside shaft
+      ctx.fillStyle = "#78350f";
+      ctx.fillRect(px + 7, py + TILE_SIZE - 8, 2, 9);
+      ctx.fillRect(px + 23, py + TILE_SIZE - 8, 2, 9);
+      ctx.fillStyle = "#b45309";
+      ctx.fillRect(px + 9, py + TILE_SIZE - 5, 14, 2);
 
-      // Iron hinges
-      ctx.fillStyle = "#333";
-      ctx.fillRect(px, py - 8, 12, 4);
-      ctx.fillRect(px, py + 12, 12, 4);
+      // Weathered heavy oak trapdoor hatch propped open
+      ctx.fillStyle = "#451a03"; // dark timber back
+      ctx.fillRect(px - 3, py - 14, 7, 34);
+      ctx.fillStyle = "#78350f"; // wood planks
+      ctx.fillRect(px - 2, py - 12, 5, 30);
+      ctx.fillStyle = "#b45309"; // wood grain
+      ctx.fillRect(px - 1, py - 10, 2, 26);
 
-      ctx.fillStyle = "#ddaaff";
-      ctx.fillText("Descend", px - 6, py - 20);
+      // Wrought-iron strap hinges with rivets
+      ctx.fillStyle = "#0f172a";
+      ctx.fillRect(px - 4, py - 10, 8, 4);
+      ctx.fillRect(px - 4, py + 10, 8, 4);
+      ctx.fillStyle = "#94a3b8"; // rivet dots
+      ctx.fillRect(px - 2, py - 9, 2, 2);
+      ctx.fillRect(px - 2, py + 11, 2, 2);
+
+      // Brass ring handle
+      ctx.fillStyle = "#fbbf24";
+      ctx.fillRect(px + 1, py - 2, 2, 6);
+
+      // Descend prompt
+      ctx.fillStyle = "#fbcfe8";
+      ctx.font = "bold 12px 'Courier New', Courier, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("DESCEND", px + 16, py - 18);
     } else if (!this.state.player.hasDiamond) {
-      // Pixelated True Diamond
+      // True Diamond on Carved Ancient Altar Pedestal
       const px = ex * TILE_SIZE;
       const py = ey * TILE_SIZE + Math.sin(Date.now() * 0.005) * 4;
 
-      ctx.fillStyle = "#7bf";
-      ctx.fillRect(px + 12, py + 4, 8, 4);
-      ctx.fillRect(px + 8, py + 8, 16, 4);
-      ctx.fillRect(px + 4, py + 12, 24, 8);
-      ctx.fillStyle = "#49d";
-      ctx.fillRect(px + 8, py + 20, 16, 4);
-      ctx.fillRect(px + 12, py + 24, 8, 4);
-      ctx.fillRect(px + 16, py + 28, 4, 4);
+      // Glowing Diamond Core & Shimmer Facets
+      ctx.fillStyle = "#38bdf8";
+      ctx.fillRect(px + 10, py + 4, 12, 4);
+      ctx.fillRect(px + 6, py + 8, 20, 6);
+      ctx.fillRect(px + 2, py + 14, 28, 8);
+      ctx.fillStyle = "#0284c7";
+      ctx.fillRect(px + 6, py + 22, 20, 6);
+      ctx.fillRect(px + 10, py + 28, 12, 4);
+      ctx.fillRect(px + 14, py + 32, 4, 3);
+
+      // Radiant Crystal Specular Highlights
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(px + 10, py + 6, 4, 4);
+      ctx.fillRect(px + 6, py + 14, 6, 4);
+      ctx.fillRect(px + 14, py + 10, 4, 4);
     }
 
     // Draw Enemies
