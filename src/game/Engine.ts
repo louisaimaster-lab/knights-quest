@@ -491,63 +491,111 @@ export class GameEngine {
     }
 
     if (this.state.biome === "volcanic") {
-      // Lava monsters walk on lava surfaces
-      for (let y = 1; y < this.state.height; y++) {
-        for (let x = 1; x < this.state.width; x++) {
-          if (this.state.map[y][x] === 21 && Math.random() < 0.06) {
-            this.state.enemies.push({
-              id: `lava_monster_${Math.random()}`,
-              type: "lava_monster",
-              x: x * TILE_SIZE + 2,
-              y: (y - 1) * TILE_SIZE,
-              w: 28,
-              h: 20,
-              vx: 0,
-              vy: 0,
-              health: 45,
-              maxHealth: 45,
-              facingRight: Math.random() > 0.5,
-              isGrounded: true,
-              invulnerableTimer: 0,
-              stateTimer: 0,
-              turnTimer: 0,
-              onLadder: false,
-              aiState: "idle",
-            });
+      // 35% chance for a monster per pool (not block) of lava
+      const visitedLava = new Set<string>();
+      const lavaPools: { x: number; y: number }[][] = [];
+
+      for (let y = 0; y < this.state.height; y++) {
+        for (let x = 0; x < this.state.width; x++) {
+          if (this.state.map[y] && this.state.map[y][x] === 21 && !visitedLava.has(`${x},${y}`)) {
+            const pool: { x: number; y: number }[] = [];
+            const queue: [number, number][] = [[x, y]];
+            visitedLava.add(`${x},${y}`);
+
+            while (queue.length > 0) {
+              const [cx, cy] = queue.shift()!;
+              pool.push({ x: cx, y: cy });
+
+              const neighbors: [number, number][] = [
+                [cx + 1, cy],
+                [cx - 1, cy],
+                [cx, cy + 1],
+                [cx, cy - 1]
+              ];
+
+              for (const [nx, ny] of neighbors) {
+                if (
+                  nx >= 0 && nx < this.state.width &&
+                  ny >= 0 && ny < this.state.height &&
+                  this.state.map[ny] && this.state.map[ny][nx] === 21 &&
+                  !visitedLava.has(`${nx},${ny}`)
+                ) {
+                  visitedLava.add(`${nx},${ny}`);
+                  queue.push([nx, ny]);
+                }
+              }
+            }
+
+            if (pool.length > 0) {
+              lavaPools.push(pool);
+            }
           }
         }
       }
 
-      // Lava spiders hang from structure ceilings or cavern roofs (max 4 per floor)
-      let spiderCount = 0;
-      for (let y = 1; y < this.state.height - 2; y++) {
-        for (let x = 1; x < this.state.width - 1; x++) {
-          const solidAbove = this.state.map[y - 1] && (this.state.map[y - 1][x] === 11 || this.state.map[y - 1][x] === 19 || this.state.map[y - 1][x] === 20);
-          const isOpen = this.state.map[y][x] === 0;
-          if (solidAbove && isOpen && Math.random() < 0.08) {
-            this.state.enemies.push({
-              id: `lava_spider_${Math.random()}`,
-              type: "lava_spider",
-              x: x * TILE_SIZE + 4,
-              y: (y - 1) * TILE_SIZE + 2,
-              w: 18,
-              h: 14,
-              vx: 0,
-              vy: 0,
-              health: 30,
-              maxHealth: 30,
-              facingRight: Math.random() > 0.5,
-              isGrounded: false,
-              invulnerableTimer: 0,
-              stateTimer: 0,
-              onLadder: false,
-              aiState: "hanging",
-            });
-            spiderCount++;
-            if (spiderCount >= 4) break;
+      for (const pool of lavaPools) {
+        if (Math.random() < 0.35) {
+          const surfaceTiles = pool.filter(t => !this.state.map[t.y - 1] || this.state.map[t.y - 1][t.x] === 0);
+          const spawnTile = surfaceTiles.length > 0
+            ? surfaceTiles[Math.floor(Math.random() * surfaceTiles.length)]
+            : pool[Math.floor(Math.random() * pool.length)];
+
+          this.state.enemies.push({
+            id: `lava_monster_${Math.random()}`,
+            type: "lava_monster",
+            x: spawnTile.x * TILE_SIZE + 2,
+            y: (spawnTile.y - 1) * TILE_SIZE,
+            w: 28,
+            h: 20,
+            vx: 0,
+            vy: 0,
+            health: 45,
+            maxHealth: 45,
+            facingRight: Math.random() > 0.5,
+            isGrounded: true,
+            invulnerableTimer: 0,
+            stateTimer: 0,
+            turnTimer: 0,
+            onLadder: false,
+            aiState: "idle",
+          });
+        }
+      }
+
+      // Exactly ONE spider spawns in each structure
+      if (gen.structures) {
+        for (const struct of gen.structures) {
+          let spawned = false;
+          for (let y = struct.y + 1; y < struct.y + struct.h - 1; y++) {
+            for (let x = struct.x + 1; x < struct.x + struct.w - 1; x++) {
+              const solidAbove = this.state.map[y - 1] && (this.state.map[y - 1][x] === 11 || this.state.map[y - 1][x] === 19 || this.state.map[y - 1][x] === 20 || this.state.map[y - 1][x] === 1);
+              const isOpen = this.state.map[y] && this.state.map[y][x] === 0;
+              if (solidAbove && isOpen) {
+                this.state.enemies.push({
+                  id: `lava_spider_${Math.random()}`,
+                  type: "lava_spider",
+                  x: x * TILE_SIZE + 4,
+                  y: (y - 1) * TILE_SIZE + 2,
+                  w: 18,
+                  h: 14,
+                  vx: 0,
+                  vy: 0,
+                  health: 30,
+                  maxHealth: 30,
+                  facingRight: Math.random() > 0.5,
+                  isGrounded: false,
+                  invulnerableTimer: 0,
+                  stateTimer: 0,
+                  onLadder: false,
+                  aiState: "hanging",
+                });
+                spawned = true;
+                break;
+              }
+            }
+            if (spawned) break;
           }
         }
-        if (spiderCount >= 4) break;
       }
     }
   }
@@ -6135,7 +6183,7 @@ export class GameEngine {
         lctx.arc(x, y, radius, 0, Math.PI * 2);
         lctx.fill();
       };
-      const pLightRad = (p.weapon === 'torch' && p.weaponEquipped) ? 330.0 : 175.5;
+      const pLightRad = (p.weapon === 'torch' && p.weaponEquipped) ? 205.0 : 115.0;
       drawPlayerLight(p.x + p.w / 2, p.y + p.h / 2, pLightRad);
 
       lctx.restore();

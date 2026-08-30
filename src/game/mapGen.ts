@@ -193,6 +193,7 @@ export function generateCave(floor: number, maxFloor: number) {
   let chests: { x: number; y: number; weapon?: string; isCastleChest?: boolean }[] = [];
   let numStructures = Math.floor(floor * 0.75) + 1;
   let structureBoxes: { x: number, y: number, w: number, h: number }[] = [];
+  let structures: { x: number, y: number, w: number, h: number }[] = [];
 
   for(let i=0; i<numStructures; i++) {
       let placed = false;
@@ -240,6 +241,7 @@ export function generateCave(floor: number, maxFloor: number) {
               sw = testSw;
               sh = testSh;
               structureBoxes.push(box);
+              structures.push({ x: sx, y: sy, w: sw, h: sh });
               placed = true;
               break;
           }
@@ -893,6 +895,7 @@ export function generateCave(floor: number, maxFloor: number) {
       });
 
       rareStructure = { x: structX, y: structY, w: structW, h: structH, type: 'molten_forge' };
+      structures.push({ x: structX, y: structY, w: structW, h: structH });
   } else if (biome === 'ice' && Math.random() < 0.015) {
       const structW = 22;
       const structH = 14;
@@ -921,6 +924,7 @@ export function generateCave(floor: number, maxFloor: number) {
       });
 
       rareStructure = { x: structX, y: structY, w: structW, h: structH, type: 'ice_citadel' };
+      structures.push({ x: structX, y: structY, w: structW, h: structH });
   }
 
   // Descend gate rule: endPos CANNOT spawn inside lava (tile 21) AND MUST spawn on top of solid ground in the lower 30% of the cave
@@ -988,6 +992,6 @@ export function generateCave(floor: number, maxFloor: number) {
       }
   }
 
-  return { width, height, map, bgMap, openSpaces, startPos, endPos, biome, chests, rareStructure };
+  return { width, height, map, bgMap, openSpaces, startPos, endPos, biome, chests, rareStructure, structures };
 }
 
