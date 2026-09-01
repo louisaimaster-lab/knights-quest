@@ -21,6 +21,30 @@ import {
   COLORS,
 } from "./constants";
 
+const tileTextures: { [key: string]: HTMLImageElement } = {};
+export function loadTileTexture(name: string, src: string) {
+  if (typeof Image === "undefined") return;
+  const img = new Image();
+  img.src = src;
+  img.onload = () => {
+    tileTextures[name] = img;
+  };
+}
+
+if (typeof window !== "undefined") {
+  loadTileTexture("dirt", "/tiles/dirt.png");
+  loadTileTexture("grass", "/tiles/grass.png");
+  loadTileTexture("cobblestone", "/tiles/cobblestone.png");
+  loadTileTexture("bricks", "/tiles/bricks.png");
+  loadTileTexture("moss", "/tiles/moss.png");
+  loadTileTexture("snow", "/tiles/snow.png");
+  loadTileTexture("ice", "/tiles/ice.png");
+  loadTileTexture("basalt", "/tiles/basalt.png");
+  loadTileTexture("magma", "/tiles/magma.png");
+  loadTileTexture("torch", "/tiles/torch.png");
+  loadTileTexture("background", "/tiles/background.png");
+}
+
 export function isWeapon(type: WeaponType | null): boolean {
   if (!type) return false;
   return ['sword', 'bow', 'colossal_sword', 'dual_daggers', 'mace', 'battle_axe', 'frozen_sword', 'molten_axe'].includes(type);
@@ -4044,7 +4068,9 @@ export class GameEngine {
         const px = x * TILE_SIZE;
         const py = y * TILE_SIZE;
 
-        if (this.state.bgMap[y] && this.state.bgMap[y][x] === 9) {
+        if (tileTextures["background"] && tileTextures["background"].complete && tileTextures["background"].naturalWidth > 0) {
+          ctx.drawImage(tileTextures["background"], px, py, TILE_SIZE + 1, TILE_SIZE + 1);
+        } else if (this.state.bgMap[y] && this.state.bgMap[y][x] === 9) {
           // Weathered Medieval Timber & Overgrown Masonry Background
           ctx.fillStyle = "#2d1b10"; // Dark rich timber base
           ctx.fillRect(px, py, TILE_SIZE + 1, TILE_SIZE + 1);
@@ -4063,39 +4089,12 @@ export class GameEngine {
           ctx.fillRect(px, py + 23, TILE_SIZE + 1, 2);
           ctx.fillRect(px, py + 31, TILE_SIZE + 1, 2);
 
-          // Woodgrain fibers
-          ctx.fillStyle = "#4a2e1b";
-          const grainSeed = (x * 7 + y * 13) % 4;
-          if (grainSeed === 0) {
-            ctx.fillRect(px + 4, py + 3, 12, 1);
-            ctx.fillRect(px + 18, py + 11, 10, 1);
-            ctx.fillRect(px + 6, py + 19, 14, 1);
-          } else if (grainSeed === 1) {
-            ctx.fillRect(px + 10, py + 4, 16, 1);
-            ctx.fillRect(px + 2, py + 12, 12, 1);
-            ctx.fillRect(px + 16, py + 27, 12, 1);
-          }
-
           // Wrought-iron square nails
           ctx.fillStyle = "#111827";
           ctx.fillRect(px + 3, py + 3, 2, 2);
           ctx.fillRect(px + 27, py + 3, 2, 2);
           ctx.fillRect(px + 3, py + 19, 2, 2);
           ctx.fillRect(px + 27, py + 19, 2, 2);
-          ctx.fillStyle = "#6b7280"; // nail highlight glint
-          ctx.fillRect(px + 3, py + 3, 1, 1);
-          ctx.fillRect(px + 27, py + 3, 1, 1);
-
-          // Creeping green moss / lichen tendrils on timber
-          const mossSeed = (x * 19 + y * 23) % 7;
-          if (mossSeed < 3) {
-            ctx.fillStyle = "#14532d"; // dark moss
-            ctx.fillRect(px + 8, py + 6, 6, 3);
-            ctx.fillRect(px + 12, py + 14, 8, 3);
-            ctx.fillStyle = "#22c55e"; // bright moss sprout
-            ctx.fillRect(px + 9, py + 7, 3, 1);
-            ctx.fillRect(px + 14, py + 15, 3, 1);
-          }
         } else {
           const isIceBg = this.state.biome === "ice";
           const isMossBg = this.state.biome === "moss";
@@ -4200,6 +4199,31 @@ export class GameEngine {
             const topRight = isSolid(this.state.map[y - 1]?.[x + 1]);
             const bottomLeft = isSolid(this.state.map[y + 1]?.[x - 1]);
             const bottomRight = isSolid(this.state.map[y + 1]?.[x + 1]);
+
+            // Check for user-imported custom texture PNGs from /tiles/
+            let customTexture: HTMLImageElement | undefined;
+            if (isGrass && tileTextures["grass"]) customTexture = tileTextures["grass"];
+            else if (isStone && tileTextures["cobblestone"]) customTexture = tileTextures["cobblestone"];
+            else if (isStoneBrick && tileTextures["bricks"]) customTexture = tileTextures["bricks"];
+            else if (isMossy && tileTextures["moss"]) customTexture = tileTextures["moss"];
+            else if (isSnow && tileTextures["snow"]) customTexture = tileTextures["snow"];
+            else if (isIce && tileTextures["ice"]) customTexture = tileTextures["ice"];
+            else if (isBasalt && tileTextures["basalt"]) customTexture = tileTextures["basalt"];
+            else if (isMagma && tileTextures["magma"]) customTexture = tileTextures["magma"];
+            else if ((tile === 1 || tile === 7) && tileTextures["dirt"]) customTexture = tileTextures["dirt"];
+
+            if (customTexture && customTexture.complete && customTexture.naturalWidth > 0) {
+              ctx.drawImage(customTexture, px, py, TILE_SIZE + 1, TILE_SIZE + 1);
+              if (isGrass && !top && !tileTextures["grass"]) {
+                ctx.fillStyle = "#14532d";
+                ctx.fillRect(px, py + 4, TILE_SIZE + 1, 2);
+                ctx.fillStyle = "#16a34a";
+                ctx.fillRect(px, py, TILE_SIZE + 1, 4);
+                ctx.fillStyle = "#4ade80";
+                ctx.fillRect(px, py, TILE_SIZE + 1, 2);
+              }
+              continue;
+            }
 
             let baseColor: string, darkColor: string, highlightColor: string, strokeColor: string;
 
