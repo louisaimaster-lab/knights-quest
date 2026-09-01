@@ -178,6 +178,8 @@ export class GameEngine {
         burnTimer: 0,
         burnPulse: 0,
         slownessTimer: 0,
+        landingSlowTimer: 0,
+        fallPeakY: undefined,
         redFlashTimer: 0,
         fireImmunityTimer: 0,
         oxygen: 100,
@@ -292,6 +294,8 @@ export class GameEngine {
     this.state.player.vx = 0;
     this.state.player.vy = 0;
     this.state.player.isGrounded = true;
+    this.state.player.fallPeakY = undefined;
+    this.state.player.landingSlowTimer = 0;
 
 // Reset camera zoom and timer states upon descending
     this.state.camera.zoom = 2.2; // ponytail: start zoomed in, ease out to 1.5 for the descend intro
@@ -1425,7 +1429,11 @@ export class GameEngine {
       superJumpMult = 1.25;
     }
 
-    const slowMult = p.slownessTimer > 0 ? 0.65 : 1;
+    if (p.landingSlowTimer && p.landingSlowTimer > 0) {
+      p.landingSlowTimer--;
+    }
+    const landingSlowMult = (p.landingSlowTimer || 0) > 0 ? 0.45 : 1;
+    const slowMult = (p.slownessTimer > 0 ? 0.65 : 1) * landingSlowMult;
     const effectiveSpeedMulti = p.speedMulti * weaponSpeedMult * superSpeedMult * potionSpeedMult * slowMult;
     const effectiveJumpMulti = p.jumpMulti * weaponJumpMult * superJumpMult;
 
@@ -2150,6 +2158,15 @@ export class GameEngine {
         p.vx = Math.sign(p.vx) * Math.max(currentSpeed, Math.abs(p.vx) - 0.5); // Decay in air
     }
 
+    // Track jump/fall apex while in the air to measure fall height
+    if (!p.isGrounded && !p.onLadder && !inWater && !inLava) {
+      if (p.fallPeakY === undefined || p.y < p.fallPeakY) {
+        p.fallPeakY = p.y;
+      }
+    } else if (p.onLadder || inWater || inLava) {
+      p.fallPeakY = undefined;
+    }
+
     const oldVy = p.vy;
     const res = AABBMapCollision(
       p,
@@ -2180,19 +2197,32 @@ export class GameEngine {
       }
     }
 
+    let isHighFall = false;
+    if (res.grounded && !brokeIce) {
+      if (p.fallPeakY !== undefined) {
+        const fallDistance = p.y - p.fallPeakY;
+        const fallBlocks = fallDistance / TILE_SIZE;
+        if (fallBlocks >= 6) {
+          isHighFall = true;
+          p.landingSlowTimer = 14; // brief landing recovery (~0.23s)
+        }
+      }
+      p.fallPeakY = undefined;
+    }
+
     p.x = res.x;
     p.y = res.y;
-    p.vx = res.vx;
+    p.vx = isHighFall ? res.vx * 0.25 : res.vx; // Speed falloff: jumping from heights over 6 blocks decreases velocity on landing
     p.vy = brokeIce ? oldVy * 0.5 : res.vy;
     p.isGrounded = brokeIce
       ? false
       : res.grounded || (p.onLadder && isClimbing && p.vy === 0);
 
     // Landing Impact Dust & Shockwave
-    if (!brokeIce && res.grounded && oldVy > 3.5) {
-      this.spawnDustPuff(p.x + p.w / 2, p.y + p.h, oldVy > 7 ? 8 : 4);
-      if (oldVy > 7) {
-        this.state.shakeTimer = Math.max(this.state.shakeTimer, 4);
+    if (!brokeIce && res.grounded && (oldVy > 3.5 || isHighFall)) {
+      this.spawnDustPuff(p.x + p.w / 2, p.y + p.h, oldVy > 7 || isHighFall ? 8 : 4);
+      if (oldVy > 7 || isHighFall) {
+        this.state.shakeTimer = Math.max(this.state.shakeTimer, isHighFall ? 4 : 3);
         this.state.particles.push({
           x: p.x + p.w / 2,
           y: p.y + p.h,

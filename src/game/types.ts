@@ -68,6 +68,8 @@ export interface Player extends Entity {
   slownessTimer: number;
   redFlashTimer: number;
   fireImmunityTimer: number;
+  fallPeakY?: number;
+  landingSlowTimer?: number;
   oxygen: number;
   maxOxygen: number;
   hasWaterResistance?: boolean;
