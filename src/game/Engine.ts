@@ -31,16 +31,53 @@ export function loadTileTexture(name: string, src: string) {
   };
 }
 
+export function getAutoTileTexture(
+  prefix: string,
+  top: boolean,
+  bottom: boolean,
+  left: boolean,
+  right: boolean
+): HTMLImageElement | undefined {
+  // 1. Check outer corners
+  if (!top && !left && tileTextures[`${prefix}_top_left`]?.complete && tileTextures[`${prefix}_top_left`]?.naturalWidth > 0)
+    return tileTextures[`${prefix}_top_left`];
+  if (!top && !right && tileTextures[`${prefix}_top_right`]?.complete && tileTextures[`${prefix}_top_right`]?.naturalWidth > 0)
+    return tileTextures[`${prefix}_top_right`];
+  if (!bottom && !left && tileTextures[`${prefix}_bottom_left`]?.complete && tileTextures[`${prefix}_bottom_left`]?.naturalWidth > 0)
+    return tileTextures[`${prefix}_bottom_left`];
+  if (!bottom && !right && tileTextures[`${prefix}_bottom_right`]?.complete && tileTextures[`${prefix}_bottom_right`]?.naturalWidth > 0)
+    return tileTextures[`${prefix}_bottom_right`];
+
+  // 2. Check outer edges
+  if (!top && tileTextures[`${prefix}_top`]?.complete && tileTextures[`${prefix}_top`]?.naturalWidth > 0)
+    return tileTextures[`${prefix}_top`];
+  if (!bottom && tileTextures[`${prefix}_bottom`]?.complete && tileTextures[`${prefix}_bottom`]?.naturalWidth > 0)
+    return tileTextures[`${prefix}_bottom`];
+  if (!left && tileTextures[`${prefix}_left`]?.complete && tileTextures[`${prefix}_left`]?.naturalWidth > 0)
+    return tileTextures[`${prefix}_left`];
+  if (!right && tileTextures[`${prefix}_right`]?.complete && tileTextures[`${prefix}_right`]?.naturalWidth > 0)
+    return tileTextures[`${prefix}_right`];
+
+  // 3. Fallback to center or base
+  if (tileTextures[`${prefix}_center`]?.complete && tileTextures[`${prefix}_center`]?.naturalWidth > 0)
+    return tileTextures[`${prefix}_center`];
+  if (tileTextures[prefix]?.complete && tileTextures[prefix]?.naturalWidth > 0)
+    return tileTextures[prefix];
+
+  return undefined;
+}
+
 if (typeof window !== "undefined") {
-  loadTileTexture("dirt", "/tiles/dirt.png");
-  loadTileTexture("grass", "/tiles/grass.png");
-  loadTileTexture("cobblestone", "/tiles/cobblestone.png");
-  loadTileTexture("bricks", "/tiles/bricks.png");
-  loadTileTexture("moss", "/tiles/moss.png");
-  loadTileTexture("snow", "/tiles/snow.png");
-  loadTileTexture("ice", "/tiles/ice.png");
-  loadTileTexture("basalt", "/tiles/basalt.png");
-  loadTileTexture("magma", "/tiles/magma.png");
+  const suffixes = [
+    "", "_top", "_bottom", "_left", "_right",
+    "_top_left", "_top_right", "_bottom_left", "_bottom_right", "_center"
+  ];
+  const blockTypes = ["dirt", "grass", "cobblestone", "bricks", "moss", "snow", "ice", "basalt", "magma"];
+  for (const b of blockTypes) {
+    for (const s of suffixes) {
+      loadTileTexture(`${b}${s}`, `/tiles/${b}${s}.png`);
+    }
+  }
   loadTileTexture("torch", "/tiles/torch.png");
   loadTileTexture("background", "/tiles/background.png");
 }
@@ -4200,21 +4237,21 @@ export class GameEngine {
             const bottomLeft = isSolid(this.state.map[y + 1]?.[x - 1]);
             const bottomRight = isSolid(this.state.map[y + 1]?.[x + 1]);
 
-            // Check for user-imported custom texture PNGs from /tiles/
+            // Check for user-imported custom texture PNGs from /tiles/ with full auto-tiling piece support
             let customTexture: HTMLImageElement | undefined;
-            if (isGrass && tileTextures["grass"]) customTexture = tileTextures["grass"];
-            else if (isStone && tileTextures["cobblestone"]) customTexture = tileTextures["cobblestone"];
-            else if (isStoneBrick && tileTextures["bricks"]) customTexture = tileTextures["bricks"];
-            else if (isMossy && tileTextures["moss"]) customTexture = tileTextures["moss"];
-            else if (isSnow && tileTextures["snow"]) customTexture = tileTextures["snow"];
-            else if (isIce && tileTextures["ice"]) customTexture = tileTextures["ice"];
-            else if (isBasalt && tileTextures["basalt"]) customTexture = tileTextures["basalt"];
-            else if (isMagma && tileTextures["magma"]) customTexture = tileTextures["magma"];
-            else if ((tile === 1 || tile === 7) && tileTextures["dirt"]) customTexture = tileTextures["dirt"];
+            if (isGrass) customTexture = getAutoTileTexture("grass", top, bottom, left, right) || getAutoTileTexture("dirt", top, bottom, left, right);
+            else if (isStone) customTexture = getAutoTileTexture("cobblestone", top, bottom, left, right);
+            else if (isStoneBrick) customTexture = getAutoTileTexture("bricks", top, bottom, left, right);
+            else if (isMossy) customTexture = getAutoTileTexture("moss", top, bottom, left, right);
+            else if (isSnow) customTexture = getAutoTileTexture("snow", top, bottom, left, right);
+            else if (isIce) customTexture = getAutoTileTexture("ice", top, bottom, left, right);
+            else if (isBasalt) customTexture = getAutoTileTexture("basalt", top, bottom, left, right);
+            else if (isMagma) customTexture = getAutoTileTexture("magma", top, bottom, left, right);
+            else customTexture = getAutoTileTexture("dirt", top, bottom, left, right);
 
             if (customTexture && customTexture.complete && customTexture.naturalWidth > 0) {
               ctx.drawImage(customTexture, px, py, TILE_SIZE + 1, TILE_SIZE + 1);
-              if (isGrass && !top && !tileTextures["grass"]) {
+              if (isGrass && !top && !tileTextures["grass"] && !tileTextures["grass_top"] && !tileTextures["dirt_top"]) {
                 ctx.fillStyle = "#14532d";
                 ctx.fillRect(px, py + 4, TILE_SIZE + 1, 2);
                 ctx.fillStyle = "#16a34a";
