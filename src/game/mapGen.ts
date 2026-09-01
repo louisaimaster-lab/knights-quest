@@ -85,27 +85,27 @@ export function generateCave(floor: number, maxFloor: number) {
   let bgMap = Array(height).fill(0).map(() => Array(width).fill(0));
 
   
-  // 1. Random noise (varying density based on floor)
-  const density = 0.37 + (Math.sin(floor) * 0.05); // Lowered for wider caves
+  // 1. Initial Chunky Noise & Thick Sub-Floors
+  const density = 0.42 + (Math.sin(floor) * 0.04);
   for (let my = 1; my < height - 1; my++) {
       for (let mx = 1; mx < width - 1; mx++) {
           map[my][mx] = Math.random() < density ? 1 : 0;
       }
   }
 
-  // 1.5 Inject heavy horizontal layers (creates cave sub-floors)
-  for (let my = 8; my < height - 8; my += (6 + Math.floor(Math.random() * 4))) {
+  // 1.5 Inject thick contiguous horizontal layers (sub-floors of 3-block thickness)
+  for (let my = 8; my < height - 8; my += (7 + Math.floor(Math.random() * 4))) {
       for (let mx = 1; mx < width - 1; mx++) {
-          if (Math.random() < 0.8) {
+          if (Math.random() < 0.85) {
               map[my][mx] = 1;
-              if (Math.random() < 0.6) map[my+1][mx] = 1;
+              map[my + 1][mx] = 1;
+              map[my + 2][mx] = 1;
           }
       }
   }
 
-  // 2. Cellular Automata - Multiple passes with different rules for varied shapes
-  // Pass 1: standard smooth
-  for (let s = 0; s < 4; s++) {
+  // 2. Cellular Automata - Majority rule passes to form clean, solid landmass chunks
+  for (let s = 0; s < 5; s++) {
       const nextMap = map.map(row => [...row]);
       for (let my = 1; my < height - 1; my++) {
           for (let mx = 1; mx < width - 1; mx++) {
@@ -116,40 +116,23 @@ export function generateCave(floor: number, maxFloor: number) {
                       if (map[my+dy][mx+dx] === 1) walls++;
                   }
               }
-              if (map[my][mx] === 1) nextMap[my][mx] = walls >= 4 ? 1 : 0;
-              else nextMap[my][mx] = walls >= 5 ? 1 : 0;
+              // Form cohesive solid chunks (>= 5 neighbors stays/becomes solid)
+              nextMap[my][mx] = walls >= 5 ? 1 : 0;
           }
       }
       map = nextMap;
   }
-  
-  // Pass 2: erode edges to create more organic varied shapes
-  const erodedMap = map.map(row => [...row]);
-  for (let my = 2; my < height - 2; my++) {
-      for (let mx = 2; mx < width - 2; mx++) {
-          let walls = 0;
-          for (let dy = -1; dy <= 1; dy++) {
-              for (let dx = -1; dx <= 1; dx++) {
-                  if (map[my+dy][mx+dx] === 1) walls++;
-              }
-          }
-          if (map[my][mx] === 1 && walls < 7) erodedMap[my][mx] = 0;
-      }
-  }
-  map = erodedMap;
 
-  // 3. Drunken worms carving paths to the bottom (more organic than snake zig-zag)
+  // 3. Drunken worms carving wide connected pathways
   const numWorms = 2 + Math.floor(Math.random() * 2);
   for (let w = 0; w < numWorms; w++) {
       let cx = Math.floor(width/4 + Math.random() * (width/2));
       let cy = 2;
       
       while (cy < height - 2) {
-          // Carve around current point with varying radius
-          let radius = 1 + Math.floor(Math.random() * 3); // 1 to 3 radius
+          let radius = 2 + Math.floor(Math.random() * 2); // 2 to 3 radius
           for (let dy = -radius; dy <= radius; dy++) {
               for (let dx = -radius; dx <= radius; dx++) {
-                  // Rough circle carve
                   if (dx*dx + dy*dy <= radius*radius * 1.2) {
                       if (cy+dy > 0 && cy+dy < height-1 && cx+dx > 0 && cx+dx < width-1) {
                           map[cy+dy][cx+dx] = 0;
@@ -158,7 +141,6 @@ export function generateCave(floor: number, maxFloor: number) {
               }
           }
           
-          // Move worm: mostly down, occasionally horizontal
           let dir = Math.random();
           if (dir < 0.5) {
               cy += 1;
@@ -173,18 +155,33 @@ export function generateCave(floor: number, maxFloor: number) {
       }
   }
 
-  // 4. (Removed normal deterministic ladder generation)
+  // 4. Structural 9-Slice Geometry Cleanup Pass:
+  // - Prune 1x1 orphan spikes (blocks with fewer than 2 orthogonal solid neighbors)
+  // - Fill 1x1 holes trapped inside solid chunks
+  for (let pass = 0; pass < 2; pass++) {
+      const cleanMap = map.map(row => [...row]);
+      for (let my = 1; my < height - 1; my++) {
+          for (let mx = 1; mx < width - 1; mx++) {
+              const solidNeighbors = (map[my-1][mx] === 1 ? 1 : 0) +
+                                     (map[my+1][mx] === 1 ? 1 : 0) +
+                                     (map[my][mx-1] === 1 ? 1 : 0) +
+                                     (map[my][mx+1] === 1 ? 1 : 0);
+              if (map[my][mx] === 1 && solidNeighbors < 2) {
+                  cleanMap[my][mx] = 0; // prune isolated pixel / spike
+              } else if (map[my][mx] === 0 && solidNeighbors === 4) {
+                  cleanMap[my][mx] = 1; // fill trapped hole
+              }
+          }
+      }
+      map = cleanMap;
+  }
 
-  // 5. Removed: Water generation moved to the end
-
-  // 6. Grass and Stone Sections
+  // 5. Stone Sections
   for (let my = 1; my < height - 1; my++) {
       for (let mx = 1; mx < width - 1; mx++) {
           if (map[my][mx] === 1) {
               // 20% chance of stone patch
-              if (Math.sin(mx*0.2 + my*0.3) > 0.6) map[my][mx] = 8;
-              // Add grass to top blocks
-              else if (map[my-1][mx] === 0 && Math.random() < 0.6) map[my][mx] = 7;
+              if (Math.sin(mx*0.2 + my*0.3) > 0.65) map[my][mx] = 8;
           }
       }
   }

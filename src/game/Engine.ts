@@ -22,10 +22,11 @@ import {
 } from "./constants";
 
 const tileTextures: { [key: string]: HTMLImageElement } = {};
+const CACHE_BUST = Date.now();
 export function loadTileTexture(name: string, src: string) {
   if (typeof Image === "undefined") return;
   const img = new Image();
-  img.src = src;
+  img.src = `${src}?v=${CACHE_BUST}`;
   img.onload = () => {
     tileTextures[name] = img;
   };
