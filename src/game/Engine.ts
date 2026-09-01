@@ -4251,14 +4251,6 @@ export class GameEngine {
 
             if (customTexture && customTexture.complete && customTexture.naturalWidth > 0) {
               ctx.drawImage(customTexture, px, py, TILE_SIZE + 1, TILE_SIZE + 1);
-              if (isGrass && !top && !tileTextures["grass"] && !tileTextures["grass_top"] && !tileTextures["dirt_top"]) {
-                ctx.fillStyle = "#14532d";
-                ctx.fillRect(px, py + 4, TILE_SIZE + 1, 2);
-                ctx.fillStyle = "#16a34a";
-                ctx.fillRect(px, py, TILE_SIZE + 1, 4);
-                ctx.fillStyle = "#4ade80";
-                ctx.fillRect(px, py, TILE_SIZE + 1, 2);
-              }
               continue;
             }
 
@@ -4515,20 +4507,14 @@ export class GameEngine {
 
             // === 3. Exposed Boundaries & Grass Top (NO green blocks in dirt!) ===
             if (!top) {
-              if (isGrass || isMossy) {
-                // Clean chunky retro pixel-art grass turf
-                ctx.fillStyle = "#14532d"; // Dark grass root shadow
-                ctx.fillRect(px, py + 4, TILE_SIZE + 1, 2);
-                ctx.fillStyle = "#16a34a"; // Vibrant grass body
-                ctx.fillRect(px, py, TILE_SIZE + 1, 4);
-                ctx.fillStyle = "#4ade80"; // Crisp sunlit blade rim
-                ctx.fillRect(px, py, TILE_SIZE + 1, 2);
-
-                // Small clean root notches hanging slightly into soil
+              if (isMossy) {
+                // Lush moss block top
                 ctx.fillStyle = "#14532d";
-                ctx.fillRect(px + 6, py + 4, 2, 3);
-                ctx.fillRect(px + 18, py + 4, 2, 2);
-                ctx.fillRect(px + 26, py + 4, 2, 3);
+                ctx.fillRect(px, py + 4, TILE_SIZE + 1, 2);
+                ctx.fillStyle = "#16a34a";
+                ctx.fillRect(px, py, TILE_SIZE + 1, 4);
+                ctx.fillStyle = "#4ade80";
+                ctx.fillRect(px, py, TILE_SIZE + 1, 2);
               } else if (isSnow) {
                 // Crisp chunky snow layer
                 ctx.fillStyle = "#bae6fd";
@@ -4541,7 +4527,7 @@ export class GameEngine {
                 ctx.fillStyle = "#fef08a";
                 ctx.fillRect(px + 2, py - 2, TILE_SIZE - 4, 2);
               } else {
-                // Stone/Cobble top bevel
+                // Earth/Stone top bevel
                 ctx.fillStyle = highlightColor;
                 ctx.fillRect(px, py, TILE_SIZE + 1, 2);
               }
@@ -4555,7 +4541,7 @@ export class GameEngine {
 
             if (!left) {
               // Left face
-              ctx.fillStyle = (isGrass && !top) ? "#16a34a" : highlightColor;
+              ctx.fillStyle = highlightColor;
               ctx.fillRect(px, py, 2, TILE_SIZE + 1);
             }
 
@@ -4566,13 +4552,13 @@ export class GameEngine {
             }
 
             // Exposed Corners
-            if (!top && !left && (isGrass || isMossy)) {
+            if (!top && !left && isMossy) {
               ctx.fillStyle = "#16a34a";
               ctx.fillRect(px - 1, py, 2, 4);
               ctx.fillStyle = "#4ade80";
               ctx.fillRect(px - 1, py, 2, 2);
             }
-            if (!top && !right && (isGrass || isMossy)) {
+            if (!top && !right && isMossy) {
               ctx.fillStyle = "#16a34a";
               ctx.fillRect(px + TILE_SIZE - 1, py, 2, 4);
               ctx.fillStyle = "#4ade80";
