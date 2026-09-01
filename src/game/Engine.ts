@@ -39,39 +39,58 @@ export function getAutoTileTexture(
   left: boolean,
   right: boolean
 ): HTMLImageElement | undefined {
-  // 1. Check outer corners
-  if (!top && !left && tileTextures[`${prefix}_top_left`]?.complete && tileTextures[`${prefix}_top_left`]?.naturalWidth > 0)
-    return tileTextures[`${prefix}_top_left`];
-  if (!top && !right && tileTextures[`${prefix}_top_right`]?.complete && tileTextures[`${prefix}_top_right`]?.naturalWidth > 0)
-    return tileTextures[`${prefix}_top_right`];
-  if (!bottom && !left && tileTextures[`${prefix}_bottom_left`]?.complete && tileTextures[`${prefix}_bottom_left`]?.naturalWidth > 0)
-    return tileTextures[`${prefix}_bottom_left`];
-  if (!bottom && !right && tileTextures[`${prefix}_bottom_right`]?.complete && tileTextures[`${prefix}_bottom_right`]?.naturalWidth > 0)
-    return tileTextures[`${prefix}_bottom_right`];
+  const getTex = (name: string) => {
+    const t = tileTextures[`${prefix}_${name}`] || tileTextures[`${prefix}${name}`];
+    return (t && t.complete && t.naturalWidth > 0) ? t : undefined;
+  };
 
-  // 2. Check outer edges
-  if (!top && tileTextures[`${prefix}_top`]?.complete && tileTextures[`${prefix}_top`]?.naturalWidth > 0)
-    return tileTextures[`${prefix}_top`];
-  if (!bottom && tileTextures[`${prefix}_bottom`]?.complete && tileTextures[`${prefix}_bottom`]?.naturalWidth > 0)
-    return tileTextures[`${prefix}_bottom`];
-  if (!left && tileTextures[`${prefix}_left`]?.complete && tileTextures[`${prefix}_left`]?.naturalWidth > 0)
-    return tileTextures[`${prefix}_left`];
-  if (!right && tileTextures[`${prefix}_right`]?.complete && tileTextures[`${prefix}_right`]?.naturalWidth > 0)
-    return tileTextures[`${prefix}_right`];
+  // 1. Check outer corners (air on two adjacent sides)
+  if (!top && !left) {
+    const t = getTex("top_left") || getTex("left_top");
+    if (t) return t;
+  }
+  if (!top && !right) {
+    const t = getTex("top_right") || getTex("right_top");
+    if (t) return t;
+  }
+  if (!bottom && !left) {
+    const t = getTex("bottom_left") || getTex("left_bottom");
+    if (t) return t;
+  }
+  if (!bottom && !right) {
+    const t = getTex("bottom_right") || getTex("right_bottom");
+    if (t) return t;
+  }
 
-  // 3. Fallback to center or base
-  if (tileTextures[`${prefix}_center`]?.complete && tileTextures[`${prefix}_center`]?.naturalWidth > 0)
-    return tileTextures[`${prefix}_center`];
-  if (tileTextures[prefix]?.complete && tileTextures[prefix]?.naturalWidth > 0)
-    return tileTextures[prefix];
+  // 2. Check outer edges (exposed to air on one side)
+  if (!top) {
+    const t = getTex("top") || getTex("mid_top") || getTex("top_mid");
+    if (t) return t;
+  }
+  if (!bottom) {
+    const t = getTex("bottom") || getTex("mid_bottom") || getTex("bottom_mid");
+    if (t) return t;
+  }
+  if (!left) {
+    const t = getTex("left") || getTex("left_mid") || getTex("mid_left");
+    if (t) return t;
+  }
+  if (!right) {
+    const t = getTex("right") || getTex("right_mid") || getTex("mid_right");
+    if (t) return t;
+  }
 
-  return undefined;
+  // 3. Center (solid on all 4 sides)
+  return getTex("center") || getTex("mid_mid") || getTex("mid") || tileTextures[prefix];
 }
 
 if (typeof window !== "undefined") {
   const suffixes = [
     "", "_top", "_bottom", "_left", "_right",
-    "_top_left", "_top_right", "_bottom_left", "_bottom_right", "_center"
+    "_top_left", "_top_right", "_bottom_left", "_bottom_right",
+    "_center", "_mid", "_mid_mid", "_mid_top", "_mid_bottom",
+    "_left_mid", "_right_mid", "_left_top", "_right_top",
+    "_left_bottom", "_right_bottom", "_top_mid", "_bottom_mid"
   ];
   const blockTypes = ["dirt", "grass", "cobblestone", "bricks", "moss", "snow", "ice", "basalt", "magma"];
   for (const b of blockTypes) {
