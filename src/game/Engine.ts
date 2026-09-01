@@ -3850,8 +3850,13 @@ export class GameEngine {
               t === 20;
             const top = isSolid(this.state.map[y - 1]?.[x]);
             const bottom = isSolid(this.state.map[y + 1]?.[x]);
-            const left = isSolid(this.state.map[y][x - 1]);
-            const right = isSolid(this.state.map[y][x + 1]);
+            const left = isSolid(this.state.map[y]?.[x - 1]);
+            const right = isSolid(this.state.map[y]?.[x + 1]);
+
+            const topLeft = isSolid(this.state.map[y - 1]?.[x - 1]);
+            const topRight = isSolid(this.state.map[y - 1]?.[x + 1]);
+            const bottomLeft = isSolid(this.state.map[y + 1]?.[x - 1]);
+            const bottomRight = isSolid(this.state.map[y + 1]?.[x + 1]);
 
             let baseColor, darkColor, highlightColor, strokeColor;
 
@@ -4026,7 +4031,7 @@ export class GameEngine {
               }
             }
 
-            // === Outer Surface Nature Edges & Overhangs ===
+            // === Outer Surface Nature Edges & Expansive Overhangs ===
             if (!top) {
               // Top exposed surface
               if (isGrass || isMossy) {
@@ -4101,6 +4106,19 @@ export class GameEngine {
               ctx.fillRect(px, py, 3, TILE_SIZE + 1);
               ctx.fillStyle = baseColor;
               ctx.fillRect(px + 3, py + 2, 2, TILE_SIZE - 4);
+
+              // Expansive 1px natural rocky crag bumps on exposed left side
+              const leftCrag = (x * 13 + y * 19) % 3;
+              ctx.fillStyle = (isGrass || isMossy) ? "#14532d" : (isSnow ? "#bae6fd" : highlightColor);
+              if (leftCrag === 0) {
+                ctx.fillRect(px - 1, py + 6, 2, 6);
+                ctx.fillRect(px - 1, py + 18, 2, 5);
+              } else if (leftCrag === 1) {
+                ctx.fillRect(px - 1, py + 10, 2, 8);
+              } else {
+                ctx.fillRect(px - 1, py + 4, 2, 5);
+                ctx.fillRect(px - 1, py + 20, 2, 6);
+              }
             }
 
             if (!right) {
@@ -4108,15 +4126,152 @@ export class GameEngine {
               ctx.fillRect(px + TILE_SIZE - 3, py, 4, TILE_SIZE + 1);
               ctx.fillStyle = darkColor;
               ctx.fillRect(px + TILE_SIZE - 5, py + 2, 2, TILE_SIZE - 4);
+
+              // Expansive 1px natural rocky crag bumps on exposed right side
+              const rightCrag = (x * 17 + y * 23) % 3;
+              ctx.fillStyle = (isGrass || isMossy) ? "#14532d" : strokeColor;
+              if (rightCrag === 0) {
+                ctx.fillRect(px + TILE_SIZE, py + 8, 2, 6);
+                ctx.fillRect(px + TILE_SIZE, py + 20, 2, 5);
+              } else if (rightCrag === 1) {
+                ctx.fillRect(px + TILE_SIZE, py + 4, 2, 8);
+              } else {
+                ctx.fillRect(px + TILE_SIZE, py + 14, 2, 7);
+              }
+            }
+
+            // === Expansive Exposed Corners (1-2px Outward on Exposed Sides) ===
+            // 1. Top-Left Outer Corner
+            if (!top && !left) {
+              if (isGrass || isMossy) {
+                ctx.fillStyle = "#14532d";
+                ctx.fillRect(px - 2, py - 1, 4, 3);
+                ctx.fillStyle = "#16a34a";
+                ctx.fillRect(px - 2, py - 2, 3, 2);
+                ctx.fillStyle = "#4ade80"; // sunlit blade tip spilling 2px left
+                ctx.fillRect(px - 2, py - 3, 2, 2);
+              } else if (isSnow) {
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(px - 2, py - 2, 4, 3);
+                ctx.fillStyle = "#bae6fd";
+                ctx.fillRect(px - 1, py + 1, 2, 2);
+              } else if (isMagma) {
+                ctx.fillStyle = "#f97316";
+                ctx.fillRect(px - 1, py - 1, 3, 3);
+                ctx.fillStyle = "#fef08a";
+                ctx.fillRect(px - 1, py - 1, 1, 1);
+              } else {
+                ctx.fillStyle = highlightColor;
+                ctx.fillRect(px - 1, py, 2, 4);
+                ctx.fillRect(px, py - 1, 4, 2);
+                ctx.fillStyle = strokeColor;
+                ctx.fillRect(px - 1, py - 1, 2, 2);
+              }
+            }
+
+            // 2. Top-Right Outer Corner
+            if (!top && !right) {
+              if (isGrass || isMossy) {
+                ctx.fillStyle = "#14532d";
+                ctx.fillRect(px + TILE_SIZE - 1, py - 1, 4, 3);
+                ctx.fillStyle = "#16a34a";
+                ctx.fillRect(px + TILE_SIZE, py - 2, 3, 2);
+                ctx.fillStyle = "#4ade80"; // sunlit blade tip spilling 2px right
+                ctx.fillRect(px + TILE_SIZE + 1, py - 3, 2, 2);
+              } else if (isSnow) {
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(px + TILE_SIZE - 1, py - 2, 4, 3);
+                ctx.fillStyle = "#bae6fd";
+                ctx.fillRect(px + TILE_SIZE, py + 1, 2, 2);
+              } else if (isMagma) {
+                ctx.fillStyle = "#f97316";
+                ctx.fillRect(px + TILE_SIZE - 1, py - 1, 3, 3);
+                ctx.fillStyle = "#fef08a";
+                ctx.fillRect(px + TILE_SIZE + 1, py - 1, 1, 1);
+              } else {
+                ctx.fillStyle = highlightColor;
+                ctx.fillRect(px + TILE_SIZE - 1, py, 2, 4);
+                ctx.fillRect(px + TILE_SIZE - 3, py - 1, 4, 2);
+                ctx.fillStyle = strokeColor;
+                ctx.fillRect(px + TILE_SIZE, py - 1, 2, 2);
+              }
+            }
+
+            // 3. Bottom-Left Outer Corner
+            if (!bottom && !left) {
+              if (isGrass || isMossy) {
+                ctx.fillStyle = "#14532d";
+                ctx.fillRect(px - 1, py + TILE_SIZE - 3, 3, 4);
+                ctx.fillStyle = "#78350f"; // root protrusion
+                ctx.fillRect(px - 2, py + TILE_SIZE - 1, 2, 3);
+              } else if (isSnow || isIce) {
+                ctx.fillStyle = "#0284c7";
+                ctx.fillRect(px - 1, py + TILE_SIZE - 2, 2, 3);
+                ctx.fillStyle = "#38bdf8";
+                ctx.fillRect(px - 1, py + TILE_SIZE - 4, 2, 2);
+              } else if (isMagma) {
+                ctx.fillStyle = "#7f1d1d";
+                ctx.fillRect(px - 1, py + TILE_SIZE - 1, 3, 3);
+                ctx.fillStyle = "#ea580c";
+                ctx.fillRect(px - 1, py + TILE_SIZE - 3, 2, 2);
+              } else {
+                ctx.fillStyle = strokeColor;
+                ctx.fillRect(px - 1, py + TILE_SIZE - 2, 3, 3);
+                ctx.fillStyle = darkColor;
+                ctx.fillRect(px - 1, py + TILE_SIZE - 4, 2, 3);
+              }
+            }
+
+            // 4. Bottom-Right Outer Corner
+            if (!bottom && !right) {
+              if (isGrass || isMossy) {
+                ctx.fillStyle = "#14532d";
+                ctx.fillRect(px + TILE_SIZE - 1, py + TILE_SIZE - 3, 3, 4);
+                ctx.fillStyle = "#78350f"; // root protrusion
+                ctx.fillRect(px + TILE_SIZE + 1, py + TILE_SIZE - 1, 2, 3);
+              } else if (isSnow || isIce) {
+                ctx.fillStyle = "#0284c7";
+                ctx.fillRect(px + TILE_SIZE, py + TILE_SIZE - 2, 2, 3);
+                ctx.fillStyle = "#38bdf8";
+                ctx.fillRect(px + TILE_SIZE, py + TILE_SIZE - 4, 2, 2);
+              } else if (isMagma) {
+                ctx.fillStyle = "#7f1d1d";
+                ctx.fillRect(px + TILE_SIZE - 1, py + TILE_SIZE - 1, 3, 3);
+                ctx.fillStyle = "#ea580c";
+                ctx.fillRect(px + TILE_SIZE, py + TILE_SIZE - 3, 2, 2);
+              } else {
+                ctx.fillStyle = strokeColor;
+                ctx.fillRect(px + TILE_SIZE - 1, py + TILE_SIZE - 2, 3, 3);
+                ctx.fillStyle = darkColor;
+                ctx.fillRect(px + TILE_SIZE, py + TILE_SIZE - 4, 2, 3);
+              }
+            }
+
+            // Inner Diagonal Convex Fillets
+            if (top && left && !topLeft) {
+              ctx.fillStyle = darkColor;
+              ctx.fillRect(px - 1, py - 1, 2, 2);
+            }
+            if (top && right && !topRight) {
+              ctx.fillStyle = darkColor;
+              ctx.fillRect(px + TILE_SIZE, py - 1, 2, 2);
+            }
+            if (bottom && left && !bottomLeft) {
+              ctx.fillStyle = strokeColor;
+              ctx.fillRect(px - 1, py + TILE_SIZE, 2, 2);
+            }
+            if (bottom && right && !bottomRight) {
+              ctx.fillStyle = strokeColor;
+              ctx.fillRect(px + TILE_SIZE, py + TILE_SIZE, 2, 2);
             }
 
             // Magma glow halo on exposed edges
             if (isMagma) {
               ctx.fillStyle = "rgba(249, 115, 22, 0.55)";
-              if (!top) ctx.fillRect(px, py - 3, TILE_SIZE + 1, 3);
-              if (!bottom) ctx.fillRect(px, py + TILE_SIZE, TILE_SIZE + 1, 3);
-              if (!left) ctx.fillRect(px - 3, py, 3, TILE_SIZE + 1);
-              if (!right) ctx.fillRect(px + TILE_SIZE, py, 3, TILE_SIZE + 1);
+              if (!top) ctx.fillRect(px - 1, py - 3, TILE_SIZE + 3, 3);
+              if (!bottom) ctx.fillRect(px - 1, py + TILE_SIZE, TILE_SIZE + 3, 3);
+              if (!left) ctx.fillRect(px - 3, py - 1, 3, TILE_SIZE + 3);
+              if (!right) ctx.fillRect(px + TILE_SIZE, py - 1, 3, TILE_SIZE + 3);
             }
           } else if (tile === 4) {
             // Ladder (Hemp Rope Ladder with Knots & Ivy Tendrils)
@@ -4182,14 +4337,34 @@ export class GameEngine {
               ctx.fillRect(px + 9, py + 20, 3, 2);
             }
           } else if (tile === 5) {
-            // Platform (Hewn Timber Scaffold Bridge with Hanging Foliage)
+            // Platform (Hewn Timber Scaffold Bridge with Expansive Log Ends & Hanging Foliage)
+            const platLeft = this.state.map[y]?.[x - 1] === 5;
+            const platRight = this.state.map[y]?.[x + 1] === 5;
+            const startX = platLeft ? px : px - 2;
+            const endX = platRight ? px + TILE_SIZE + 1 : px + TILE_SIZE + 3;
+            const totalW = endX - startX;
+
             // Main Timber Log Beam
             ctx.fillStyle = "#451a03"; // Dark bark shadow
-            ctx.fillRect(px, py + 8, TILE_SIZE + 1, 3);
+            ctx.fillRect(startX, py + 8, totalW, 3);
             ctx.fillStyle = "#78350f"; // Rich aged wood core
-            ctx.fillRect(px, py + 2, TILE_SIZE + 1, 6);
+            ctx.fillRect(startX, py + 2, totalW, 6);
             ctx.fillStyle = "#b45309"; // Top log highlight
-            ctx.fillRect(px, py + 2, TILE_SIZE + 1, 2);
+            ctx.fillRect(startX, py + 2, totalW, 2);
+
+            // Protruding log ends
+            if (!platLeft) {
+              ctx.fillStyle = "#451a03";
+              ctx.fillRect(px - 2, py + 3, 2, 5);
+              ctx.fillStyle = "#b45309"; // end grain
+              ctx.fillRect(px - 2, py + 4, 1, 3);
+            }
+            if (!platRight) {
+              ctx.fillStyle = "#451a03";
+              ctx.fillRect(px + TILE_SIZE + 1, py + 3, 2, 5);
+              ctx.fillStyle = "#b45309"; // end grain
+              ctx.fillRect(px + TILE_SIZE + 2, py + 4, 1, 3);
+            }
 
             // Plank dividers
             ctx.fillStyle = "#1c1917";
