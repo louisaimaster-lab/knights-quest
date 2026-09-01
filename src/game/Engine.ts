@@ -600,17 +600,236 @@ export class GameEngine {
     }
   }
 
-  spawnParticles(x: number, y: number, color: string, amount: number) {
+  spawnParticles(
+    x: number,
+    y: number,
+    color: string,
+    amount: number,
+    opts: Partial<Particle> = {},
+  ) {
+    const isBlood =
+      color === COLORS.blood ||
+      color.includes("180, 0, 0") ||
+      color.includes("#990000") ||
+      color === "#ff0000";
+    const isFire =
+      color === "#f97316" ||
+      color === "#ea580c" ||
+      color === "#ef4444" ||
+      color === "#fbbf24";
+    const isIce =
+      color === "#38bdf8" ||
+      color === "#bae6fd" ||
+      color.includes("180, 220, 255") ||
+      color.includes("100, 200, 255");
+    const isMagic =
+      color === "#a855f7" ||
+      color === "#c084fc" ||
+      color === "#f472b6" ||
+      color === "#ddaaff";
+
     for (let i = 0; i < amount; i++) {
+      const angle =
+        opts.angle !== undefined
+          ? opts.angle + (Math.random() - 0.5) * 0.8
+          : Math.random() * Math.PI * 2;
+      const speed =
+        opts.vx !== undefined
+          ? Math.hypot(opts.vx, opts.vy || 0) * (0.5 + Math.random())
+          : Math.random() * 6 + 1.5;
+      const vx =
+        opts.vx !== undefined
+          ? opts.vx + (Math.random() - 0.5) * 2
+          : Math.cos(angle) * speed;
+      const vy =
+        opts.vy !== undefined
+          ? opts.vy + (Math.random() - 0.5) * 2
+          : Math.sin(angle) * speed;
+      const life = opts.life || Math.random() * 15 + 15;
+
+      let shape = opts.shape;
+      if (!shape) {
+        if (isIce) shape = Math.random() < 0.5 ? "star" : "square";
+        else if (isMagic) shape = Math.random() < 0.6 ? "star" : "circle";
+        else if (isBlood) shape = "streak";
+        else if (isFire) shape = Math.random() < 0.4 ? "circle" : "square";
+        else shape = "square";
+      }
+
+      this.state.particles.push({
+        x: x + (Math.random() - 0.5) * 4,
+        y: y + (Math.random() - 0.5) * 4,
+        vx,
+        vy,
+        life,
+        maxLife: life,
+        color: opts.color || color,
+        secondaryColor:
+          opts.secondaryColor ||
+          (isFire ? "#fef08a" : isIce ? "#ffffff" : undefined),
+        size: opts.size !== undefined ? opts.size : Math.random() * 3 + 2,
+        type:
+          opts.type ||
+          (isFire ? "ember" : isIce ? "crystal" : isBlood ? "blood" : "spark"),
+        gravity:
+          opts.gravity !== undefined
+            ? opts.gravity
+            : isBlood
+              ? 0.22
+              : isFire
+                ? -0.06
+                : 0.08,
+        drag: opts.drag !== undefined ? opts.drag : 0.94,
+        grow: opts.grow || 0,
+        shape,
+        angle: Math.random() * Math.PI * 2,
+        vAngle: (Math.random() - 0.5) * 0.2,
+      });
+    }
+  }
+
+  spawnHitImpact(x: number, y: number, color: string = "#fef08a", isCrit: boolean = false) {
+    const sparkCount = isCrit ? 14 : 7;
+    for (let i = 0; i < sparkCount; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const spd = (Math.random() * 7 + 4) * (isCrit ? 1.4 : 1.0);
       this.state.particles.push({
         x,
         y,
-        vx: (Math.random() - 0.5) * 10,
-        vy: (Math.random() - 0.5) * 10,
-        life: Math.random() * 20 + 10,
-        maxLife: 30,
-        color,
-        size: Math.random() * 4 + 2,
+        vx: Math.cos(a) * spd,
+        vy: Math.sin(a) * spd,
+        life: Math.random() * 7 + 6,
+        maxLife: 13,
+        color: isCrit ? "#fef08a" : color,
+        secondaryColor: "#ffffff",
+        size: isCrit ? 3.5 : 2.5,
+        shape: "streak",
+        drag: 0.88,
+      });
+    }
+    // Shockwave expansion ring at impact point
+    this.state.particles.push({
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      life: isCrit ? 10 : 7,
+      maxLife: isCrit ? 10 : 7,
+      color: isCrit ? "#fbbf24" : color,
+      size: isCrit ? 5 : 3,
+      shape: "ring",
+      grow: isCrit ? 3.2 : 2.0,
+    });
+  }
+
+  spawnExplosionVFX(x: number, y: number, radius: number = 32, isFire: boolean = true) {
+    // Shockwave expansion ring
+    this.state.particles.push({
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      life: 14,
+      maxLife: 14,
+      color: isFire ? "#f97316" : "#38bdf8",
+      size: 4,
+      shape: "ring",
+      grow: radius / 3.5,
+    });
+
+    // Inner bright flash
+    this.state.particles.push({
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      life: 6,
+      maxLife: 6,
+      color: "#ffffff",
+      size: 8,
+      shape: "circle",
+      grow: 4,
+    });
+
+    // Shrapnel / Fire ember burst
+    const count = 22;
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      const spd = Math.random() * 8 + 3;
+      this.state.particles.push({
+        x: x + (Math.random() - 0.5) * 6,
+        y: y + (Math.random() - 0.5) * 6,
+        vx: Math.cos(a) * spd,
+        vy: Math.sin(a) * spd,
+        life: Math.random() * 16 + 10,
+        maxLife: 26,
+        color: isFire ? (Math.random() < 0.5 ? "#f97316" : "#fbbf24") : "#bae6fd",
+        secondaryColor: "#ffffff",
+        size: Math.random() * 4 + 3,
+        shape: isFire ? "circle" : "star",
+        gravity: 0.12,
+        drag: 0.92,
+      });
+    }
+
+    // Billowing smoke puffs
+    for (let i = 0; i < 7; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const spd = Math.random() * 3 + 1;
+      this.state.particles.push({
+        x,
+        y,
+        vx: Math.cos(a) * spd,
+        vy: Math.sin(a) * spd - 1,
+        life: Math.random() * 20 + 15,
+        maxLife: 35,
+        color: "#334155",
+        size: Math.random() * 6 + 6,
+        shape: "circle",
+        grow: 0.4,
+        drag: 0.94,
+      });
+    }
+  }
+
+  spawnDustPuff(x: number, y: number, count: number = 5) {
+    for (let i = 0; i < count; i++) {
+      const vx = (Math.random() - 0.5) * 4;
+      const vy = -Math.random() * 2.0 - 0.4;
+      this.state.particles.push({
+        x: x + (Math.random() - 0.5) * 6,
+        y: y - 2,
+        vx,
+        vy,
+        life: Math.random() * 10 + 8,
+        maxLife: 18,
+        color: "#94a3b8",
+        size: Math.random() * 2.5 + 2,
+        shape: "circle",
+        grow: 0.2,
+        drag: 0.9,
+      });
+    }
+  }
+
+  spawnWaterSplash(x: number, y: number, isLava: boolean = false) {
+    const count = isLava ? 12 : 10;
+    for (let i = 0; i < count; i++) {
+      const vx = (Math.random() - 0.5) * 6;
+      const vy = -Math.random() * 5 - 2;
+      this.state.particles.push({
+        x: x + (Math.random() - 0.5) * 8,
+        y,
+        vx,
+        vy,
+        life: Math.random() * 12 + 10,
+        maxLife: 22,
+        color: isLava ? (Math.random() < 0.5 ? "#f97316" : "#fbbf24") : (Math.random() < 0.5 ? "#38bdf8" : "#bae6fd"),
+        secondaryColor: "#ffffff",
+        size: Math.random() * 2.5 + 2,
+        shape: "streak",
+        gravity: 0.28,
+        drag: 0.96,
       });
     }
   }
@@ -1288,13 +1507,30 @@ export class GameEngine {
       }
     }
 
-    // Ambient volcanic embers and ash drifting in the caverns
+    // Ambient Biome Atmosphere VFX (Ember sparks, snowflakes, glowing pollen motes)
     if (this.state.biome === "volcanic" && Math.random() < 0.35) {
       this.spawnParticles(
         this.state.camera.x + (Math.random() - 0.5) * this.canvasWidth,
         this.state.camera.y + (Math.random() - 0.5) * this.canvasHeight,
-        Math.random() < 0.6 ? "#f97316" : (Math.random() < 0.5 ? "#fbbf24" : "#451a03"),
-        1
+        Math.random() < 0.6 ? "#f97316" : (Math.random() < 0.5 ? "#fbbf24" : "#ea580c"),
+        1,
+        { type: "ember", shape: "circle", gravity: -0.06, size: Math.random() * 2.5 + 1, life: 60 }
+      );
+    } else if (this.state.biome === "ice" && Math.random() < 0.35) {
+      this.spawnParticles(
+        this.state.camera.x + (Math.random() - 0.5) * this.canvasWidth,
+        this.state.camera.y - (this.canvasHeight / 2) / this.state.camera.zoom + Math.random() * 30,
+        Math.random() < 0.7 ? "#bae6fd" : "#ffffff",
+        1,
+        { type: "crystal", shape: "star", gravity: 0.04, vx: Math.sin(Date.now() * 0.001) * 0.4, size: Math.random() * 2 + 1, life: 80 }
+      );
+    } else if (this.state.biome === "moss" && Math.random() < 0.30) {
+      this.spawnParticles(
+        this.state.camera.x + (Math.random() - 0.5) * this.canvasWidth,
+        this.state.camera.y + (Math.random() - 0.5) * this.canvasHeight,
+        Math.random() < 0.6 ? "#4ade80" : "#fde047",
+        1,
+        { type: "glow", shape: "circle", gravity: -0.02, vx: Math.sin(Date.now() * 0.002) * 0.4, size: 2, life: 75 }
       );
     }
 
@@ -1308,12 +1544,12 @@ export class GameEngine {
           p.vy = scaledJump;
           p.isGrounded = false;
           isClimbing = false;
-          this.spawnParticles(p.x + p.w / 2, p.y + p.h, COLORS.wallAccent, 5);
+          this.spawnDustPuff(p.x + p.w / 2, p.y + p.h, 7);
         } else if (inWater || inLava) {
           const isFireImmune = (p.fireImmunityTimer || 0) > 0;
           p.vy = scaledJump * (inLava ? (isFireImmune ? 0.75 : 0.55) : 0.8); // heavier swim jump from lava
           isClimbing = false;
-          this.spawnParticles(p.x + p.w / 2, p.y, inLava ? "#f97316" : "rgba(0, 255, 200, 0.5)", 5);
+          this.spawnWaterSplash(p.x + p.w / 2, p.y + 4, inLava);
         } else if (p.wallSliding && p.wallJumpsLeft > 0) {
           p.wallJumpsLeft--;
           p.vy = scaledJump * 1.225; // +50% height (sqrt(1.5))
@@ -1324,8 +1560,9 @@ export class GameEngine {
           this.spawnParticles(
             p.x + (p.wallSlideDir > 0 ? 0 : p.w),
             p.y + p.h / 2,
-            COLORS.wallAccent,
-            5,
+            "#cbd5e1",
+            8,
+            { shape: "streak", gravity: 0.2 },
           );
         }
       }
@@ -1951,6 +2188,31 @@ export class GameEngine {
       ? false
       : res.grounded || (p.onLadder && isClimbing && p.vy === 0);
 
+    // Landing Impact Dust & Shockwave
+    if (!brokeIce && res.grounded && oldVy > 3.5) {
+      this.spawnDustPuff(p.x + p.w / 2, p.y + p.h, oldVy > 7 ? 8 : 4);
+      if (oldVy > 7) {
+        this.state.shakeTimer = Math.max(this.state.shakeTimer, 4);
+        this.state.particles.push({
+          x: p.x + p.w / 2,
+          y: p.y + p.h,
+          vx: 0,
+          vy: 0,
+          life: 8,
+          maxLife: 8,
+          color: "#94a3b8",
+          size: 3,
+          shape: "ring",
+          grow: 2.5,
+        });
+      }
+    }
+
+    // Running Dust at feet
+    if (p.isGrounded && Math.abs(p.vx) > 1.8 && this.state.frameCounter % 6 === 0) {
+      this.spawnDustPuff(p.x + (p.facingRight ? 2 : p.w - 2), p.y + p.h, 1);
+    }
+
     // Wall slide logic
     p.wallSliding = false;
     if (
@@ -1965,6 +2227,15 @@ export class GameEngine {
       ) {
         p.wallSliding = true;
         p.wallSlideDir = res.hitXLeft ? 1 : -1; // If wall is on left, jump right (+1). If wall is on right, jump left (-1).
+        if (this.state.frameCounter % 5 === 0) {
+          this.spawnParticles(
+            p.x + (p.wallSlideDir > 0 ? 0 : p.w),
+            p.y + p.h / 2,
+            "#94a3b8",
+            2,
+            { shape: "streak", gravity: 0.35 },
+          );
+        }
       }
     }
 
@@ -2235,13 +2506,19 @@ export class GameEngine {
           e.vx = Math.cos(angle) * 10;
           e.vy = Math.sin(angle) * 10 - 2;
 
-          this.spawnParticles(ex, ey, COLORS.blood, 10);
+          this.spawnHitImpact(ex, ey, "#fbbf24", true);
+          this.spawnParticles(ex, ey, COLORS.blood, 10, { shape: "streak" });
           this.state.texts.push({
-            x: e.x,
-            y: e.y - 10,
+            x: e.x + e.w / 2,
+            y: e.y - 12,
             text: Math.round(finalDamage).toString(),
-            life: 30,
-            maxLife: 30,
+            life: 35,
+            maxLife: 35,
+            color: "#fef08a",
+            strokeColor: "#451a03",
+            scale: 1.3,
+            vy: -1.2,
+            vx: (Math.random() - 0.5) * 1.5,
           });
         }
       }
@@ -2321,6 +2598,7 @@ export class GameEngine {
       if (rectIntersect(attackRect, e)) {
         // Hit!
         const finalDamage = damage * p.damageMulti;
+        const isCrit = finalDamage >= 35 || p.clawsActive;
         e.health -= finalDamage;
         e.invulnerableTimer = p.clawsActive ? 8 : (p.weapon === 'dual_daggers' ? 6 : 10);
         e.vx = p.facingRight ? knockback : -knockback;
@@ -2328,28 +2606,45 @@ export class GameEngine {
         
         if (p.weapon === 'molten_axe') {
           e.burnTimer = 180; // 3 seconds burning
-          this.spawnParticles(e.x + e.w / 2, e.y + e.h / 2, "#f97316", 12);
+          this.spawnParticles(e.x + e.w / 2, e.y + e.h / 2, "#f97316", 14, { shape: "circle", gravity: -0.06 });
         } else if (p.weapon === 'frozen_sword') {
           e.isFrozen = true;
           e.frozenTimer = 120; // 2 seconds frozen
-          this.spawnParticles(e.x + e.w / 2, e.y + e.h / 2, "#38bdf8", 12);
+          this.spawnParticles(e.x + e.w / 2, e.y + e.h / 2, "#38bdf8", 14, { shape: "star", gravity: 0.05 });
         }
 
-        // Claws have red VFX particles!
-        const pColor = p.clawsActive ? "#ff0000" : (p.weapon === 'molten_axe' ? "#f97316" : (p.weapon === 'frozen_sword' ? "#38bdf8" : (e.type === "slime" || e.type === "frost_slime" || e.type === "moss_slime" ? COLORS.slime : COLORS.blood)));
+        const pColor = p.clawsActive
+          ? "#ff0000"
+          : p.weapon === "molten_axe"
+            ? "#f97316"
+            : p.weapon === "frozen_sword"
+              ? "#38bdf8"
+              : e.type === "slime" ||
+                  e.type === "frost_slime" ||
+                  e.type === "moss_slime"
+                ? COLORS.slime
+                : COLORS.blood;
+
+        this.spawnHitImpact(e.x + e.w / 2, e.y + e.h / 2, pColor, isCrit);
         this.spawnParticles(
           e.x + e.w / 2,
           e.y + e.h / 2,
           pColor,
-          p.clawsActive ? 15 : (p.weapon === 'colossal_sword' ? 20 : (p.weapon === 'molten_axe' ? 18 : 10))
+          p.clawsActive ? 16 : p.weapon === "colossal_sword" ? 22 : p.weapon === "molten_axe" ? 18 : 12,
+          { shape: "streak" }
         );
         
         this.state.texts.push({
-          x: e.x,
-          y: e.y - 10,
-          text: Math.round(finalDamage).toString() + (p.weapon === 'molten_axe' ? " [FLAME]" : (p.weapon === 'frozen_sword' ? " [FROST]" : "")),
-          life: 30,
-          maxLife: 30,
+          x: e.x + e.w / 2,
+          y: e.y - 12,
+          text: Math.round(finalDamage).toString() + (p.weapon === 'molten_axe' ? " 🔥" : (p.weapon === 'frozen_sword' ? " ❄" : "")),
+          life: 36,
+          maxLife: 36,
+          color: p.weapon === 'molten_axe' ? "#f97316" : (p.weapon === 'frozen_sword' ? "#38bdf8" : (isCrit ? "#fef08a" : "#ffffff")),
+          strokeColor: isCrit ? "#451a03" : "#090d16",
+          scale: isCrit ? 1.35 : 1.0,
+          vy: -1.2,
+          vx: (Math.random() - 0.5) * 1.5,
         });
       }
     }
@@ -2371,11 +2666,15 @@ export class GameEngine {
         y: p.y - 20,
         text: "SHIELD BLOCKED!",
         life: 60,
-        maxLife: 60
+        maxLife: 60,
+        color: "#38bdf8",
+        strokeColor: "#082f49",
+        scale: 1.3,
+        vy: -1.0
       });
       
-      // Spawn shield shatter particles
-      this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, "rgba(100, 200, 255, 0.8)", 30);
+      // Spawn shield shatter particles & expanding shockwave ring
+      this.spawnExplosionVFX(p.x + p.w / 2, p.y + p.h / 2, 28, false);
       return false;
     }
 
@@ -2398,14 +2697,20 @@ export class GameEngine {
     }
 
     this.state.shakeTimer = Math.max(this.state.shakeTimer, 15);
-    this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, particleColor, 15);
+    this.spawnHitImpact(p.x + p.w / 2, p.y + p.h / 2, "#ef4444", true);
+    this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, particleColor, 15, { shape: "streak" });
 
     this.state.texts.push({
-      x: p.x,
-      y: p.y - 20,
+      x: p.x + p.w / 2,
+      y: p.y - 18,
       text: `-${finalDamage} HP`,
       life: 45,
-      maxLife: 45
+      maxLife: 45,
+      color: "#ef4444",
+      strokeColor: "#450a0a",
+      scale: 1.3,
+      vy: -1.2,
+      vx: (Math.random() - 0.5) * 1.0,
     });
 
     if (p.health <= 0) {
@@ -2539,31 +2844,34 @@ export class GameEngine {
       if (proj.type === 'bomb') {
         proj.vy += 0.25; // gravity
         proj.timer = (proj.timer || 90) - 1;
-        this.spawnParticles(proj.x + proj.w / 2, proj.y + proj.h / 2, "#f59e0b", 1);
+        this.spawnParticles(proj.x + proj.w / 2, proj.y + proj.h / 2, "#f59e0b", 1, { shape: "circle", gravity: -0.05, size: 2 });
 
         if (hitWall || proj.timer <= 0) {
           const bx = proj.x + proj.w / 2;
           const by = proj.y + proj.h / 2;
-          this.state.shakeTimer = 20;
-          this.spawnParticles(bx, by, "#ef4444", 20);
-          this.spawnParticles(bx, by, "#f97316", 20);
-          this.spawnParticles(bx, by, "#eab308", 15);
+          this.state.shakeTimer = 22;
+          this.spawnExplosionVFX(bx, by, 70, true);
 
           for (const e of this.state.enemies) {
             const dist = Math.hypot(e.x + e.w / 2 - bx, e.y + e.h / 2 - by);
-            if (dist < 70) {
+            if (dist < 75) {
               const dmg = Math.round(proj.damage * p.damageMulti);
               e.health -= dmg;
               e.invulnerableTimer = 10;
-              e.vx = (e.x + e.w / 2 > bx ? 1 : -1) * 6;
+              e.vx = (e.x + e.w / 2 > bx ? 1 : -1) * 7;
               e.vy = -4;
-              this.spawnParticles(e.x + e.w / 2, e.y + e.h / 2, "#f97316", 10);
+              this.spawnHitImpact(e.x + e.w / 2, e.y + e.h / 2, "#f97316", true);
               this.state.texts.push({
-                x: e.x,
-                y: e.y - 10,
-                text: dmg.toString(),
-                life: 30,
-                maxLife: 30
+                x: e.x + e.w / 2,
+                y: e.y - 12,
+                text: `${dmg} 💥`,
+                life: 38,
+                maxLife: 38,
+                color: "#fbbf24",
+                strokeColor: "#451a03",
+                scale: 1.4,
+                vy: -1.3,
+                vx: (Math.random() - 0.5) * 2.0,
               });
             }
           }
@@ -2571,7 +2879,13 @@ export class GameEngine {
           continue;
         }
       } else if (hitWall && proj.type !== 'magma') {
-        this.spawnParticles(proj.x + (proj.w || 8) / 2, proj.y + (proj.h || 8) / 2, "rgba(200, 200, 200, 0.4)", 4);
+        this.spawnParticles(
+          proj.x + (proj.w || 8) / 2,
+          proj.y + (proj.h || 8) / 2,
+          "#cbd5e1",
+          6,
+          { shape: "streak", gravity: 0.2 }
+        );
         this.state.projectiles.splice(i, 1);
         continue;
       }
@@ -2581,7 +2895,7 @@ export class GameEngine {
           // Player-thrown Magma Orb
           proj.vy += 0.22; // slight gravity arc
           proj.timer = (proj.timer || 120) - 1;
-          this.spawnParticles(proj.x + proj.w / 2, proj.y + proj.h / 2, "#f97316", 1);
+          this.spawnParticles(proj.x + proj.w / 2, proj.y + proj.h / 2, "#f97316", 1, { shape: "circle", gravity: -0.05, size: 2.5 });
 
           let triggered = hitWall || proj.timer <= 0;
           if (!triggered) {
@@ -2596,27 +2910,30 @@ export class GameEngine {
           if (triggered) {
             const mx = proj.x + proj.w / 2;
             const my = proj.y + proj.h / 2;
-            this.state.shakeTimer = 15;
-            this.spawnParticles(mx, my, "#ef4444", 20);
-            this.spawnParticles(mx, my, "#f97316", 20);
-            this.spawnParticles(mx, my, "#fbbf24", 15);
+            this.state.shakeTimer = 18;
+            this.spawnExplosionVFX(mx, my, 60, true);
 
             for (const e of this.state.enemies) {
               const dist = Math.hypot(e.x + e.w / 2 - mx, e.y + e.h / 2 - my);
-              if (dist < 65) {
+              if (dist < 68) {
                 const dmg = Math.round(proj.damage * p.damageMulti);
                 e.health -= dmg;
                 e.invulnerableTimer = 10;
                 e.burnTimer = 300; // 5 seconds burn!
                 e.vx = (e.x + e.w / 2 > mx ? 1 : -1) * 7;
                 e.vy = -3;
-                this.spawnParticles(e.x + e.w / 2, e.y + e.h / 2, "#f97316", 10);
+                this.spawnHitImpact(e.x + e.w / 2, e.y + e.h / 2, "#f97316", true);
                 this.state.texts.push({
-                  x: e.x,
-                  y: e.y - 10,
-                  text: `${dmg} [MAGMA BURST]`,
+                  x: e.x + e.w / 2,
+                  y: e.y - 12,
+                  text: `${dmg} 🔥`,
                   life: 40,
-                  maxLife: 40
+                  maxLife: 40,
+                  color: "#f97316",
+                  strokeColor: "#451a03",
+                  scale: 1.35,
+                  vy: -1.2,
+                  vx: (Math.random() - 0.5) * 2.0,
                 });
               }
             }
@@ -2626,7 +2943,7 @@ export class GameEngine {
         } else {
           // Enemy-fired magma fireball
           if (hitWall) {
-            this.spawnParticles(proj.x + proj.w / 2, proj.y + proj.h / 2, "#f97316", 6);
+            this.spawnParticles(proj.x + proj.w / 2, proj.y + proj.h / 2, "#f97316", 8, { shape: "circle", gravity: -0.05 });
             this.state.projectiles.splice(i, 1);
             continue;
           }
@@ -2647,13 +2964,14 @@ export class GameEngine {
             maxLife: 35,
             color: Math.random() < 0.5 ? "#f97316" : "#fbbf24",
             size: 2 + Math.random() * 2,
+            shape: "circle",
           });
           if (p.invulnerableTimer <= 0 && rectIntersect({ x: proj.x - 4, y: proj.y - 4, w: 8, h: 8 }, p)) {
             const hit = this.damagePlayer(proj.damage, Math.sign(proj.vx) || 1, 8, -4, "#f97316");
             if (hit && (!p.fireImmunityTimer || p.fireImmunityTimer <= 0)) {
               p.burnTimer = 60;
             }
-            this.spawnParticles(proj.x, proj.y, "#ef4444", 8);
+            this.spawnHitImpact(proj.x, proj.y, "#f97316", false);
             this.state.projectiles.splice(i, 1);
             continue;
           }
@@ -2666,24 +2984,32 @@ export class GameEngine {
         if (e.invulnerableTimer > 0) continue;
         if (rectIntersect(proj, e)) {
           const finalDamage = proj.damage * p.damageMulti;
+          const isCrit = finalDamage >= 30;
           e.health -= finalDamage;
           e.invulnerableTimer = 10;
           e.vx = proj.vx !== 0 ? Math.sign(proj.vx) * 3 : (p.facingRight ? 3 : -3);
           e.vy = -2;
 
+          this.spawnHitImpact(e.x + e.w / 2, e.y + e.h / 2, isCrit ? "#fef08a" : "#cbd5e1", isCrit);
           this.spawnParticles(
             e.x + e.w / 2,
             e.y + e.h / 2,
             e.type === "slime" ? COLORS.slime : COLORS.blood,
-            8
+            8,
+            { shape: "streak" }
           );
 
           this.state.texts.push({
-            x: e.x,
-            y: e.y - 10,
+            x: e.x + e.w / 2,
+            y: e.y - 12,
             text: Math.round(finalDamage).toString(),
-            life: 30,
-            maxLife: 30,
+            life: 35,
+            maxLife: 35,
+            color: isCrit ? "#fef08a" : "#ffffff",
+            strokeColor: isCrit ? "#451a03" : "#090d16",
+            scale: isCrit ? 1.3 : 1.0,
+            vy: -1.2,
+            vx: (Math.random() - 0.5) * 1.5,
           });
 
           hitEnemy = true;
@@ -3433,20 +3759,45 @@ export class GameEngine {
         const dy = p.target.y - p.y;
         const dist = Math.hypot(dx, dy);
         if (dist > 2) {
-          p.vx += (dx / dist) * 0.2;
-          p.vy += (dy / dist) * 0.2;
+          p.vx += (dx / dist) * 0.25;
+          p.vy += (dy / dist) * 0.25;
           p.vx *= 0.95;
           p.vy *= 0.95;
         }
       }
+
+      if (p.drag !== undefined) {
+        p.vx *= p.drag;
+        p.vy *= p.drag;
+      }
+      if (p.gravity !== undefined) {
+        p.vy += p.gravity;
+      }
+      if (p.grow !== undefined) {
+        p.size = Math.max(0.5, p.size + p.grow);
+      }
+      if (p.vAngle !== undefined && p.angle !== undefined) {
+        p.angle += p.vAngle;
+      }
+
       p.x += p.vx;
       p.y += p.vy;
       p.life--;
       if (p.life <= 0) this.state.particles.splice(i, 1);
     }
+
     for (let i = this.state.texts.length - 1; i >= 0; i--) {
       let t = this.state.texts[i];
-      t.y -= 0.5;
+      if (t.vy !== undefined) {
+        t.y += t.vy;
+        t.vy += 0.03; // slight upward deceleration
+      } else {
+        t.y -= 0.6;
+      }
+      if (t.vx !== undefined) {
+        t.x += t.vx;
+        t.vx *= 0.96;
+      }
       t.life--;
       if (t.life <= 0) this.state.texts.splice(i, 1);
     }
@@ -5190,12 +5541,28 @@ export class GameEngine {
         ctx.fillRect(eyeX, e.y + 6, 6, 2);
       }
 
+      // Status Effects Overlay: Frozen Ice Shell
       if (e.isFrozen) {
-        ctx.fillStyle = "rgba(56, 189, 248, 0.45)";
+        ctx.fillStyle = "rgba(56, 189, 248, 0.40)";
         ctx.fillRect(e.x - 2, e.y - 2, e.w + 4, e.h + 4);
         ctx.strokeStyle = "#e0f2fe";
         ctx.lineWidth = 1.5;
         ctx.strokeRect(e.x - 2, e.y - 2, e.w + 4, e.h + 4);
+        // Crystal glints at corners
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(e.x - 2, e.y - 2, 2, 2);
+        ctx.fillRect(e.x + e.w, e.y - 2, 2, 2);
+      }
+
+      // Status Effects Overlay: Burning Fire Tongues
+      if (e.burnTimer && e.burnTimer > 0) {
+        const flameAnim = Math.floor(Date.now() / 80) % 3;
+        ctx.fillStyle = "#ef4444";
+        ctx.fillRect(e.x + 2, e.y - 4 + (flameAnim === 0 ? -2 : 0), e.w - 4, 4);
+        ctx.fillStyle = "#f97316";
+        ctx.fillRect(e.x + 4, e.y - 6 + (flameAnim === 1 ? -2 : 0), e.w - 8, 4);
+        ctx.fillStyle = "#fef08a";
+        ctx.fillRect(e.x + e.w / 2 - 2, e.y - 7 + (flameAnim === 2 ? -2 : 0), 4, 3);
       }
 
       // Draw Enemy Health Bar (for all enemies)
@@ -5302,17 +5669,51 @@ export class GameEngine {
     ctx.fillRect(p.x + 4, p.y + p.h - 2, 4, 2);
     ctx.fillRect(p.x + p.w - 9, p.y + p.h - 2, 4, 2);
 
-    // Draw Player Weapon Model / Claws / Shield
+    // Draw Player Status Auras & Shields
     if (p.shieldActive) {
       ctx.save();
+      const sRadius = 22 + Math.sin(Date.now() * 0.008) * 1.5;
       ctx.beginPath();
-      ctx.arc(p.x + p.w / 2, p.y + p.h / 2 + bob, 22, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(0, 190, 255, 0.22)";
+      ctx.arc(p.x + p.w / 2, p.y + p.h / 2 + bob, sRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(56, 189, 248, 0.20)";
       ctx.fill();
       ctx.lineWidth = 2;
-      ctx.strokeStyle = "rgba(100, 220, 255, 0.8)";
+      ctx.strokeStyle = "rgba(186, 230, 253, 0.85)";
+      ctx.stroke();
+
+      // Orbiting celestial rune glints
+      const oAngle = (Date.now() * 0.004) % (Math.PI * 2);
+      for (let s = 0; s < 3; s++) {
+        const sa = oAngle + (s * Math.PI * 2) / 3;
+        const sx = p.x + p.w / 2 + Math.cos(sa) * sRadius;
+        const sy = p.y + p.h / 2 + bob + Math.sin(sa) * sRadius;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
+      }
+      ctx.restore();
+    }
+
+    if (p.fireImmunityTimer && p.fireImmunityTimer > 0) {
+      ctx.save();
+      const fRadius = 20 + Math.sin(Date.now() * 0.01) * 1.0;
+      ctx.beginPath();
+      ctx.arc(p.x + p.w / 2, p.y + p.h / 2 + bob, fRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(249, 115, 22, 0.18)";
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.75)";
       ctx.stroke();
       ctx.restore();
+    }
+
+    if (p.burnTimer && p.burnTimer > 0) {
+      const flameCycle = Math.floor(Date.now() / 80) % 3;
+      ctx.fillStyle = "#ef4444";
+      ctx.fillRect(p.x + 3, p.y - 4 + bob + (flameCycle === 0 ? -2 : 0), p.w - 6, 4);
+      ctx.fillStyle = "#f97316";
+      ctx.fillRect(p.x + 5, p.y - 6 + bob + (flameCycle === 1 ? -2 : 0), p.w - 10, 4);
+      ctx.fillStyle = "#fef08a";
+      ctx.fillRect(p.x + p.w / 2 - 2, p.y - 7 + bob + (flameCycle === 2 ? -2 : 0), 4, 3);
     }
 
     if (p.clawsActive) {
@@ -6277,30 +6678,103 @@ export class GameEngine {
       }
     }
 
-    // Particles
+    // Dynamic VFX Particles
     for (let pt of this.state.particles) {
-      ctx.fillStyle = pt.color;
-      ctx.globalAlpha = pt.life / pt.maxLife;
-      ctx.fillRect(
-        Math.round(pt.x * zoom) / zoom,
-        Math.round(pt.y * zoom) / zoom,
-        pt.size,
-        pt.size,
-      ); // ponytail: round coordinates in screen space
+      const alpha = Math.max(0, Math.min(1.0, (pt.life / pt.maxLife) * (pt.alpha !== undefined ? pt.alpha : 1.0)));
+      ctx.globalAlpha = alpha;
+      const px = Math.round(pt.x * zoom) / zoom;
+      const py = Math.round(pt.y * zoom) / zoom;
+      const sz = Math.max(1, pt.size);
+
+      if (pt.shape === "streak") {
+        const spd = Math.hypot(pt.vx, pt.vy);
+        if (spd > 0.8) {
+          ctx.strokeStyle = pt.color;
+          ctx.lineWidth = Math.max(1.5, sz * 0.8);
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(px - pt.vx * 1.6, py - pt.vy * 1.6);
+          ctx.stroke();
+          if (pt.secondaryColor) {
+            ctx.strokeStyle = pt.secondaryColor;
+            ctx.lineWidth = Math.max(1, sz * 0.4);
+            ctx.beginPath();
+            ctx.moveTo(px, py);
+            ctx.lineTo(px - pt.vx * 0.8, py - pt.vy * 0.8);
+            ctx.stroke();
+          }
+        } else {
+          ctx.fillStyle = pt.color;
+          ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+        }
+      } else if (pt.shape === "ring" || pt.shape === "shockwave") {
+        ctx.strokeStyle = pt.color;
+        ctx.lineWidth = Math.max(1.5, Math.min(3.5, (pt.life / pt.maxLife) * 3));
+        ctx.beginPath();
+        ctx.arc(px, py, sz, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (pt.shape === "star") {
+        ctx.fillStyle = pt.color;
+        ctx.fillRect(px - sz, py - 0.75, sz * 2, 1.5);
+        ctx.fillRect(px - 0.75, py - sz, 1.5, sz * 2);
+        if (pt.secondaryColor) {
+          ctx.fillStyle = pt.secondaryColor;
+          ctx.fillRect(px - 0.75, py - 0.75, 1.5, 1.5);
+        }
+      } else if (pt.shape === "circle") {
+        ctx.fillStyle = pt.color;
+        ctx.beginPath();
+        ctx.arc(px, py, sz / 2, 0, Math.PI * 2);
+        ctx.fill();
+        if (pt.secondaryColor) {
+          ctx.fillStyle = pt.secondaryColor;
+          ctx.beginPath();
+          ctx.arc(px, py, sz / 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else {
+        // Default square pixel
+        ctx.fillStyle = pt.color;
+        ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+        if (pt.secondaryColor && sz >= 3) {
+          ctx.fillStyle = pt.secondaryColor;
+          ctx.fillRect(px - 0.5, py - 0.5, 1, 1);
+        }
+      }
     }
     ctx.globalAlpha = 1.0;
 
-    // Texts
+    // Enhanced Combat Floating Numbers & Interaction Texts
     ctx.textAlign = "center";
-    ctx.font = "bold 14px 'Courier New', Courier, monospace";
+    ctx.textBaseline = "middle";
     for (let t of this.state.texts) {
-      ctx.fillStyle = `rgba(255,255,255,${t.life / t.maxLife})`;
-      ctx.fillText(
-        t.text,
-        Math.round(t.x * zoom) / zoom,
-        Math.round(t.y * zoom) / zoom,
-      ); // ponytail: round coordinates in screen space
+      const alpha = Math.max(0, Math.min(1.0, (t.life / t.maxLife) * 1.5));
+      const prog = 1 - t.life / t.maxLife;
+      // Spring pop scale: bouncy start then settling
+      const popScale = (t.scale || 1.0) * (prog < 0.25 ? 1.0 + (0.25 - prog) * 2.0 : 1.0);
+      const tx = Math.round(t.x * zoom) / zoom;
+      const ty = Math.round(t.y * zoom) / zoom;
+
+      ctx.save();
+      ctx.translate(tx, ty);
+      ctx.scale(popScale, popScale);
+
+      const textColor = t.color || "#ffffff";
+      const strokeColor = t.strokeColor || "#090d16";
+
+      ctx.font = "bold 13px 'Courier New', Courier, monospace";
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = strokeColor;
+      ctx.globalAlpha = alpha * 0.95;
+      ctx.strokeText(t.text, 0, 0);
+
+      ctx.fillStyle = textColor;
+      ctx.globalAlpha = alpha;
+      ctx.fillText(t.text, 0, 0);
+      ctx.restore();
     }
+    ctx.globalAlpha = 1.0;
 
     // Darkness overlay (using offscreen canvas)
 // Nolly: only early-return for the idle menu background when we are NOT

@@ -132,6 +132,22 @@ export interface Enemy extends Entity {
   frozenTimer?: number;
 }
 
+export type ParticleType =
+  | 'spark'
+  | 'smoke'
+  | 'blood'
+  | 'crystal'
+  | 'ember'
+  | 'fire'
+  | 'bubble'
+  | 'glow'
+  | 'slash_spark'
+  | 'star'
+  | 'shockwave'
+  | 'ring'
+  | 'dash_ghost'
+  | 'streak';
+
 export interface Particle {
   x: number;
   y: number;
@@ -141,8 +157,16 @@ export interface Particle {
   maxLife: number;
   color: string;
   size: number;
-  type?: string;
-  target?: {x: number, y: number};
+  type?: ParticleType | string;
+  target?: { x: number; y: number };
+  gravity?: number;
+  drag?: number;
+  grow?: number;
+  angle?: number;
+  vAngle?: number;
+  alpha?: number;
+  secondaryColor?: string;
+  shape?: 'square' | 'circle' | 'star' | 'streak' | 'ring' | 'shockwave' | 'cross';
 }
 
 export interface InteractionText {
@@ -151,6 +175,11 @@ export interface InteractionText {
   text: string;
   life: number;
   maxLife: number;
+  color?: string;
+  strokeColor?: string;
+  scale?: number;
+  vy?: number;
+  vx?: number;
 }
 
 export interface FallingIcicle {
