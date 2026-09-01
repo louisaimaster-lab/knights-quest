@@ -4154,18 +4154,7 @@ export class GameEngine {
               }
 
               ctx.fillStyle = color;
-              ctx.fillRect(subPx, subPy, 9, 9); // overlap to prevent gaps
-
-              // Subtle chunky 8x8 rock crevice outline for rich pixel-art cave depth
-              ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
-              ctx.fillRect(subPx, subPy + 7, 8, 1);
-              ctx.fillRect(subPx + 7, subPy, 1, 8);
-
-              // 2x2 chunky stone facet highlight on lighter blocks
-              if (baseNoise < -0.45) {
-                ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
-                ctx.fillRect(subPx + 2, subPy + 2, 2, 2);
-              }
+              ctx.fillRect(subPx, subPy, 9, 9); // seamless overlap to prevent any gaps
             }
           }
         }
@@ -4236,6 +4225,12 @@ export class GameEngine {
               darkColor = "#1e293b";
               highlightColor = "#64748b";
               strokeColor = "#0f172a";
+            } else if (isMossy) {
+              // Lush Emerald Moss Block (Tile 15)
+              baseColor = "#166534";
+              darkColor = "#14532d";
+              highlightColor = "#22c55e";
+              strokeColor = "#052e16";
             } else if (isIce) {
               baseColor = "#0369a1";
               darkColor = "#075985";
@@ -4247,7 +4242,7 @@ export class GameEngine {
               highlightColor = "#38bdf8";
               strokeColor = "#020617";
             } else {
-              // Natural Cave Earth / Dirt (Tile 1, 7, 15)
+              // Natural Cave Earth / Dirt (Tile 1, 7)
               baseColor = "#3b2d22";
               darkColor = "#241911";
               highlightColor = "#4d3a2b";
