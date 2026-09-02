@@ -35,26 +35,9 @@ export interface Afterimage {
   weaponEquipped: boolean;
 }
 
-export interface SlashArc {
-  x: number;
-  y: number;
-  angle: number;
-  radius: number;
-  arcLength: number;
-  progress: number;
-  maxProgress: number;
-  color: string;
-  secondaryColor?: string;
-  width: number;
-  flipped: boolean;
-}
-
 export interface Player extends Entity {
   attackTimer: number;
   attackCooldown: number;
-  comboStep: number;
-  comboTimer: number;
-  isPlunging?: boolean;
   comboResetTimer: number;
   slashFlipped: boolean;
   isAttacking: boolean;
@@ -149,7 +132,6 @@ export interface Enemy extends Entity {
   burnTimer?: number;
   isFrozen?: boolean;
   frozenTimer?: number;
-  hitFlashTimer?: number;
 }
 
 export type ParticleType =
@@ -257,8 +239,6 @@ export interface GameState {
   player: Player;
   enemies: Enemy[];
   particles: Particle[];
-  slashArcs: SlashArc[];
-  hitstopTimer: number;
   texts: InteractionText[];
   fallingIcicles: FallingIcicle[];
   chests: Chest[];
