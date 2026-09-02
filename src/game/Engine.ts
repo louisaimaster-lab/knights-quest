@@ -4273,9 +4273,9 @@ export class GameEngine {
 
             if (customTexture && customTexture.complete && customTexture.naturalWidth > 0) {
               const scale = TILE_SIZE / customTexture.naturalWidth;
-              const drawW = TILE_SIZE + 1;
-              const drawH = Math.round(customTexture.naturalHeight * scale) + 1;
-              const extraTop = Math.max(0, drawH - (TILE_SIZE + 1));
+              const drawW = TILE_SIZE;
+              const drawH = Math.round(customTexture.naturalHeight * scale);
+              const extraTop = Math.max(0, drawH - TILE_SIZE);
               const drawY = py - extraTop;
               ctx.drawImage(customTexture, px, drawY, drawW, drawH);
               continue;
