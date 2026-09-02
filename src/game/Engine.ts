@@ -6054,13 +6054,13 @@ export class GameEngine {
     }
     ctx.restore();
 
-    // Draw 6-frame curving stretched arch slash animation if attacking
+    // Draw 6-frame chunky pixel-art stretched arch slash animation if attacking
     if (p.isAttacking && p.weapon !== "bow") {
       const duration = p.weapon === "colossal_sword" ? 20 : (p.weapon === "dual_daggers" ? 6 : (p.weapon === "molten_axe" ? 14 : 10));
       const progress = Math.max(0, Math.min(0.999, 1 - p.attackTimer / duration));
       const dir = p.facingRight ? 1 : -1;
       let ox = p.facingRight ? p.x + p.w : p.x;
-      let oy = p.y + p.h / 2 - 6;
+      let oy = p.y + p.h / 2 - 4;
 
       ox = Math.round(ox * zoom) / zoom;
       oy = Math.round(oy * zoom) / zoom;
@@ -6079,118 +6079,99 @@ export class GameEngine {
         ctx.scale(1, -1);
       }
 
-      // 6 Discrete Handcrafted Frames of a Curving Stretched Arch Slash
+      const PIX = 2; // 2x2 retro chunky pixel art grid
+
+      // 6 Discrete Handcrafted Frames of a Stretched Forward Katana Arch
       const frameIndex = Math.min(5, Math.floor(progress * 6));
-      const ARCH_FRAMES = [
-        // Frame 0: Razor spark ignition at swing opening
-        { startAngle: -Math.PI * 0.45, endAngle: -Math.PI * 0.12, radius: 24, maxThick: 5, stretchX: 1.35, stretchY: 1.05, arcBow: 0.22, alpha: 0.90 },
-        // Frame 1: Expanding curved crescent arch cutting through air
-        { startAngle: -Math.PI * 0.58, endAngle: +Math.PI * 0.12, radius: 28, maxThick: 8, stretchX: 1.60, stretchY: 1.15, arcBow: 0.32, alpha: 1.00 },
-        // Frame 2: Peak impact! Majestic elongated razor arch with wide belly and needle tips
-        { startAngle: -Math.PI * 0.68, endAngle: +Math.PI * 0.38, radius: 32, maxThick: 11, stretchX: 1.85, stretchY: 1.25, arcBow: 0.40, alpha: 1.00 },
-        // Frame 3: Sweeping follow-through arch, trailing edge tapering forward
-        { startAngle: -Math.PI * 0.35, endAngle: +Math.PI * 0.55, radius: 34, maxThick: 8, stretchX: 1.95, stretchY: 1.20, arcBow: 0.35, alpha: 0.85 },
-        // Frame 4: Thinning aerodynamic energy ribbon dissipating
-        { startAngle: +Math.PI * 0.00, endAngle: +Math.PI * 0.62, radius: 36, maxThick: 5, stretchX: 2.05, stretchY: 1.12, arcBow: 0.25, alpha: 0.55 },
-        // Frame 5: Fading wispy curved tail dissolving into air
-        { startAngle: +Math.PI * 0.22, endAngle: +Math.PI * 0.66, radius: 37, maxThick: 3, stretchX: 2.10, stretchY: 1.08, arcBow: 0.18, alpha: 0.25 },
+      const FRAMES = [
+        // Frame 0: Quick opening spark wedge
+        { hH: 10, fwd: 16, thick: 6, bowCurve: 1.4, alpha: 0.9 },
+        // Frame 1: Expanding forward stretched razor arch
+        { hH: 18, fwd: 30, thick: 9, bowCurve: 1.6, alpha: 1.0 },
+        // Frame 2: Maximum peak power lunge! Stretched aerodynamic arch with needle ends
+        { hH: 26, fwd: 46, thick: 13, bowCurve: 1.8, alpha: 1.0 },
+        // Frame 3: Sweeping follow-through stretched arch drifting forward
+        { hH: 22, fwd: 48, thick: 9, bowCurve: 1.7, alpha: 0.85 },
+        // Frame 4: Thinning energy ribbon
+        { hH: 16, fwd: 50, thick: 6, bowCurve: 1.5, alpha: 0.60 },
+        // Frame 5: Fading wispy pixel embers
+        { hH: 10, fwd: 52, thick: 3, bowCurve: 1.3, alpha: 0.30 },
       ];
 
-      const currentFrame = ARCH_FRAMES[frameIndex];
-      const wScale = p.clawsActive ? 1.15 : (p.weapon === "colossal_sword" ? 1.45 : (p.weapon === "dual_daggers" ? 0.85 : (p.weapon === "molten_axe" ? 1.22 : 1.0)));
-      const radius = currentFrame.radius * wScale;
-      const maxThick = currentFrame.maxThick * wScale;
-      const stretchX = currentFrame.stretchX;
-      const stretchY = currentFrame.stretchY;
+      const f = FRAMES[frameIndex];
+      const wScale = p.clawsActive ? 1.15 : (p.weapon === "colossal_sword" ? 1.45 : (p.weapon === "dual_daggers" ? 0.85 : (p.weapon === "molten_axe" ? 1.20 : 1.0)));
+      const halfH = Math.round((f.hH * wScale) / PIX) * PIX;
+      const fwd = Math.round((f.fwd * wScale) / PIX) * PIX;
+      const maxThick = Math.round((f.thick * wScale) / PIX) * PIX;
 
-      // Weapon elemental palettes
-      let coreColor = "#ffffff";
-      let midColor = "#e9d5ff";
-      let outerColor = "rgba(168, 85, 247, 0.45)";
+      // Color palettes (Outer / Mid / Core)
+      let outerColor = "#c084fc"; // soft purple
+      let midColor = "#f3e8ff"; // bright lavender
+      let coreColor = "#ffffff"; // pure white
 
       if (p.clawsActive) {
-        coreColor = "#ffffff";
+        outerColor = "#990000";
         midColor = "#ff3300";
-        outerColor = "rgba(185, 28, 28, 0.6)";
+        coreColor = "#ffffff";
       } else if (p.weapon === "molten_axe") {
-        coreColor = "#fef08a";
+        outerColor = "#ea580c";
         midColor = "#f97316";
-        outerColor = "rgba(185, 28, 28, 0.55)";
+        coreColor = "#fef08a";
       } else if (p.weapon === "frozen_sword") {
-        coreColor = "#f0f9ff";
+        outerColor = "#0284c7";
         midColor = "#38bdf8";
-        outerColor = "rgba(2, 132, 199, 0.55)";
+        coreColor = "#f0f9ff";
       }
 
-      const drawCurvedArch = (rBase: number, thick: number, color: string, alpha: number) => {
-        ctx.fillStyle = color;
-        ctx.globalAlpha = currentFrame.alpha * alpha;
+      ctx.globalAlpha = f.alpha;
 
-        const steps = 36;
-        const outerPoints: { x: number; y: number }[] = [];
-        const innerPoints: { x: number; y: number }[] = [];
+      const drawPixelArch = (yOffset: number, scaleX: number, thickMulti: number) => {
+        for (let y = -halfH; y <= halfH; y += PIX) {
+          const v = halfH > 0 ? y / halfH : 0; // -1 to 1
+          const curve = Math.max(0, 1 - Math.pow(Math.abs(v), f.bowCurve));
+          const archX = Math.round((curve * fwd * scaleX) / PIX) * PIX;
+          const th = Math.max(PIX, Math.round(((1 - Math.pow(Math.abs(v), 2.2)) * maxThick * thickMulti) / PIX) * PIX);
+          const drawY = y + yOffset;
 
-        for (let i = 0; i <= steps; i++) {
-          const t = i / steps; // 0 to 1 along the arch
-          const angle = currentFrame.startAngle + (currentFrame.endAngle - currentFrame.startAngle) * t;
+          const startX = archX - Math.floor(th / 2);
+          const endX = archX + Math.floor(th / 2);
 
-          // Aerodynamic arch outward bulge (bow) in the center of the swing
-          const bow = Math.sin(t * Math.PI) * currentFrame.arcBow;
-          const curR = rBase * (1.0 + bow);
+          // 3-Tone Pixel Shading for authentic arcade pixel art
+          for (let x = startX; x <= endX; x += PIX) {
+            const distFromCenter = Math.abs(x - archX);
+            const normDist = th > PIX ? distFromCenter / (th / 2) : 0;
 
-          // Smooth razor needle taper at both ends
-          const taper = Math.pow(Math.sin(t * Math.PI), 1.2) * thick;
-
-          const cosA = Math.cos(angle);
-          const sinA = Math.sin(angle);
-
-          const rOut = curR + taper * 0.5;
-          const rIn = Math.max(1, curR - taper * 0.5);
-
-          outerPoints.push({ x: rOut * cosA * stretchX, y: rOut * sinA * stretchY });
-          innerPoints.push({ x: rIn * cosA * stretchX, y: rIn * sinA * stretchY });
+            if (normDist < 0.35) {
+              ctx.fillStyle = coreColor;
+            } else if (normDist < 0.75) {
+              ctx.fillStyle = midColor;
+            } else {
+              ctx.fillStyle = outerColor;
+            }
+            ctx.fillRect(x, drawY, PIX, PIX);
+          }
         }
-
-        ctx.beginPath();
-        ctx.moveTo(outerPoints[0].x, outerPoints[0].y);
-        for (let i = 1; i < outerPoints.length; i++) {
-          ctx.lineTo(outerPoints[i].x, outerPoints[i].y);
-        }
-        for (let i = innerPoints.length - 1; i >= 0; i--) {
-          ctx.lineTo(innerPoints[i].x, innerPoints[i].y);
-        }
-        ctx.closePath();
-        ctx.fill();
       };
 
       if (p.clawsActive) {
-        // Triple parallel razor claws
-        const offsets = [-7, 0, 7];
-        for (const off of offsets) {
-          drawCurvedArch(radius + off, maxThick * 0.7, outerColor, 0.5);
-          drawCurvedArch(radius + off, maxThick * 0.45, midColor, 0.9);
-          drawCurvedArch(radius + off, maxThick * 0.2, coreColor, 1.0);
-        }
+        // Triple parallel razor pixel claws
+        drawPixelArch(-8, 0.95, 0.65);
+        drawPixelArch(0, 1.0, 0.75);
+        drawPixelArch(8, 0.95, 0.65);
       } else {
-        // 3-Pass Glowing Blade Arch: Outer Aura -> Main Blade -> Razor Core
-        drawCurvedArch(radius, maxThick + 5, outerColor, 0.40);
-        drawCurvedArch(radius, maxThick, midColor, 0.90);
-        drawCurvedArch(radius, Math.max(2, maxThick * 0.35), coreColor, 1.00);
+        drawPixelArch(0, 1.0, 1.0);
       }
 
-      // Spark Burst along the leading cutting tip on peak frames 1, 2, 3
+      // Trailing Pixel Sparks on Peak Frames 1, 2, 3
       if (frameIndex >= 1 && frameIndex <= 3) {
         ctx.fillStyle = coreColor;
-        ctx.globalAlpha = currentFrame.alpha * 0.85;
-        const sparkCount = p.weapon === "colossal_sword" ? 8 : 4;
-        const tipAngle = currentFrame.endAngle;
-        const tipR = radius * (1.0 + currentFrame.arcBow) * stretchX;
+        const sparkCount = p.weapon === "colossal_sword" ? 6 : 3;
         for (let s = 0; s < sparkCount; s++) {
-          const spAngle = tipAngle + (Math.random() - 0.5) * 0.35;
-          const spDist = tipR + (Math.random() - 0.5) * 10;
-          const spX = Math.cos(spAngle) * spDist;
-          const spY = Math.sin(spAngle) * spDist * (stretchY / stretchX);
-          ctx.fillRect(spX, spY, 2, 2);
+          const sy = Math.round(((Math.random() - 0.5) * halfH * 1.5) / PIX) * PIX;
+          const v = halfH > 0 ? sy / halfH : 0;
+          const curve = Math.max(0, 1 - Math.pow(Math.abs(v), f.bowCurve));
+          const sx = Math.round((curve * fwd + (Math.random() * 8 + 2)) / PIX) * PIX;
+          ctx.fillRect(sx, sy, PIX, PIX);
         }
       }
 
