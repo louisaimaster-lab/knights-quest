@@ -4272,10 +4272,11 @@ export class GameEngine {
             else customTexture = getAutoTileTexture("dirt", top, bottom, left, right);
 
             if (customTexture && customTexture.complete && customTexture.naturalWidth > 0) {
-              const scale = TILE_SIZE / customTexture.naturalWidth;
-              const drawW = TILE_SIZE;
+              const baseGrid = customTexture.naturalWidth <= 18 ? 16 : (customTexture.naturalWidth <= 36 ? 32 : (customTexture.naturalWidth <= 72 ? 64 : customTexture.naturalWidth));
+              const scale = TILE_SIZE / baseGrid;
+              const drawW = Math.round(customTexture.naturalWidth * scale);
               const drawH = Math.round(customTexture.naturalHeight * scale);
-              const extraTop = Math.max(0, drawH - TILE_SIZE);
+              const extraTop = Math.max(0, Math.round((customTexture.naturalHeight - baseGrid) * scale));
               const drawY = py - extraTop;
               ctx.drawImage(customTexture, px, drawY, drawW, drawH);
               continue;
