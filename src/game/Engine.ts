@@ -236,6 +236,9 @@ export class GameEngine {
         invulnerableTimer: 0,
         attackTimer: 0,
         attackCooldown: 0,
+        comboStep: 0,
+        comboTimer: 0,
+        isPlunging: false,
         comboResetTimer: 0,
         slashFlipped: false,
         isAttacking: false,
@@ -299,6 +302,8 @@ export class GameEngine {
       },
       enemies: [],
       particles: [],
+      slashArcs: [],
+      hitstopTimer: 0,
       texts: [],
       fallingIcicles: [],
       chests: [],
@@ -919,6 +924,82 @@ export class GameEngine {
     }
   }
 
+  spawnDirectionalSparks(
+    x: number,
+    y: number,
+    angle: number,
+    color: string = "#fef08a",
+    count: number = 10,
+    speed: number = 7,
+  ) {
+    for (let i = 0; i < count; i++) {
+      const spread = (Math.random() - 0.5) * 1.1;
+      const spd = (Math.random() * 0.7 + 0.6) * speed;
+      const a = angle + spread;
+      this.state.particles.push({
+        x: x + (Math.random() - 0.5) * 4,
+        y: y + (Math.random() - 0.5) * 4,
+        vx: Math.cos(a) * spd,
+        vy: Math.sin(a) * spd - 1,
+        life: Math.random() * 8 + 6,
+        maxLife: 14,
+        color,
+        secondaryColor: "#ffffff",
+        size: Math.random() * 2 + 2,
+        shape: "streak",
+        gravity: 0.18,
+        drag: 0.9,
+      });
+    }
+  }
+
+  spawnGroundDust(x: number, y: number, count: number = 8, spread: number = 14) {
+    for (let i = 0; i < count; i++) {
+      const dir = i % 2 === 0 ? 1 : -1;
+      const vx = dir * (Math.random() * 3 + 1);
+      const vy = -Math.random() * 1.6 - 0.4;
+      this.state.particles.push({
+        x: x + (Math.random() - 0.5) * spread,
+        y: y - 2,
+        vx,
+        vy,
+        life: Math.random() * 12 + 8,
+        maxLife: 20,
+        color: "#94a3b8",
+        size: Math.random() * 3 + 2,
+        shape: "circle",
+        grow: 0.25,
+        drag: 0.88,
+      });
+    }
+  }
+
+  spawnSlashArc(
+    x: number,
+    y: number,
+    angle: number,
+    radius: number,
+    color: string,
+    secondaryColor?: string,
+    width: number = 24,
+    flipped: boolean = false,
+  ) {
+    if (!this.state.slashArcs) this.state.slashArcs = [];
+    this.state.slashArcs.push({
+      x,
+      y,
+      angle,
+      radius,
+      arcLength: Math.PI * 0.75,
+      progress: 0,
+      maxProgress: 8,
+      color,
+      secondaryColor,
+      width,
+      flipped,
+    });
+  }
+
   update() {
     if (this.state.isFloorComplete || this.state.transitionState === "cards") {
       // Update mouse world pos for UI interactions
@@ -1287,6 +1368,16 @@ export class GameEngine {
       }
       this.state.mouse.clicked = false;
       this.state.prevKeys = { ...this.state.keys };
+      return;
+    }
+
+    // Hitstop micro-pause (crisp weighted combat freeze on impacts)
+    if (this.state.hitstopTimer > 0) {
+      this.state.hitstopTimer--;
+      this.updateCamera();
+      this.updateParticlesAndTexts();
+      this.state.prevKeys = { ...this.state.keys };
+      this.state.mouse.clicked = false;
       return;
     }
 
@@ -2139,6 +2230,12 @@ export class GameEngine {
       }
     }
 
+    // Combo timer tick
+    if (p.comboTimer > 0) {
+      p.comboTimer--;
+      if (p.comboTimer === 0) p.comboStep = 0;
+    }
+
     // Attack (only when valid weapon equipped or claws active - click/normal attack)
     const canAttackWithWeapon = p.clawsActive || (p.weaponEquipped && p.weapon && p.weapon !== 'torch');
 
@@ -2159,19 +2256,59 @@ export class GameEngine {
       const isMoltenAxe = p.clawsActive ? false : p.weapon === 'molten_axe';
       const isFrozen = p.clawsActive ? false : p.weapon === 'frozen_sword';
 
-      p.isAttacking = true;
-      p.isAirAttacking = false;
-      p.attackAngle = Math.atan2(this.state.mouse.worldY - (p.y + p.h / 2), this.state.mouse.worldX - (p.x + p.w / 2));
+      const wantsPlunge = !p.isGrounded && !p.onLadder && !inWater && !inLava && (this.state.keys["s"] || this.state.keys["ArrowDown"]);
 
-      if (p.clawsActive) {
-        p.attackTimer = 4;
+      if (wantsPlunge) {
+        // Air Down-Thrust Plunge Attack!
+        p.isPlunging = true;
+        p.isAttacking = true;
+        p.isAirAttacking = true;
+        p.vy = 16;
+        p.attackTimer = 16;
+        p.attackCooldown = 14;
+        p.attackAngle = Math.PI * 0.5;
+        this.spawnParticles(p.x + p.w / 2, p.y + p.h / 2, "#e2e8f0", 8, { shape: "streak" });
+        this.spawnSlashArc(p.x + p.w / 2, p.y + p.h / 2, Math.PI * 0.5, 30, "#fef08a", "#ffffff", 30, false);
+        this.checkAttackHits();
       } else {
-        p.attackTimer = isColossal ? 20 : (isDaggers ? 6 : (isAxe ? 12 : (isMoltenAxe ? 14 : (isFrozen ? 10 : 10))));
+        // Ground / Air Combo Strike
+        p.isAttacking = true;
+        p.isAirAttacking = !p.isGrounded && !p.onLadder;
+        p.isPlunging = false;
+        p.attackAngle = Math.atan2(this.state.mouse.worldY - (p.y + p.h / 2), this.state.mouse.worldX - (p.x + p.w / 2));
+
+        if (p.comboTimer > 0) {
+          p.comboStep = isDaggers ? ((p.comboStep % 4) + 1) : ((p.comboStep % 3) + 1);
+        } else {
+          p.comboStep = 1;
+        }
+        p.comboTimer = isDaggers ? 30 : 40; // combo chaining window
+        p.slashFlipped = p.comboStep === 2;
+
+        if (p.clawsActive) {
+          p.attackTimer = 4;
+        } else {
+          p.attackTimer = isColossal ? 18 : (isDaggers ? 5 : (isAxe ? 11 : (isMoltenAxe ? 13 : (isFrozen ? 9 : 8))));
+        }
+
+        // Combo Step Momentum & Effects
+        if (p.comboStep === 3) {
+          // Finisher lunge!
+          if (p.isGrounded) p.vx += p.facingRight ? 4.5 : -4.5;
+          this.state.shakeTimer = Math.max(this.state.shakeTimer, 5);
+        } else {
+          // Light forward step
+          if (p.isGrounded) p.vx += p.facingRight ? 2.0 : -2.0;
+        }
+
+        // Spawn glowing dynamic slash arc
+        const arcColor = p.clawsActive ? "#ff3300" : (p.weapon === "molten_axe" ? "#f97316" : (p.weapon === "frozen_sword" ? "#38bdf8" : (p.comboStep === 3 ? "#fbbf24" : "#fef08a")));
+        const secColor = p.clawsActive ? "#ffffff" : (p.weapon === "molten_axe" ? "#fef08a" : (p.weapon === "frozen_sword" ? "#ffffff" : "#ffffff"));
+        const arcRadius = p.clawsActive ? 26 : (p.weapon === "colossal_sword" ? 38 : (p.weapon === "dual_daggers" ? 18 : 22));
+        this.spawnSlashArc(p.facingRight ? p.x + p.w : p.x, p.y + p.h / 2, p.attackAngle, arcRadius, arcColor, secColor, p.comboStep === 3 ? 32 : 24, p.slashFlipped);
+
+        this.checkAttackHits();
       }
-      p.slashFlipped = !p.slashFlipped;
-      p.comboResetTimer = 120; // 2 seconds
-      
-      this.checkAttackHits();
     }
 
     if (p.attackTimer > 0) {
@@ -2181,7 +2318,7 @@ export class GameEngine {
         if (p.clawsActive) {
           p.attackCooldown = 3;
         } else {
-          p.attackCooldown = p.weapon === 'colossal_sword' ? 50 : (p.weapon === 'dual_daggers' ? 5 : (p.weapon === 'battle_axe' ? 15 : (p.weapon === 'molten_axe' ? 16 : 12)));
+          p.attackCooldown = p.weapon === 'colossal_sword' ? 38 : (p.weapon === 'dual_daggers' ? 4 : (p.weapon === 'battle_axe' ? 14 : (p.weapon === 'molten_axe' ? 15 : 10)));
         }
       }
     }
@@ -2298,6 +2435,15 @@ export class GameEngine {
     p.isGrounded = brokeIce
       ? false
       : res.grounded || (p.onLadder && isClimbing && p.vy === 0);
+
+    // Plunge Attack Ground Slam Shockwave & AoE
+    if (p.isPlunging && res.grounded) {
+      p.isPlunging = false;
+      this.state.shakeTimer = Math.max(this.state.shakeTimer, 10);
+      this.spawnGroundDust(p.x + p.w / 2, p.y + p.h, 12, 24);
+      this.spawnExplosionVFX(p.x + p.w / 2, p.y + p.h, 28, false);
+      this.checkAttackHits(); // trigger ground impact hit
+    }
 
     // Landing Impact Dust & Shockwave
     if (!brokeIce && res.grounded && (oldVy > 3.5 || isHighFall)) {
@@ -2687,7 +2833,16 @@ export class GameEngine {
       knockback = 6;
     }
 
-    if (p.isAirAttacking) {
+    if (p.isPlunging) {
+      attackRect = {
+        x: p.x - 14,
+        y: p.y + p.h - 4,
+        w: p.w + 28,
+        h: 24,
+      };
+      damage = Math.round(damage * 1.8);
+      knockback = 9;
+    } else if (p.isAirAttacking) {
       const scaleHeight = p.clawsActive ? 3.0 : (p.weapon === 'colossal_sword' ? 4.5 : (p.weapon === 'dual_daggers' ? 1.5 : (p.weapon === 'molten_axe' ? 3.5 : 3.0)));
       attackRect = {
         x: p.x - 10 - 2, // 2px outside left
@@ -2704,17 +2859,35 @@ export class GameEngine {
       };
     }
 
+    // Combo Finisher bonus damage & knockback
+    if (p.comboStep === 3) {
+      damage = Math.round(damage * 1.5);
+      knockback *= 1.5;
+    }
+
     for (let e of this.state.enemies) {
       if (e.invulnerableTimer > 0) continue;
       if (rectIntersect(attackRect, e)) {
         // Hit!
         const finalDamage = damage * p.damageMulti;
-        const isCrit = finalDamage >= 35 || p.clawsActive;
+        const isCrit = finalDamage >= 35 || p.clawsActive || p.comboStep === 3 || p.isPlunging;
         e.health -= finalDamage;
-        e.invulnerableTimer = p.clawsActive ? 8 : (p.weapon === 'dual_daggers' ? 6 : 10);
+        e.invulnerableTimer = p.clawsActive ? 8 : (p.weapon === 'dual_daggers' ? 5 : 10);
+        e.hitFlashTimer = 6;
         e.vx = p.facingRight ? knockback : -knockback;
-        e.vy = p.clawsActive ? -4 : (p.weapon === 'colossal_sword' ? -5 : (p.weapon === 'molten_axe' ? -4.5 : -3));
+        e.vy = p.isPlunging ? 6 : (p.clawsActive ? -4 : (p.weapon === 'colossal_sword' ? -5 : (p.weapon === 'molten_axe' ? -4.5 : -3)));
         
+        // Micro-Hitstop for crunchy combat weight
+        this.state.hitstopTimer = isCrit ? 3 : 2;
+
+        // Plunge attack recoil jump!
+        if (p.isPlunging) {
+          p.vy = -10;
+          p.isPlunging = false;
+          this.spawnExplosionVFX(e.x + e.w / 2, e.y + e.h / 2, 24, false);
+          this.state.shakeTimer = Math.max(this.state.shakeTimer, 7);
+        }
+
         if (p.weapon === 'molten_axe') {
           e.burnTimer = 180; // 3 seconds burning
           this.spawnParticles(e.x + e.w / 2, e.y + e.h / 2, "#f97316", 14, { shape: "circle", gravity: -0.06 });
@@ -2737,6 +2910,14 @@ export class GameEngine {
                 : COLORS.blood;
 
         this.spawnHitImpact(e.x + e.w / 2, e.y + e.h / 2, pColor, isCrit);
+        this.spawnDirectionalSparks(
+          e.x + e.w / 2,
+          e.y + e.h / 2,
+          p.attackAngle !== undefined ? p.attackAngle : (p.facingRight ? 0 : Math.PI),
+          pColor,
+          isCrit ? 14 : 8,
+          isCrit ? 8 : 6
+        );
         this.spawnParticles(
           e.x + e.w / 2,
           e.y + e.h / 2,
@@ -2747,14 +2928,14 @@ export class GameEngine {
         
         this.state.texts.push({
           x: e.x + e.w / 2,
-          y: e.y - 12,
-          text: Math.round(finalDamage).toString() + (p.weapon === 'molten_axe' ? " 🔥" : (p.weapon === 'frozen_sword' ? " ❄" : "")),
-          life: 36,
-          maxLife: 36,
-          color: p.weapon === 'molten_axe' ? "#f97316" : (p.weapon === 'frozen_sword' ? "#38bdf8" : (isCrit ? "#fef08a" : "#ffffff")),
+          y: e.y - 14,
+          text: Math.round(finalDamage).toString() + (p.weapon === 'molten_axe' ? " 🔥" : (p.weapon === 'frozen_sword' ? " ❄" : (p.comboStep === 3 ? " 💥" : ""))),
+          life: 38,
+          maxLife: 38,
+          color: p.weapon === 'molten_axe' ? "#f97316" : (p.weapon === 'frozen_sword' ? "#38bdf8" : (isCrit ? "#fde047" : "#ffffff")),
           strokeColor: isCrit ? "#451a03" : "#090d16",
-          scale: isCrit ? 1.35 : 1.0,
-          vy: -1.2,
+          scale: isCrit ? 1.4 : (p.comboStep === 2 ? 1.15 : 1.0),
+          vy: -1.3,
           vx: (Math.random() - 0.5) * 1.5,
         });
       }
@@ -3386,6 +3567,7 @@ export class GameEngine {
       }
 
       if (e.invulnerableTimer > 0) e.invulnerableTimer--;
+      if (e.hitFlashTimer && e.hitFlashTimer > 0) e.hitFlashTimer--;
       e.stateTimer--;
 
       if (e.burnTimer && e.burnTimer > 0) {
@@ -6131,6 +6313,18 @@ export class GameEngine {
         white = "#e0f2fe";
         pink = "#38bdf8";
         purple = "#0284c7";
+      } else if (p.isPlunging) {
+        white = "#ffffff";
+        pink = "#fef08a";
+        purple = "#f59e0b";
+      } else if (p.comboStep === 3) {
+        white = "#ffffff";
+        pink = "#fde047";
+        purple = "#ca8a04";
+      } else if (p.comboStep === 2) {
+        white = "#ffffff";
+        pink = "#e2e8f0";
+        purple = "#94a3b8";
       }
 
       // Animate headAngle and tailLength
@@ -6142,9 +6336,10 @@ export class GameEngine {
       const tailAngle = headAngle - trailLength;
 
       // Draw crescent: Pointy ends and wider middle design
+      const comboThickBoost = p.comboStep === 3 ? 6 : (p.isPlunging ? 8 : 0);
       const rBase = p.clawsActive ? 25 : (p.weapon === "colossal_sword" ? 30 : (p.weapon === "dual_daggers" ? 14 : 20));
       const spread = p.clawsActive ? 6 : (p.weapon === "colossal_sword" ? 10 : (p.weapon === "dual_daggers" ? 2 : 5));
-      const maxThick = p.clawsActive ? 28 : (p.weapon === "colossal_sword" ? 36 : (p.weapon === "dual_daggers" ? 14 : 24));
+      const maxThick = (p.clawsActive ? 28 : (p.weapon === "colossal_sword" ? 36 : (p.weapon === "dual_daggers" ? 14 : 24))) + comboThickBoost;
       
       if (p.clawsActive) {
         // Custom 3-Claw Slash Effect (3 parallel fiery claw swipes following the crescent arc)
@@ -6166,13 +6361,49 @@ export class GameEngine {
         drawPixelCrescent(rBase, spread, Math.max(2, maxThick - 6), tailAngle, headAngle, white);
 
         if (progress > 0.1 && progress < 0.9) {
-          const sparkCount = p.weapon === "colossal_sword" ? Math.floor(trailProgress * 12) : (p.weapon === "dual_daggers" ? Math.floor(trailProgress * 3) : Math.floor(trailProgress * 6));
+          const sparkCount = p.weapon === "colossal_sword" ? Math.floor(trailProgress * 12) : (p.weapon === "dual_daggers" ? Math.floor(trailProgress * 3) : Math.floor(trailProgress * (p.comboStep === 3 ? 10 : 6)));
           const sparkRad = p.weapon === "colossal_sword" ? 40 : (p.weapon === "dual_daggers" ? 16 : 26);
           drawSparks(headAngle + 0.1, sparkRad, sparkCount);
         }
       }
 
       ctx.restore();
+    }
+
+    // Draw independent Slash Arcs
+    if (this.state.slashArcs) {
+      for (const arc of this.state.slashArcs) {
+        const prog = arc.progress / arc.maxProgress;
+        const alpha = Math.sin(prog * Math.PI);
+        if (alpha <= 0.01) continue;
+
+        ctx.save();
+        ctx.translate(Math.round(arc.x * zoom) / zoom, Math.round(arc.y * zoom) / zoom);
+        ctx.rotate(arc.angle);
+        if (arc.flipped) ctx.scale(1, -1);
+
+        const curRadius = arc.radius + prog * 6;
+        const arcStart = -arc.arcLength * 0.5 + prog * 0.4;
+        const arcEnd = arc.arcLength * 0.5 + prog * 0.4;
+
+        ctx.beginPath();
+        ctx.arc(0, 0, curRadius, arcStart, arcEnd);
+        ctx.lineWidth = Math.max(1, (1 - prog) * arc.width);
+        ctx.strokeStyle = arc.color;
+        ctx.globalAlpha = alpha * 0.8;
+        ctx.stroke();
+
+        if (arc.secondaryColor) {
+          ctx.beginPath();
+          ctx.arc(0, 0, curRadius, arcStart + 0.1, arcEnd - 0.1);
+          ctx.lineWidth = Math.max(1, (1 - prog) * (arc.width * 0.4));
+          ctx.strokeStyle = arc.secondaryColor;
+          ctx.globalAlpha = alpha;
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
     }
 
     // 360 Saturn-Ring Horizontal Wind Effect for Battle Axe Spin
