@@ -4285,8 +4285,10 @@ export class GameEngine {
               const drawW = Math.round(customTexture.naturalWidth * scale);
               const drawH = Math.round(customTexture.naturalHeight * scale);
               const extraTop = Math.max(0, Math.round((customTexture.naturalHeight - baseGrid) * scale));
+              const extraLeft = !left && customTexture.naturalWidth > baseGrid ? Math.round((customTexture.naturalWidth - baseGrid) * scale) : 0;
+              const drawX = px - extraLeft;
               const drawY = py - extraTop;
-              ctx.drawImage(customTexture, px, drawY, drawW, drawH);
+              ctx.drawImage(customTexture, drawX, drawY, drawW, drawH);
               continue;
             }
 
