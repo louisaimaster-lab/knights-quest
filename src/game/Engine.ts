@@ -4259,7 +4259,9 @@ export class GameEngine {
 
             // Check for user-imported custom texture PNGs from /tiles/ with full auto-tiling piece support
             let customTexture: HTMLImageElement | undefined;
-            if (isGrass) customTexture = getAutoTileTexture("grass", top, bottom, left, right) || getAutoTileTexture("dirt", top, bottom, left, right);
+            if (isGrass || (!top && tile === 1 && (this.state.biome === "neutral" || !this.state.biome))) {
+              customTexture = getAutoTileTexture("grass", top, bottom, left, right) || getAutoTileTexture("dirt", top, bottom, left, right);
+            }
             else if (isStone) customTexture = getAutoTileTexture("cobblestone", top, bottom, left, right);
             else if (isStoneBrick) customTexture = getAutoTileTexture("bricks", top, bottom, left, right);
             else if (isMossy) customTexture = getAutoTileTexture("moss", top, bottom, left, right);
@@ -4270,7 +4272,12 @@ export class GameEngine {
             else customTexture = getAutoTileTexture("dirt", top, bottom, left, right);
 
             if (customTexture && customTexture.complete && customTexture.naturalWidth > 0) {
-              ctx.drawImage(customTexture, px, py, TILE_SIZE + 1, TILE_SIZE + 1);
+              const scale = TILE_SIZE / customTexture.naturalWidth;
+              const drawW = TILE_SIZE + 1;
+              const drawH = Math.round(customTexture.naturalHeight * scale) + 1;
+              const extraTop = Math.max(0, drawH - (TILE_SIZE + 1));
+              const drawY = py - extraTop;
+              ctx.drawImage(customTexture, px, drawY, drawW, drawH);
               continue;
             }
 
