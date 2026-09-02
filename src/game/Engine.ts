@@ -4214,6 +4214,14 @@ export class GameEngine {
             }
           }
         }
+      }
+    }
+
+    // Pass 2: Draw Foreground Solids, Custom Auto-Tiles, Overhangs, and Map Entities
+    for (let y = startRow; y < endRow; y++) {
+      for (let x = startCol; x < endCol; x++) {
+        const px = x * TILE_SIZE;
+        const py = y * TILE_SIZE;
 
         if (this.state.map[y] && this.state.map[y][x] !== undefined) {
           const tile = this.state.map[y][x];
