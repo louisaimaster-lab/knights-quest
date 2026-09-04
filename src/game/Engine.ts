@@ -4297,7 +4297,17 @@ export class GameEngine {
               const drawW = Math.round(customTexture.naturalWidth * scale);
               const drawH = Math.round(customTexture.naturalHeight * scale);
               const extraTop = Math.max(0, Math.round((customTexture.naturalHeight - baseGrid) * scale));
-              const extraLeft = !left && customTexture.naturalWidth > baseGrid ? Math.round((customTexture.naturalWidth - baseGrid) * scale) : 0;
+              let extraLeft = 0;
+              if (!left && customTexture.naturalWidth > baseGrid) {
+                if (!right) {
+                  // Symmetrical stub/pillar (e.g. 18x17 with 1px left overhang and 1px right overhang)
+                  const leftProtrusion = Math.floor((customTexture.naturalWidth - baseGrid) / 2);
+                  extraLeft = Math.round(leftProtrusion * scale);
+                } else {
+                  // Left corner tile (17x17 with 1px left overhang only)
+                  extraLeft = Math.round((customTexture.naturalWidth - baseGrid) * scale);
+                }
+              }
               const drawX = px - extraLeft;
               const drawY = py - extraTop;
               ctx.drawImage(customTexture, drawX, drawY, drawW, drawH);
