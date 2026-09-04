@@ -583,80 +583,125 @@ export function generateCave(floor: number, maxFloor: number) {
       }
   }
 
-  // 10. Final pass: Generate water pools in logically enclosed dips
-  const isSolid = (x: number, y: number) => {
-      if (y < 0 || y >= height || x < 0 || x >= width) return true;
+  // 10. True Sealed Basin Liquid Generation (Water & Lava Pools):
+  // Pools are strictly generated in natural, enclosed U-shaped terrain basins.
+  // Must have: Solid Left Wall, Solid Right Wall, Solid Bottom Floor, and Flat Open Air Ceiling above.
+  const isSolidTerrain = (x: number, y: number): boolean => {
+      if (x < 0 || x >= width || y < 0 || y >= height) return true;
       const t = map[y][x];
-      return t === 1 || t === 8 || t === 7 || t === 15 || t === 11 || t === 6;
+      return t === 1 || t === 7 || t === 8 || t === 11 || t === 15 || t === 16 || t === 17 || t === 19 || t === 20;
   };
-  
-  for (let my = height - 2; my >= 2; my--) {
-      for (let mx = 2; mx < width - 2; mx++) {
-          if (map[my][mx] === 0 && isSolid(mx, my+1)) {
-              // Measure pool width to the right
+
+  const isAir = (x: number, y: number): boolean => {
+      if (x < 0 || x >= width || y < 0 || y >= height) return false;
+      const t = map[y][x];
+      return t === 0 || t === 10 || t === 12 || t === 13;
+  };
+
+  for (let my = height - 4; my >= 6; my--) {
+      for (let mx = 3; mx < width - 6; mx++) {
+          // Check if candidate starting at (mx, my) is bounded on the left by solid terrain
+          if (isSolidTerrain(mx - 1, my) && isAir(mx, my)) {
+              // Measure open basin width to the right
               let poolWidth = 0;
               let rightBounded = false;
-              
-              while (mx + poolWidth < width - 1) {
-                  const checkingX = mx + poolWidth;
-                  const tg = map[my][checkingX];
-                  if (isSolid(checkingX, my) || tg === 5 || tg === 4 || tg === 11) {
+
+              while (mx + poolWidth < width - 2) {
+                  const checkX = mx + poolWidth;
+                  if (isSolidTerrain(checkX, my)) {
                       rightBounded = true;
-                      break; // Hit a wall to the right
+                      break; // Reached solid right bank!
                   }
-                  if (!isSolid(checkingX, my+1) && map[my+1][checkingX] !== 5 && map[my+1][checkingX] !== 4) {
-                      break; // Floor dropped out
-                  }
-                  // It will fill until it hits a solid block, overwriting torches, vines etc. if they are in the pool
+                  // If we hit an obstacle (gate, ladder, platform), abort this candidate
+                  const t = map[my][checkX];
+                  if (t === 2 || t === 3 || t === 4 || t === 5) break;
+
                   poolWidth++;
+                  if (poolWidth > 10) break; // Maximum pool width limit
               }
-              
-              if (poolWidth >= 3 && rightBounded) {
-                 const leftBounded = isSolid(mx-1, my) || map[my][mx-1] === 5 || map[my][mx-1] === 4;
-                 
-                 // If bounded safely on both sides and floor is solid (already checked by the while loop)
-                 if (leftBounded && rightBounded) {
-                     for(let w=-1; w<=poolWidth; w++) {
-                         if (w < 0 || w == poolWidth) {
-                             if (!isSolid(mx+w, my+1)) map[my+1][mx+w] = 1;
-                         } else {
-                             const currentTile = map[my][mx+w];
-                             if (currentTile !== 5 && currentTile !== 4 && currentTile !== 11) {
-                                 map[my][mx+w] = 6;
-                                 if (my + 2 < height) {
-                                     map[my+1][mx+w] = 6; // Carve deeper
-                                     if (!isSolid(mx+w, my+2)) map[my+2][mx+w] = 1; // Ensure bottom is solid
-                                 }
-                             }
-                         }
-                     }
-                 }
-                 mx += poolWidth; // Skip checked area
+
+              // Valid pool width (between 3 and 10 blocks wide) with solid right bank
+              if (poolWidth >= 3 && poolWidth <= 10 && rightBounded) {
+                  const endX = mx + poolWidth - 1;
+
+                  // Determine maximum depth (1 to 2 layers) that is strictly enclosed
+                  let maxDepth = 0;
+                  for (let d = 0; d < 2; d++) {
+                      const testY = my + d;
+                      if (testY >= height - 2) break;
+
+                      // Check left bank at this depth
+                      if (!isSolidTerrain(mx - 1, testY)) break;
+                      // Check right bank at this depth
+                      if (!isSolidTerrain(endX + 1, testY)) break;
+
+                      // Check that inside cells are valid open air or fluid
+                      let rowValid = true;
+                      for (let x = mx; x <= endX; x++) {
+                          const t = map[testY][x];
+                          if (t === 2 || t === 3 || t === 4 || t === 5) {
+                              rowValid = false;
+                              break;
+                          }
+                      }
+                      if (!rowValid) break;
+
+                      // Check that the floor directly beneath this depth layer is solid
+                      let floorSolid = true;
+                      for (let x = mx; x <= endX; x++) {
+                          if (!isSolidTerrain(x, testY + 1)) {
+                              if (testY + 1 < height - 1) {
+                                  map[testY + 1][x] = 1;
+                              } else {
+                                  floorSolid = false;
+                              }
+                          }
+                      }
+                      if (!floorSolid) break;
+
+                      maxDepth = d + 1;
+                  }
+
+                  // Verify the surface row has open air above the ENTIRE pool width
+                  let openAirAbove = true;
+                  for (let x = mx; x <= endX; x++) {
+                      if (!isAir(x, my - 1)) {
+                          openAirAbove = false;
+                          break;
+                      }
+                  }
+
+                  if (maxDepth >= 1 && openAirAbove) {
+                      // Fill the pristine basin with liquid (6)
+                      for (let d = 0; d < maxDepth; d++) {
+                          for (let x = mx; x <= endX; x++) {
+                              map[my + d][x] = 6;
+                          }
+                      }
+                      mx = endX + 1; // Advance past this pool
+                  }
               }
           }
       }
   }
 
-  // Water cleanup: water cannot spawn if it bounds non-water/non-solids (prevents floating water passing through vines/torches)
-  let changedWater = true;
-  while(changedWater) {
-      changedWater = false;
+  // Safety Drain Pass: Drain any orphaned/leaking water tile that is open to air on the side or bottom
+  for (let pass = 0; pass < 3; pass++) {
       for (let my = 1; my < height - 1; my++) {
           for (let mx = 1; mx < width - 1; mx++) {
               if (map[my][mx] === 6) {
-                  if (!isSolid(mx-1, my) && map[my][mx-1] !== 5 && map[my][mx-1] !== 4 && map[my][mx-1] !== 11) { map[my][mx] = 0; changedWater = true; continue; }
-                  if (!isSolid(mx+1, my) && map[my][mx+1] !== 5 && map[my][mx+1] !== 4 && map[my][mx+1] !== 11) { map[my][mx] = 0; changedWater = true; continue; }
-                  if (!isSolid(mx, my+1) && map[my+1][mx] !== 5 && map[my+1][mx] !== 4 && map[my+1][mx] !== 11) { map[my][mx] = 0; changedWater = true; continue; }
+                  const tileBelow = map[my + 1]?.[mx];
+                  const tileLeft = map[my]?.[mx - 1];
+                  const tileRight = map[my]?.[mx + 1];
+
+                  const openBottom = tileBelow === 0 || tileBelow === 4 || tileBelow === 5;
+                  const openLeft = tileLeft === 0 || tileLeft === 4 || tileLeft === 5;
+                  const openRight = tileRight === 0 || tileRight === 4 || tileRight === 5;
+
+                  if (openBottom || openLeft || openRight) {
+                      map[my][mx] = 0; // Drain leaking water tile
+                  }
               }
-          }
-      }
-  }
-  
-  // Clear top layer of water to ensure a gap before the ceiling
-  for (let my = 1; my < height - 1; my++) {
-      for (let mx = 1; mx < width - 1; mx++) {
-          if (map[my][mx] === 6 && map[my-1][mx] !== 0 && map[my-1][mx] !== 6) {
-              map[my][mx] = 0; // if right under a ceiling, remove water to leave air gap
           }
       }
   }
