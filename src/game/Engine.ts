@@ -4336,7 +4336,12 @@ export class GameEngine {
               }
               const drawX = px - extraLeft;
               const drawY = py - extraTop;
+
+              // Atmospheric Cave Color Filter (harmonizes custom pixel tiles with deep subterranean cave lighting)
+              ctx.save();
+              ctx.filter = "brightness(0.74) contrast(1.20) saturate(0.82)";
               ctx.drawImage(customTexture, drawX, drawY, drawW, drawH);
+              ctx.restore();
               continue;
             }
 
