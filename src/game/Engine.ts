@@ -44,13 +44,21 @@ export function getAutoTileTexture(
     return (t && t.complete && t.naturalWidth > 0) ? t : undefined;
   };
 
-  // 1. Check Stubs / Pillars / Thin Columns (exposed on 3 sides)
+  // 1. Check Stubs / Pillars / Single Ledges (exposed on 3 sides)
   if (!top && !left && !right && bottom) {
     const t = getTex("stub_down") || getTex("stub_top") || getTex("pillar_top");
     if (t) return t;
   }
   if (!bottom && !left && !right && top) {
     const t = getTex("stub_up") || getTex("stub_bottom") || getTex("pillar_bottom");
+    if (t) return t;
+  }
+  if (!top && !bottom && !right && left) {
+    const t = getTex("stub_right") || getTex("stub_east") || getTex("bridge_right");
+    if (t) return t;
+  }
+  if (!top && !bottom && !left && right) {
+    const t = getTex("stub_left") || getTex("stub_west") || getTex("bridge_left");
     if (t) return t;
   }
 
@@ -102,7 +110,7 @@ if (typeof window !== "undefined") {
     "_left_mid", "_right_mid", "_left_top", "_right_top",
     "_left_bottom", "_right_bottom", "_top_mid", "_bottom_mid",
     "_stub_down", "_stub_top", "_stub_up", "_stub_bottom",
-    "_pillar_top", "_pillar_bottom", "_stub"
+    "_stub_left", "_stub_right", "_pillar_top", "_pillar_bottom", "_stub"
   ];
   const blockTypes = ["dirt", "grass", "cobblestone", "bricks", "moss", "snow", "ice", "basalt", "magma"];
   for (const b of blockTypes) {
