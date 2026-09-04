@@ -62,7 +62,17 @@ export function getAutoTileTexture(
     if (t) return t;
   }
 
-  // 2. Check outer corners (air on two adjacent sides)
+  // 2. Check 1-block Thin Slabs & Pillars (exposed on 2 opposite sides)
+  if (!top && !bottom && left && right) {
+    const t = getTex("slab_horizontal") || getTex("bridge_mid") || getTex("horizontal_bar");
+    if (t) return t;
+  }
+  if (!left && !right && top && bottom) {
+    const t = getTex("pillar_vertical") || getTex("pillar_mid") || getTex("vertical_bar");
+    if (t) return t;
+  }
+
+  // 3. Check outer corners (air on two adjacent sides)
   if (!top && !left) {
     const t = getTex("top_left") || getTex("left_top");
     if (t) return t;
@@ -80,7 +90,7 @@ export function getAutoTileTexture(
     if (t) return t;
   }
 
-  // 3. Check outer edges (exposed to air on one side)
+  // 4. Check outer edges (exposed to air on one side)
   if (!top) {
     const t = getTex("top") || getTex("mid_top") || getTex("top_mid");
     if (t) return t;
@@ -98,7 +108,7 @@ export function getAutoTileTexture(
     if (t) return t;
   }
 
-  // 4. Center (solid on all 4 sides)
+  // 5. Center (solid on all 4 sides)
   return getTex("center") || getTex("mid_mid") || getTex("mid") || tileTextures[prefix];
 }
 
@@ -110,7 +120,9 @@ if (typeof window !== "undefined") {
     "_left_mid", "_right_mid", "_left_top", "_right_top",
     "_left_bottom", "_right_bottom", "_top_mid", "_bottom_mid",
     "_stub_down", "_stub_top", "_stub_up", "_stub_bottom",
-    "_stub_left", "_stub_right", "_pillar_top", "_pillar_bottom", "_stub"
+    "_stub_left", "_stub_right", "_pillar_top", "_pillar_bottom", "_stub",
+    "_slab_horizontal", "_pillar_vertical", "_bridge_mid", "_pillar_mid",
+    "_horizontal_bar", "_vertical_bar"
   ];
   const blockTypes = ["dirt", "grass", "cobblestone", "bricks", "moss", "snow", "ice", "basalt", "magma"];
   for (const b of blockTypes) {
