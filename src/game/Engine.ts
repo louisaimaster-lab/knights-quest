@@ -44,6 +44,12 @@ export function getAutoTileTexture(
     return (t && t.complete && t.naturalWidth > 0) ? t : undefined;
   };
 
+  // 0. Check Single Isolated Floating Block (exposed on all 4 sides)
+  if (!top && !bottom && !left && !right) {
+    const t = getTex("lone") || getTex("single") || getTex("isolated") || getTex("stub_down");
+    if (t) return t;
+  }
+
   // 1. Check Stubs / Pillars / Single Ledges (exposed on 3 sides)
   if (!top && !left && !right && bottom) {
     const t = getTex("stub_down") || getTex("stub_top") || getTex("pillar_top");
@@ -122,7 +128,7 @@ if (typeof window !== "undefined") {
     "_stub_down", "_stub_top", "_stub_up", "_stub_bottom",
     "_stub_left", "_stub_right", "_pillar_top", "_pillar_bottom", "_stub",
     "_slab_horizontal", "_pillar_vertical", "_bridge_mid", "_pillar_mid",
-    "_horizontal_bar", "_vertical_bar"
+    "_horizontal_bar", "_vertical_bar", "_lone", "_single", "_isolated"
   ];
   const blockTypes = ["dirt", "grass", "cobblestone", "bricks", "moss", "snow", "ice", "basalt", "magma"];
   for (const b of blockTypes) {
