@@ -6107,13 +6107,13 @@ export class GameEngine {
     }
     ctx.restore();
 
-    // Draw 6-frame chunky pixel-art stretched arch slash animation if attacking
+    // Draw 5-Frame Handcrafted Chunky Pixel-Art Slash Animation
     if (p.isAttacking && p.weapon !== "bow") {
       const duration = p.weapon === "colossal_sword" ? 20 : (p.weapon === "dual_daggers" ? 6 : (p.weapon === "molten_axe" ? 14 : 10));
       const progress = Math.max(0, Math.min(0.999, 1 - p.attackTimer / duration));
       const dir = p.facingRight ? 1 : -1;
       let ox = p.facingRight ? p.x + p.w : p.x;
-      let oy = p.y + p.h / 2 - 4;
+      let oy = p.y + p.h / 2 - 2;
 
       ox = Math.round(ox * zoom) / zoom;
       oy = Math.round(oy * zoom) / zoom;
@@ -6132,30 +6132,28 @@ export class GameEngine {
         ctx.scale(1, -1);
       }
 
-      const PIX = 2; // 2x2 retro chunky pixel art grid
-
-      // 6 Discrete Handcrafted Frames of a Stretched Forward Katana Arch
-      const frameIndex = Math.min(5, Math.floor(progress * 6));
-      const FRAMES = [
-        // Frame 0: Quick opening spark wedge
-        { hH: 10, fwd: 16, thick: 6, bowCurve: 1.4, alpha: 0.9 },
-        // Frame 1: Expanding forward stretched razor arch
-        { hH: 18, fwd: 30, thick: 9, bowCurve: 1.6, alpha: 1.0 },
-        // Frame 2: Maximum peak power lunge! Stretched aerodynamic arch with needle ends
-        { hH: 26, fwd: 46, thick: 13, bowCurve: 1.8, alpha: 1.0 },
-        // Frame 3: Sweeping follow-through stretched arch drifting forward
-        { hH: 22, fwd: 48, thick: 9, bowCurve: 1.7, alpha: 0.85 },
-        // Frame 4: Thinning energy ribbon
-        { hH: 16, fwd: 50, thick: 6, bowCurve: 1.5, alpha: 0.60 },
-        // Frame 5: Fading wispy pixel embers
-        { hH: 10, fwd: 52, thick: 3, bowCurve: 1.3, alpha: 0.30 },
+      // 5 Handcrafted Animation Frames derived from 25x14 Master Slash Arc
+      // 0 = Transparent, 1 = Outer Energy Rim, 2 = Mid Blade Body, 3 = Pure White Razor Core
+      const SLASH_FRAMES = [
+        // Frame 0: Quick opening startup crescent
+        [[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],
+        // Frame 1: Expanding forward surge
+        [[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,3,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,2,3,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,2,3,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,3,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],
+        // Frame 2: Maximum peak power master arch
+        [[1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0],[0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0,0,0],[0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],[1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0]],
+        // Frame 3: Slicing follow-through (center split)
+        [[0,0,0,0,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0],[0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0],[0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],[0,0,0,0,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0]],
+        // Frame 4: Detached energy shards & fading embers
+        [[1,0,1,0,1,0,1,0,2,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,1,0,1,0,1,0,0,0,0,0,0,0,2,0,2,0,0,0,0,0],[0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,2,0,2,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,2,0,2,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,2,0,2,0,2,0,0],[0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,2,0,2,0,2,0,0,0],[0,0,0,0,1,0,1,0,1,0,1,0,0,0,0,0,0,0,2,0,0,0,0,0,0],[0,1,0,1,0,1,0,2,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]
       ];
 
-      const f = FRAMES[frameIndex];
-      const wScale = p.clawsActive ? 1.15 : (p.weapon === "colossal_sword" ? 1.45 : (p.weapon === "dual_daggers" ? 0.85 : (p.weapon === "molten_axe" ? 1.20 : 1.0)));
-      const halfH = Math.round((f.hH * wScale) / PIX) * PIX;
-      const fwd = Math.round((f.fwd * wScale) / PIX) * PIX;
-      const maxThick = Math.round((f.thick * wScale) / PIX) * PIX;
+      const frameIndex = Math.min(4, Math.floor(progress * 5));
+      const frameMatrix = SLASH_FRAMES[frameIndex];
+      const alphas = [0.95, 1.0, 1.0, 0.85, 0.45];
+      ctx.globalAlpha = alphas[frameIndex];
+
+      const wScale = p.clawsActive ? 1.15 : (p.weapon === "colossal_sword" ? 1.50 : (p.weapon === "dual_daggers" ? 0.85 : (p.weapon === "molten_axe" ? 1.25 : 1.0)));
+      const PIX = 2 * wScale;
 
       // Color palettes (Outer / Mid / Core)
       let outerColor = "#c084fc"; // soft purple
@@ -6176,55 +6174,42 @@ export class GameEngine {
         coreColor = "#f0f9ff";
       }
 
-      ctx.globalAlpha = f.alpha;
+      const drawPixelMatrix = (offsetY: number, scaleFactor: number) => {
+        const rows = frameMatrix.length;
+        const cols = frameMatrix[0].length;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const val = frameMatrix[r][c];
+            if (val === 0) continue;
 
-      const drawPixelArch = (yOffset: number, scaleX: number, thickMulti: number) => {
-        for (let y = -halfH; y <= halfH; y += PIX) {
-          const v = halfH > 0 ? y / halfH : 0; // -1 to 1
-          const curve = Math.max(0, 1 - Math.pow(Math.abs(v), f.bowCurve));
-          const archX = Math.round((curve * fwd * scaleX) / PIX) * PIX;
-          const th = Math.max(PIX, Math.round(((1 - Math.pow(Math.abs(v), 2.2)) * maxThick * thickMulti) / PIX) * PIX);
-          const drawY = y + yOffset;
+            if (val === 3) ctx.fillStyle = coreColor;
+            else if (val === 2) ctx.fillStyle = midColor;
+            else ctx.fillStyle = outerColor;
 
-          const startX = archX - Math.floor(th / 2);
-          const endX = archX + Math.floor(th / 2);
-
-          // 3-Tone Pixel Shading for authentic arcade pixel art
-          for (let x = startX; x <= endX; x += PIX) {
-            const distFromCenter = Math.abs(x - archX);
-            const normDist = th > PIX ? distFromCenter / (th / 2) : 0;
-
-            if (normDist < 0.35) {
-              ctx.fillStyle = coreColor;
-            } else if (normDist < 0.75) {
-              ctx.fillStyle = midColor;
-            } else {
-              ctx.fillStyle = outerColor;
-            }
-            ctx.fillRect(x, drawY, PIX, PIX);
+            const pxX = Math.round((c - 8) * PIX * scaleFactor);
+            const pxY = Math.round((r - 6.5) * PIX * scaleFactor + offsetY);
+            ctx.fillRect(pxX, pxY, Math.ceil(PIX * scaleFactor), Math.ceil(PIX * scaleFactor));
           }
         }
       };
 
       if (p.clawsActive) {
         // Triple parallel razor pixel claws
-        drawPixelArch(-8, 0.95, 0.65);
-        drawPixelArch(0, 1.0, 0.75);
-        drawPixelArch(8, 0.95, 0.65);
+        drawPixelMatrix(-8, 0.85);
+        drawPixelMatrix(0, 1.0);
+        drawPixelMatrix(8, 0.85);
       } else {
-        drawPixelArch(0, 1.0, 1.0);
+        drawPixelMatrix(0, 1.0);
       }
 
-      // Trailing Pixel Sparks on Peak Frames 1, 2, 3
-      if (frameIndex >= 1 && frameIndex <= 3) {
+      // Trailing Pixel Sparks on Peak Impact Frames
+      if (frameIndex === 1 || frameIndex === 2) {
         ctx.fillStyle = coreColor;
-        const sparkCount = p.weapon === "colossal_sword" ? 6 : 3;
+        const sparkCount = p.weapon === "colossal_sword" ? 5 : 3;
         for (let s = 0; s < sparkCount; s++) {
-          const sy = Math.round(((Math.random() - 0.5) * halfH * 1.5) / PIX) * PIX;
-          const v = halfH > 0 ? sy / halfH : 0;
-          const curve = Math.max(0, 1 - Math.pow(Math.abs(v), f.bowCurve));
-          const sx = Math.round((curve * fwd + (Math.random() * 8 + 2)) / PIX) * PIX;
-          ctx.fillRect(sx, sy, PIX, PIX);
+          const sx = Math.round((14 + Math.random() * 8) * PIX);
+          const sy = Math.round(((Math.random() - 0.5) * 12) * PIX);
+          ctx.fillRect(sx, sy, Math.ceil(PIX * 0.8), Math.ceil(PIX * 0.8));
         }
       }
 
