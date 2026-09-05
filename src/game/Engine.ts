@@ -22,6 +22,7 @@ import {
 } from "./constants";
 
 const tileTextures: { [key: string]: HTMLImageElement } = {};
+const slashImages: HTMLImageElement[] = [];
 const CACHE_BUST = Date.now();
 export function loadTileTexture(name: string, src: string) {
   if (typeof Image === "undefined") return;
@@ -138,6 +139,11 @@ if (typeof window !== "undefined") {
   }
   loadTileTexture("torch", "/tiles/torch.png");
   loadTileTexture("background", "/tiles/background.png");
+  for (let i = 0; i < 5; i++) {
+    const img = new Image();
+    img.src = `/sprites/slash/slash_${i}.png?v=${CACHE_BUST}`;
+    slashImages.push(img);
+  }
 }
 
 export function isWeapon(type: WeaponType | null): boolean {
@@ -6121,32 +6127,12 @@ export class GameEngine {
       ctx.save();
       ctx.translate(ox, oy);
 
-      // 5 Handcrafted Animation Frames derived from 25x14 Master Slash Arc
-      // 0 = Transparent, 1 = Outer Energy Rim, 2 = Mid Blade Body, 3 = Pure White Razor Core
-      const SLASH_FRAMES = [
-        // Frame 0: High startup crescent (angled downward)
-        [[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],
-        // Frame 1: Expanding forward sweep surge
-        [[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,3,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,2,3,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,2,3,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,3,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],
-        // Frame 2: Maximum peak power master arch (full 25x14 reach!)
-        [[1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0],[0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0,0,0],[0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],[1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0]],
-        // Frame 3: Slicing follow-through (center cuts through, separating wings)
-        [[0,0,0,0,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0],[0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0],[0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],[0,0,0,0,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0]],
-        // Frame 4: Detached energy shards & trailing follow-through embers
-        [[1,0,1,0,1,0,1,0,2,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,1,0,1,0,1,0,0,0,0,0,0,0,2,0,2,0,0,0,0,0],[0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,2,0,2,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,2,0,2,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,2,0,2,0,2,0,0],[0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,2,0,2,0,2,0,0,0],[0,0,0,0,1,0,1,0,1,0,1,0,0,0,0,0,0,0,2,0,0,0,0,0,0],[0,1,0,1,0,1,0,2,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]
-      ];
-
       const frameIndex = Math.min(4, Math.floor(progress * 5));
-      const frameMatrix = SLASH_FRAMES[frameIndex];
       const alphas = [0.95, 1.0, 1.0, 0.85, 0.45];
       ctx.globalAlpha = alphas[frameIndex];
 
-      // Dynamic Sweeping Slashing Cut Rotation (-50 deg down to +50 deg)
-      const SWING_SWEEP = [-0.85, -0.40, 0, 0.40, 0.85];
-      const sweepAngle = SWING_SWEEP[frameIndex] * (p.slashFlipped ? -1 : 1);
       const baseAim = p.attackAngle !== undefined ? p.attackAngle : (dir === -1 ? Math.PI : 0);
-      const finalAngle = baseAim + (dir === -1 ? -sweepAngle : sweepAngle);
-      ctx.rotate(finalAngle);
+      ctx.rotate(baseAim);
 
       if (dir === -1 && p.attackAngle === undefined) {
         ctx.scale(-1, 1);
@@ -6157,7 +6143,7 @@ export class GameEngine {
 
       // Sizing: Generous, impactful, large slash scale (PIX = 3 to 4.5)
       const wScale = p.clawsActive ? 1.25 : (p.weapon === "colossal_sword" ? 1.60 : (p.weapon === "dual_daggers" ? 0.95 : (p.weapon === "molten_axe" ? 1.35 : 1.15)));
-      const PIX = Math.round(3 * wScale);
+      const PIX = Math.round(3.2 * wScale);
 
       // Color palettes (Outer / Mid / Core)
       let outerColor = "#c084fc"; // soft purple
@@ -6178,44 +6164,142 @@ export class GameEngine {
         coreColor = "#f0f9ff";
       }
 
-      // Contiguous Row-Span Filling (eliminates 100% of subpixel seams & gaps!)
-      const drawContiguousMatrix = (offsetY: number, sizeScale: number) => {
-        const rows = frameMatrix.length;
-        const cols = frameMatrix[0].length;
+      const frameImg = slashImages[frameIndex];
+      const isDefaultPalette = !p.clawsActive && p.weapon !== "molten_axe" && p.weapon !== "frozen_sword";
+
+      const drawFrameArt = (offsetY: number, sizeScale: number) => {
         const curPix = Math.round(PIX * sizeScale);
+        const w = 25 * curPix;
+        const h = 14 * curPix;
+        const drawX = -6 * curPix;
+        const drawY = -7 * curPix + offsetY;
 
-        for (let r = 0; r < rows; r++) {
-          let startX = -1;
-          let curVal = 0;
+        if (isDefaultPalette && frameImg && frameImg.complete && frameImg.naturalWidth > 0) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(frameImg, drawX, drawY, w, h);
+        } else {
+          // Fallback pixel matrices matching the exact 5 distinct PNG slash frames
+          const SLASH_FRAMES = [
+            // Frame 0: Startup Slash Arc
+            [
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,0,0,0,0,0,0],
+              [0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0,0,0,0,0,0,0],
+              [0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0,0,0,0,0,0,0,0,0],
+              [0,0,1,1,1,1,2,2,2,2,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0],
+              [1,1,1,1,2,2,2,2,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              [0,0,1,1,1,1,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+            ],
+            // Frame 1: Expanding Forward Arc
+            [
+              [0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,2,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,1,1,1,1,2,2,2,2,2,3,3,3,3,0,0,0,0,0,0,0],
+              [0,0,0,1,1,1,1,2,2,2,2,2,3,3,3,3,3,3,0,0,0,0,0,0,0],
+              [0,0,1,1,1,1,2,2,2,2,3,3,3,3,3,3,3,3,3,0,0,0,0,0,0],
+              [0,1,1,1,1,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,0,0,0,0,0],
+              [1,1,1,1,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,3,0,0,0,0,0],
+              [1,1,1,1,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,3,0,0,0,0,0],
+              [0,1,1,1,1,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,0,0,0,0,0],
+              [0,0,1,1,1,1,2,2,2,2,3,3,3,3,3,3,3,3,3,0,0,0,0,0,0],
+              [0,0,0,1,1,1,1,2,2,2,2,2,3,3,3,3,3,3,0,0,0,0,0,0,0],
+              [0,0,0,0,0,1,1,1,1,2,2,2,2,2,3,3,3,3,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,2,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+            ],
+            // Frame 2: Master Peak Slash Arc (Exact 25x14 master shape)
+            [
+              [1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0],
+              [0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],
+              [0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],
+              [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0],
+              [0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0,0,0],
+              [0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],
+              [1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0]
+            ],
+            // Frame 3: Slicing Cut-Through
+            [
+              [0,0,0,0,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0],
+              [0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,3,3,3,3,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,3,3,3,3,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,3,3,3],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,3,3,3],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,3,3,3],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,3,3,3],
+              [0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,3,3,3,3,0],
+              [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,3,3,3,3,0],
+              [0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0],
+              [0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],
+              [0,0,0,0,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0]
+            ],
+            // Frame 4: Trailing Dissipating Slashes & Sparks
+            [
+              [0,1,1,1,1,0,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,1,1,1,1,0,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,2,2,2,2,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,3,3,3,3,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,3,3,3,3,0,0,0,0],
+              [0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,2,2,2,2,0,0,0,0,0,0],
+              [0,0,0,0,0,1,1,1,1,0,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0],
+              [0,1,1,1,1,0,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+            ]
+          ];
+          const frameMatrix = SLASH_FRAMES[frameIndex];
+          const rows = frameMatrix.length;
+          const cols = frameMatrix[0].length;
+          for (let r = 0; r < rows; r++) {
+            let startX = -1;
+            let curVal = 0;
+            for (let c = 0; c <= cols; c++) {
+              const val = c < cols ? frameMatrix[r][c] : 0;
+              if (val !== curVal) {
+                if (curVal > 0 && startX !== -1) {
+                  if (curVal === 3) ctx.fillStyle = coreColor;
+                  else if (curVal === 2) ctx.fillStyle = midColor;
+                  else ctx.fillStyle = outerColor;
 
-          for (let c = 0; c <= cols; c++) {
-            const val = c < cols ? frameMatrix[r][c] : 0;
-            if (val !== curVal) {
-              if (curVal > 0 && startX !== -1) {
-                if (curVal === 3) ctx.fillStyle = coreColor;
-                else if (curVal === 2) ctx.fillStyle = midColor;
-                else ctx.fillStyle = outerColor;
-
-                const rx = (startX - 6) * curPix;
-                const ry = (r - 7) * curPix + offsetY;
-                const rw = (c - startX) * curPix;
-                const rh = curPix;
-                ctx.fillRect(rx, ry, rw, rh);
+                  const rx = (startX - 6) * curPix;
+                  const ry = (r - 7) * curPix + offsetY;
+                  const rw = (c - startX) * curPix;
+                  const rh = curPix;
+                  ctx.fillRect(rx, ry, rw, rh);
+                }
+                startX = c;
+                curVal = val;
               }
-              startX = c;
-              curVal = val;
             }
           }
         }
       };
 
       if (p.clawsActive) {
-        // Triple parallel razor pixel claws
-        drawContiguousMatrix(-12, 0.85);
-        drawContiguousMatrix(0, 1.0);
-        drawContiguousMatrix(12, 0.85);
+        drawFrameArt(-12, 0.85);
+        drawFrameArt(0, 1.0);
+        drawFrameArt(12, 0.85);
       } else {
-        drawContiguousMatrix(0, 1.0);
+        drawFrameArt(0, 1.0);
       }
 
       // Dynamic Cutting Sparks on Peak Frames
@@ -6908,9 +6992,9 @@ export class GameEngine {
     if (!this.lightCanvas) {
       this.lightCanvas = document.createElement("canvas");
     }
-    // ponytail: half-res darkness canvas, scaled up on draw — ~4x cheaper, soft light hides the loss
-    const lw = Math.ceil(this.canvasWidth / 2);
-    const lh = Math.ceil(this.canvasHeight / 2);
+    // Lighting canvas matches the exact 1:1 pixel resolution of game blocks
+    const lw = this.canvasWidth;
+    const lh = this.canvasHeight;
     if (
       this.lightCanvas.width !== lw ||
       this.lightCanvas.height !== lh
@@ -6920,12 +7004,7 @@ export class GameEngine {
     }
     const lctx = this.lightCanvas.getContext("2d");
     if (lctx && !this.isMenuBackground && !this.state.isFloorComplete && this.state.transitionState !== "cards") {
-      // ponytail: static lights (torches/lava/exit) never move in world space, so bake
-      // them once into a padded half-res canvas and re-bake only when the camera crosses
-      // a tile boundary / zoom bucket / floor / diamond-state changes. Player light is
-      // the only dynamic one, drawn per-frame. This killed the per-frame gradient flood
-      // that tanked FPS after the 2x caves.
-      const PAD = 48; // px; covers max sub-tile blit shift = TILE*zoom*0.5 (40px at gate zoom 2.5)
+      const PAD = 96; // px; covers max sub-tile blit shift = TILE*zoom
       const camBakeX = Math.floor(this.state.camera.x / TILE_SIZE) * TILE_SIZE;
       const camBakeY = Math.floor(this.state.camera.y / TILE_SIZE) * TILE_SIZE;
       const zoomBucket = Math.round(zoom * 50);
@@ -6950,10 +7029,7 @@ export class GameEngine {
           sctx.clearRect(0, 0, slw, slh);
           sctx.save();
           sctx.translate(lw / 2 + PAD, lh / 2 + PAD);
-          sctx.scale(zoom * 0.5, zoom * 0.5);
-          // ponytail: translate applied BEFORE the scale, so it must be raw world
-          // camera units (camBake), NOT camera*zoom — the pre-scale translate gets
-          // scaled again, double-counting zoom otherwise.
+          sctx.scale(zoom, zoom);
           sctx.translate(-camBakeX, -camBakeY);
 
           const drawStaticLight = (x: number, y: number, radius: number) => {
@@ -7003,21 +7079,14 @@ export class GameEngine {
       lctx.fillRect(0, 0, lw, lh);
 
       lctx.globalCompositeOperation = "destination-out";
-      // Blit the baked static layer shifted to the current (sub-tile) camera position
-      // static canvas maps p -> lw/2+PAD+z/2*(p-camBake); desired is lw/2+z/2*(p-camera)
-      // => offset = z/2*(camBake-camera) - PAD
-      const dx = (camBakeX - this.state.camera.x) * zoom * 0.5 - PAD;
-      const dy = (camBakeY - this.state.camera.y) * zoom * 0.5 - PAD;
+      const dx = (camBakeX - this.state.camera.x) * zoom - PAD;
+      const dy = (camBakeY - this.state.camera.y) * zoom - PAD;
       lctx.drawImage(this.staticLightCanvas, dx, dy);
 
       // Player light is dynamic — draw it live with the correct world transform
       lctx.save();
       lctx.translate(Math.round(lw / 2), Math.round(lh / 2));
-      lctx.scale(zoom * 0.5, zoom * 0.5);
-      // ponytail: this translate is applied BEFORE the scale above, so it must be
-      // raw world units (camera.x/y), NOT scaledCamX (camera * zoom). Using the
-      // scaled value threw the whole light field off by camera*(zoom-1) at any
-      // zoom > 1 — huge misalignment during the 1.6 intro zoom.
+      lctx.scale(zoom, zoom);
       lctx.translate(-this.state.camera.x, -this.state.camera.y);
 
       const drawPlayerLight = (x: number, y: number, radius: number) => {
@@ -7038,7 +7107,7 @@ export class GameEngine {
 
       ctx.save();
       ctx.resetTransform();
-      ctx.imageSmoothingEnabled = true; // soft upscale for the darkness layer
+      ctx.imageSmoothingEnabled = false;
       ctx.drawImage(this.lightCanvas, 0, 0, this.canvasWidth, this.canvasHeight);
       ctx.restore();
     }
