@@ -6141,23 +6141,23 @@ export class GameEngine {
       const wScale = p.clawsActive ? 1.25 : (p.weapon === "colossal_sword" ? 1.60 : (p.weapon === "dual_daggers" ? 0.95 : (p.weapon === "molten_axe" ? 1.35 : 1.15)));
       const PIX = Math.round(3.2 * wScale);
 
-      // White and Gray Palette (not player colors!)
-      let outerColor = "#64748b"; // slate gray outline
+      // White and Light Gray 2-Color Palette (strictly 2 colors)
+      let outerColor = "#cbd5e1"; // light silver gray body and rim
       let midColor = "#cbd5e1";   // light silver gray body
       let coreColor = "#ffffff";  // pure white cutting razor edge
 
       if (p.clawsActive) {
-        outerColor = "#990000";
+        outerColor = "#ff3300";
         midColor = "#ff3300";
         coreColor = "#ffffff";
       } else if (p.weapon === "molten_axe") {
-        outerColor = "#ea580c";
+        outerColor = "#f97316";
         midColor = "#f97316";
         coreColor = "#fef08a";
       } else if (p.weapon === "frozen_sword") {
-        outerColor = "#0284c7";
+        outerColor = "#38bdf8";
         midColor = "#38bdf8";
-        coreColor = "#f0f9ff";
+        coreColor = "#ffffff";
       }
 
       const frameImg = slashImages[frameIndex];

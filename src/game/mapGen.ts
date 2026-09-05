@@ -85,27 +85,16 @@ export function generateCave(floor: number, maxFloor: number) {
   let bgMap = Array(height).fill(0).map(() => Array(width).fill(0));
 
   
-  // 1. Random noise (varying density based on floor)
-  const density = 0.37 + (Math.sin(floor) * 0.05); // Lowered for wider, dynamic caves
+  // 1. Initial organic random noise
+  const density = 0.44;
   for (let my = 1; my < height - 1; my++) {
       for (let mx = 1; mx < width - 1; mx++) {
           map[my][mx] = Math.random() < density ? 1 : 0;
       }
   }
 
-  // 1.5 Inject lively horizontal layers (creates cave sub-floors and stepped ledges)
-  for (let my = 8; my < height - 8; my += (6 + Math.floor(Math.random() * 4))) {
-      for (let mx = 1; mx < width - 1; mx++) {
-          if (Math.random() < 0.8) {
-              map[my][mx] = 1;
-              if (Math.random() < 0.6) map[my+1][mx] = 1;
-          }
-      }
-  }
-
-  // 2. Cellular Automata - Multiple passes with organic rules for varied shapes
-  // Pass 1: standard smooth
-  for (let s = 0; s < 4; s++) {
+  // 2. Cellular Automata - 3 smoothing passes for natural cave chambers
+  for (let s = 0; s < 3; s++) {
       const nextMap = map.map(row => [...row]);
       for (let my = 1; my < height - 1; my++) {
           for (let mx = 1; mx < width - 1; mx++) {
@@ -123,50 +112,46 @@ export function generateCave(floor: number, maxFloor: number) {
       map = nextMap;
   }
 
-  // Pass 2: erode edges to create organic varied shapes, steps & natural ledges
-  const erodedMap = map.map(row => [...row]);
-  for (let my = 2; my < height - 2; my++) {
-      for (let mx = 2; mx < width - 2; mx++) {
-          let walls = 0;
-          for (let dy = -1; dy <= 1; dy++) {
-              for (let dx = -1; dx <= 1; dx++) {
-                  if (map[my+dy][mx+dx] === 1) walls++;
-              }
-          }
-          if (map[my][mx] === 1 && walls < 7) erodedMap[my][mx] = 0;
-      }
-  }
-  map = erodedMap;
-
-  // 3. Drunken worms carving organic winding pathways to the bottom
-  const numWorms = 2 + Math.floor(Math.random() * 2);
+  // 3. Wide Multi-Artery Worms carving spacious, guaranteed connected shafts from top to bottom
+  const numWorms = 4;
   for (let w = 0; w < numWorms; w++) {
-      let cx = Math.floor(width/4 + Math.random() * (width/2));
+      let cx = Math.floor(width * (0.18 + 0.64 * (w / (numWorms - 1 || 1))));
       let cy = 2;
       
-      while (cy < height - 2) {
-          let radius = 1 + Math.floor(Math.random() * 3); // 1 to 3 radius for organic variety
+      while (cy < height - 3) {
+          let radius = 2 + Math.floor(Math.random() * 3); // 2 to 4 radius for wide, natural chambers
           for (let dy = -radius; dy <= radius; dy++) {
               for (let dx = -radius; dx <= radius; dx++) {
-                  if (dx*dx + dy*dy <= radius*radius * 1.2) {
-                      if (cy+dy > 0 && cy+dy < height-1 && cx+dx > 0 && cx+dx < width-1) {
-                          map[cy+dy][cx+dx] = 0;
+                  if (dx*dx + dy*dy <= radius*radius * 1.15) {
+                      const ny = cy + dy;
+                      const nx = cx + dx;
+                      if (ny > 1 && ny < height - 2 && nx > 1 && nx < width - 2) {
+                          map[ny][nx] = 0;
                       }
                   }
               }
           }
           
-          let dir = Math.random();
-          if (dir < 0.5) {
-              cy += 1;
+          cy += 1;
+          if (Math.random() < 0.6) {
               cx += (Math.random() < 0.5 ? -1 : 1);
-          } else if (dir < 0.75) {
-              cx -= 1 + Math.floor(Math.random() * 2);
-          } else {
-              cx += 1 + Math.floor(Math.random() * 2);
+          } else if (Math.random() < 0.2) {
+              cx += (Math.random() < 0.5 ? -2 : 2);
           }
-          
-          cx = Math.max(3, Math.min(width-4, cx));
+          cx = Math.max(4, Math.min(width - 5, cx));
+      }
+  }
+
+  // 3.5 Horizontal Cross-Tunnels interconnecting vertical shafts every 26-34 tiles
+  for (let yConn = 22; yConn < height - 12; yConn += 26 + Math.floor(Math.random() * 8)) {
+      const cRadius = 2;
+      for (let mx = 4; mx < width - 4; mx++) {
+          for (let dy = -cRadius; dy <= cRadius; dy++) {
+              const ny = yConn + dy;
+              if (ny > 1 && ny < height - 2) {
+                  map[ny][mx] = 0;
+              }
+          }
       }
   }
 
@@ -395,9 +380,22 @@ export function generateCave(floor: number, maxFloor: number) {
     ? startSpaces[Math.floor(Math.random() * startSpaces.length)] 
     : {x: Math.floor(width/2), y: 5};
     
-  // Ensure start is not mid-air
-  if (map[startPos.y + 1] && map[startPos.y + 1][startPos.x] === 0) {
-      map[startPos.y + 1][startPos.x] = 5; // Place a platform right beneath spawn
+  // Ensure start area is open and comfortable (7x4 open space)
+  for (let dy = -2; dy <= 1; dy++) {
+    for (let dx = -3; dx <= 3; dx++) {
+      const sx = startPos.x + dx;
+      const sy = startPos.y + dy;
+      if (sx > 1 && sx < width - 2 && sy > 1 && sy < height - 2) {
+        if (map[sy][sx] !== 2 && map[sy][sx] !== 3) map[sy][sx] = 0;
+      }
+    }
+  }
+
+  // Ensure start is not mid-air and has a solid platform
+  if (map[startPos.y + 1]) {
+      map[startPos.y + 1][startPos.x] = 5;
+      if (startPos.x > 1) map[startPos.y + 1][startPos.x - 1] = 5;
+      if (startPos.x < width - 2) map[startPos.y + 1][startPos.x + 1] = 5;
   }
     
   // Descend gate MUST spawn on the floor of the lower 30% of the cave,
