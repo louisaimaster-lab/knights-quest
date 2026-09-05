@@ -6121,29 +6121,18 @@ export class GameEngine {
       ctx.save();
       ctx.translate(ox, oy);
 
-      // Rotate slash directly toward cursor angle if available
-      if (p.attackAngle !== undefined) {
-        ctx.rotate(p.attackAngle);
-      } else if (dir === -1) {
-        ctx.scale(-1, 1);
-      }
-
-      if (p.slashFlipped) {
-        ctx.scale(1, -1);
-      }
-
       // 5 Handcrafted Animation Frames derived from 25x14 Master Slash Arc
       // 0 = Transparent, 1 = Outer Energy Rim, 2 = Mid Blade Body, 3 = Pure White Razor Core
       const SLASH_FRAMES = [
-        // Frame 0: Quick opening startup crescent
+        // Frame 0: High startup crescent (angled downward)
         [[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],
-        // Frame 1: Expanding forward surge
+        // Frame 1: Expanding forward sweep surge
         [[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,3,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,2,3,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,2,3,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,3,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],
-        // Frame 2: Maximum peak power master arch
+        // Frame 2: Maximum peak power master arch (full 25x14 reach!)
         [[1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0],[0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,0,0,0],[0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],[1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0]],
-        // Frame 3: Slicing follow-through (center split)
+        // Frame 3: Slicing follow-through (center cuts through, separating wings)
         [[0,0,0,0,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0],[0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,3,3,3,3,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0],[0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0],[0,0,0,0,1,1,1,1,1,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0]],
-        // Frame 4: Detached energy shards & fading embers
+        // Frame 4: Detached energy shards & trailing follow-through embers
         [[1,0,1,0,1,0,1,0,2,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,1,0,1,0,1,0,0,0,0,0,0,0,2,0,2,0,0,0,0,0],[0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,2,0,2,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,2,0,2,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,2,0,2,0,2,0,0],[0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,2,0,2,0,2,0,0,0],[0,0,0,0,1,0,1,0,1,0,1,0,0,0,0,0,0,0,2,0,0,0,0,0,0],[0,1,0,1,0,1,0,2,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]
       ];
 
@@ -6152,8 +6141,23 @@ export class GameEngine {
       const alphas = [0.95, 1.0, 1.0, 0.85, 0.45];
       ctx.globalAlpha = alphas[frameIndex];
 
-      const wScale = p.clawsActive ? 1.15 : (p.weapon === "colossal_sword" ? 1.50 : (p.weapon === "dual_daggers" ? 0.85 : (p.weapon === "molten_axe" ? 1.25 : 1.0)));
-      const PIX = 2 * wScale;
+      // Dynamic Sweeping Slashing Cut Rotation (-50 deg down to +50 deg)
+      const SWING_SWEEP = [-0.85, -0.40, 0, 0.40, 0.85];
+      const sweepAngle = SWING_SWEEP[frameIndex] * (p.slashFlipped ? -1 : 1);
+      const baseAim = p.attackAngle !== undefined ? p.attackAngle : (dir === -1 ? Math.PI : 0);
+      const finalAngle = baseAim + (dir === -1 ? -sweepAngle : sweepAngle);
+      ctx.rotate(finalAngle);
+
+      if (dir === -1 && p.attackAngle === undefined) {
+        ctx.scale(-1, 1);
+      }
+      if (p.slashFlipped) {
+        ctx.scale(1, -1);
+      }
+
+      // Sizing: Generous, impactful, large slash scale (PIX = 3 to 4.5)
+      const wScale = p.clawsActive ? 1.25 : (p.weapon === "colossal_sword" ? 1.60 : (p.weapon === "dual_daggers" ? 0.95 : (p.weapon === "molten_axe" ? 1.35 : 1.15)));
+      const PIX = Math.round(3 * wScale);
 
       // Color palettes (Outer / Mid / Core)
       let outerColor = "#c084fc"; // soft purple
@@ -6174,42 +6178,54 @@ export class GameEngine {
         coreColor = "#f0f9ff";
       }
 
-      const drawPixelMatrix = (offsetY: number, scaleFactor: number) => {
+      // Contiguous Row-Span Filling (eliminates 100% of subpixel seams & gaps!)
+      const drawContiguousMatrix = (offsetY: number, sizeScale: number) => {
         const rows = frameMatrix.length;
         const cols = frameMatrix[0].length;
+        const curPix = Math.round(PIX * sizeScale);
+
         for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            const val = frameMatrix[r][c];
-            if (val === 0) continue;
+          let startX = -1;
+          let curVal = 0;
 
-            if (val === 3) ctx.fillStyle = coreColor;
-            else if (val === 2) ctx.fillStyle = midColor;
-            else ctx.fillStyle = outerColor;
+          for (let c = 0; c <= cols; c++) {
+            const val = c < cols ? frameMatrix[r][c] : 0;
+            if (val !== curVal) {
+              if (curVal > 0 && startX !== -1) {
+                if (curVal === 3) ctx.fillStyle = coreColor;
+                else if (curVal === 2) ctx.fillStyle = midColor;
+                else ctx.fillStyle = outerColor;
 
-            const pxX = Math.round((c - 8) * PIX * scaleFactor);
-            const pxY = Math.round((r - 6.5) * PIX * scaleFactor + offsetY);
-            ctx.fillRect(pxX, pxY, Math.ceil(PIX * scaleFactor), Math.ceil(PIX * scaleFactor));
+                const rx = (startX - 6) * curPix;
+                const ry = (r - 7) * curPix + offsetY;
+                const rw = (c - startX) * curPix;
+                const rh = curPix;
+                ctx.fillRect(rx, ry, rw, rh);
+              }
+              startX = c;
+              curVal = val;
+            }
           }
         }
       };
 
       if (p.clawsActive) {
         // Triple parallel razor pixel claws
-        drawPixelMatrix(-8, 0.85);
-        drawPixelMatrix(0, 1.0);
-        drawPixelMatrix(8, 0.85);
+        drawContiguousMatrix(-12, 0.85);
+        drawContiguousMatrix(0, 1.0);
+        drawContiguousMatrix(12, 0.85);
       } else {
-        drawPixelMatrix(0, 1.0);
+        drawContiguousMatrix(0, 1.0);
       }
 
-      // Trailing Pixel Sparks on Peak Impact Frames
+      // Dynamic Cutting Sparks on Peak Frames
       if (frameIndex === 1 || frameIndex === 2) {
         ctx.fillStyle = coreColor;
-        const sparkCount = p.weapon === "colossal_sword" ? 5 : 3;
+        const sparkCount = p.weapon === "colossal_sword" ? 6 : 4;
         for (let s = 0; s < sparkCount; s++) {
-          const sx = Math.round((14 + Math.random() * 8) * PIX);
-          const sy = Math.round(((Math.random() - 0.5) * 12) * PIX);
-          ctx.fillRect(sx, sy, Math.ceil(PIX * 0.8), Math.ceil(PIX * 0.8));
+          const sx = (16 + Math.random() * 8) * PIX;
+          const sy = ((Math.random() - 0.5) * 14) * PIX;
+          ctx.fillRect(sx, sy, PIX, PIX);
         }
       }
 
