@@ -6121,9 +6121,9 @@ export class GameEngine {
         ctx.scale(1, -1);
       }
 
-      // Sizing: Generous, larger impactful slash scale wrapping around the player
-      const wScale = p.clawsActive ? 1.30 : (p.weapon === "colossal_sword" ? 1.70 : (p.weapon === "dual_daggers" ? 1.05 : (p.weapon === "molten_axe" ? 1.45 : 1.25)));
-      const PIX = Math.round(3.8 * wScale);
+      // Sizing: Balanced, clean circular slash scale wrapping around the player
+      const wScale = p.clawsActive ? 1.20 : (p.weapon === "colossal_sword" ? 1.50 : (p.weapon === "dual_daggers" ? 0.95 : (p.weapon === "molten_axe" ? 1.30 : 1.10)));
+      const PIX = Math.round(2.6 * wScale);
 
       // White and Light Gray 2-Color Palette (strictly 2 colors)
       let outerColor = "#cbd5e1"; // light silver gray body and rim
@@ -6149,10 +6149,10 @@ export class GameEngine {
 
       const drawFrameArt = (offsetY: number, sizeScale: number) => {
         const curPix = Math.round(PIX * sizeScale);
-        const w = 28 * curPix;
-        const h = 16 * curPix;
-        const drawX = -9 * curPix;
-        const drawY = -8 * curPix + offsetY;
+        const w = 24 * curPix;
+        const h = 24 * curPix;
+        const drawX = -5 * curPix;
+        const drawY = -12 * curPix + offsetY;
 
         if (frameImg && frameImg.complete && frameImg.naturalWidth > 0) {
           ctx.imageSmoothingEnabled = false;
@@ -6161,20 +6161,20 @@ export class GameEngine {
       };
 
       if (p.clawsActive) {
-        drawFrameArt(-12, 0.85);
+        drawFrameArt(-8, 0.85);
         drawFrameArt(0, 1.0);
-        drawFrameArt(12, 0.85);
+        drawFrameArt(8, 0.85);
       } else {
         drawFrameArt(0, 1.0);
       }
 
       // Dynamic Cutting Sparks on Peak Frames
-      if (frameIndex >= 4 && frameIndex <= 7) {
+      if (frameIndex >= 5 && frameIndex <= 9) {
         ctx.fillStyle = coreColor;
-        const sparkCount = p.weapon === "colossal_sword" ? 6 : 4;
+        const sparkCount = p.weapon === "colossal_sword" ? 5 : 3;
         for (let s = 0; s < sparkCount; s++) {
-          const sx = (14 + Math.random() * 8) * PIX;
-          const sy = ((Math.random() - 0.5) * 14) * PIX;
+          const sx = (10 + Math.random() * 6) * PIX;
+          const sy = ((Math.random() - 0.5) * 10) * PIX;
           ctx.fillRect(sx, sy, PIX, PIX);
         }
       }
