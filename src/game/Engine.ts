@@ -9,7 +9,7 @@ import {
   UpgradeChoice,
   SavedRunState,
 } from "./types";
-import { generateCave } from "./mapGen";
+import { generateCave, WorldGenConfig, DEFAULT_WORLD_GEN, setWorldGenConfig } from "./mapGen";
 import { AABBMapCollision, rectIntersect, checkTilesAt } from "./physics";
 import {
   TILE_SIZE,
@@ -160,8 +160,25 @@ export class GameEngine {
   canvasWidth = 800;
   canvasHeight = 600;
   isMenuBackground = false;
+  worldGenConfig: WorldGenConfig = {
+    density: DEFAULT_WORLD_GEN.density,
+    tunneling: DEFAULT_WORLD_GEN.tunneling,
+    size: { ...DEFAULT_WORLD_GEN.size }
+  };
 
   constructor() {
+    if (typeof window !== "undefined") {
+      (window as any).worldGenConfig = this.worldGenConfig;
+      (window as any).setWorldGenConfig = (cfg: Partial<WorldGenConfig>) => {
+        if (cfg.density !== undefined) this.worldGenConfig.density = cfg.density;
+        if (cfg.tunneling !== undefined) this.worldGenConfig.tunneling = cfg.tunneling;
+        if (cfg.size) {
+          if (cfg.size.width !== undefined) this.worldGenConfig.size.width = cfg.size.width;
+          if (cfg.size.length !== undefined) this.worldGenConfig.size.length = cfg.size.length;
+        }
+        setWorldGenConfig(cfg);
+      };
+    }
     this.state = this.getInitialState();
     this.initFloor(1);
   }
@@ -239,7 +256,7 @@ export class GameEngine {
 
   initCardBackground() {
     this.isMenuBackground = true;
-    const gen = generateCave(Math.min(25, this.state.floor + 1), this.state.maxFloor);
+    const gen = generateCave(Math.min(25, this.state.floor + 1), this.state.maxFloor, this.worldGenConfig);
     this.state.map = gen.map;
     this.state.bgMap = gen.bgMap;
     this.state.biome = gen.biome;
@@ -385,7 +402,7 @@ export class GameEngine {
   initFloor(floor: number) {
     this.isMenuBackground = false;
     this.staticLightKey = ""; // force a re-bake of the static light layer for the new map
-    const gen = generateCave(floor, this.state.maxFloor);
+    const gen = generateCave(floor, this.state.maxFloor, this.worldGenConfig);
 
     // Immediate start
     this.state.transitionState = "none";
