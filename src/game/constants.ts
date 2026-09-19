@@ -22,11 +22,11 @@ export const COLORS = {
 };
 
 export interface WorldGenConfig {
-  /** How compact (higher = more compact/solid walls) or vast (lower = more open air) the caves are. Default: 0.52 */
+  /** How compact (higher = more compact/solid walls) or vast (lower = more open air) the caves are. Default: 0.44 */
   density: number;
   /** Controls holes and gaps to progress through (higher = more shafts/cross-tunnels, lower = fewer/tighter paths). Default: 1.0 */
   tunneling: number;
-  /** Cave size in tiles: width (columns) and length (vertical depth / rows). Default: width 48, length 140 */
+  /** Cave size in tiles: width (columns) and length (vertical depth / rows). Default: width 140, length 390 */
   size: {
     width: number;
     length: number;
@@ -34,11 +34,11 @@ export interface WorldGenConfig {
 }
 
 export const DEFAULT_WORLD_GEN: WorldGenConfig = {
-  density: 0.52, // compact, cozy cave walls instead of vast empty voids
-  tunneling: 1.0, // balanced holes and gaps to progress through
+  density: 0.44, // classic spacious open caves from original world generation
+  tunneling: 1.0, // balanced shafts, holes, and cross-tunnels for smooth progression
   size: {
-    width: 48,
-    length: 140,
+    width: 140,
+    length: 390,
   },
 };
 

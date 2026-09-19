@@ -96,10 +96,12 @@ export function generateCave(
     return { width, height, map, bgMap, openSpaces, startPos, endPos, biome, chests };
   }
 
-  // Biome assignment (Equal 25% chance for neutral, ice, moss, and volcanic biomes)
+  // Biome assignment (Floor 1 is always neutral classic cave; equal chance for neutral, ice, moss, and volcanic biomes thereafter)
   const randBiome = Math.random();
   let biome: 'neutral' | 'ice' | 'moss' | 'volcanic' = 'neutral';
-  if (randBiome < 0.25) {
+  if (floor === 1) {
+      biome = 'neutral';
+  } else if (randBiome < 0.25) {
       biome = 'neutral';
   } else if (randBiome < 0.50) {
       biome = 'ice';
@@ -109,19 +111,20 @@ export function generateCave(
       biome = 'volcanic';
   }
 
-  // Cave map dimensions configured via size.width and size.length (compact, not overly vast)
-  const baseW = Math.max(20, cfg.size.width);
-  const baseL = Math.max(40, cfg.size.length);
-  const width = Math.floor(baseW + Math.min(Math.floor((floor - 1) * 0.8), 12));
-  const height = Math.floor(baseL + Math.min(Math.floor((floor - 1) * 3), 40));
+  // Expanded cave map scale: defaults to classic spacious dimensions, configurable via cfg.size
+  const baseW = Math.max(30, cfg.size.width);
+  const baseL = Math.max(60, cfg.size.length);
+  const floorW = Math.min(Math.floor((floor - 1) * 3), 48);
+  const floorL = Math.min(Math.floor((floor - 1) * 12), 160);
+  const width = Math.floor(baseW + floorW);
+  const height = Math.floor(baseL + floorL);
   
   // 1 = solid wall, 0 = empty, 2 = exit, 3 = diamond, 4 = ladder, 5 = platform
   let map = Array(height).fill(0).map(() => Array(width).fill(1));
   let bgMap = Array(height).fill(0).map(() => Array(width).fill(0));
 
-  // 1. Initial organic random noise controlled by density
-  // Higher density = more compact rock/walls; lower density = more vast open chambers
-  const density = Math.max(0.30, Math.min(0.70, cfg.density));
+  // 1. Initial organic random noise controlled by density (default 0.44 for classic spacious open caves)
+  const density = Math.max(0.30, Math.min(0.60, cfg.density));
   for (let my = 1; my < height - 1; my++) {
       for (let mx = 1; mx < width - 1; mx++) {
           map[my][mx] = Math.random() < density ? 1 : 0;
@@ -147,17 +150,14 @@ export function generateCave(
       map = nextMap;
   }
 
-  // 3. Multi-Artery Worms carving connected vertical shafts from top to bottom
-  // tunneling controls number of paths and carve radius (more or less holes/gaps to progress through)
-  const numWorms = Math.max(1, Math.min(4, Math.round(2 * cfg.tunneling)));
-  const baseRadius = Math.max(1, Math.min(3, Math.round(1.5 * cfg.tunneling)));
-
+  // 3. Wide Multi-Artery Worms carving spacious, guaranteed connected shafts from top to bottom
+  const numWorms = Math.max(2, Math.min(6, Math.round(4 * cfg.tunneling)));
   for (let w = 0; w < numWorms; w++) {
-      let cx = Math.floor(width * (0.22 + 0.56 * (w / (numWorms - 1 || 1))));
+      let cx = Math.floor(width * (0.10 + 0.80 * (w / (numWorms - 1 || 1))));
       let cy = 2;
       
       while (cy < height - 3) {
-          let radius = baseRadius + (Math.random() < 0.35 ? 1 : 0);
+          let radius = 2 + Math.floor(Math.random() * 3); // 2 to 4 radius for wide, natural chambers
           for (let dy = -radius; dy <= radius; dy++) {
               for (let dx = -radius; dx <= radius; dx++) {
                   if (dx*dx + dy*dy <= radius*radius * 1.15) {
@@ -176,22 +176,19 @@ export function generateCave(
           } else if (Math.random() < 0.2) {
               cx += (Math.random() < 0.5 ? -2 : 2);
           }
-          cx = Math.max(3, Math.min(width - 4, cx));
+          cx = Math.max(4, Math.min(width - 5, cx));
       }
   }
 
-  // 3.5 Horizontal Cross-Tunnels interconnecting vertical shafts
-  // tunneling controls frequency of cross-connections and gaps to progress through
-  if (cfg.tunneling > 0.2) {
-      const yInterval = Math.max(16, Math.round((28 + Math.floor(Math.random() * 8)) / Math.max(0.4, cfg.tunneling)));
-      const cRadius = Math.max(1, Math.min(2, Math.round(1.2 * cfg.tunneling)));
-      for (let yConn = 18; yConn < height - 10; yConn += yInterval) {
-          for (let mx = 3; mx < width - 3; mx++) {
-              for (let dy = -cRadius; dy <= cRadius; dy++) {
-                  const ny = yConn + dy;
-                  if (ny > 1 && ny < height - 2) {
-                      map[ny][mx] = 0;
-                  }
+  // 3.5 Horizontal Cross-Tunnels interconnecting vertical shafts every 26-34 tiles
+  const yInterval = Math.max(18, Math.round((26 + Math.floor(Math.random() * 8)) / Math.max(0.4, cfg.tunneling)));
+  const cRadius = Math.max(1, Math.min(3, Math.round(2 * Math.min(1.2, cfg.tunneling))));
+  for (let yConn = 8; yConn < height - 12; yConn += yInterval) {
+      for (let mx = 4; mx < width - 4; mx++) {
+          for (let dy = -cRadius; dy <= cRadius; dy++) {
+              const ny = yConn + dy;
+              if (ny > 1 && ny < height - 2) {
+                  map[ny][mx] = 0;
               }
           }
       }
@@ -211,7 +208,7 @@ export function generateCave(
 
   // 7. Structures (3 Types: Small, Medium, Large 2-3 Rooms)
   let chests: { x: number; y: number; weapon?: string; isCastleChest?: boolean }[] = [];
-  let numStructures = Math.min(4, Math.floor(floor * 0.5) + 1);
+  let numStructures = Math.floor(floor * 0.75) + 1;
   let structureBoxes: { x: number, y: number, w: number, h: number }[] = [];
   let structures: { x: number, y: number, w: number, h: number }[] = [];
 
@@ -418,7 +415,7 @@ export function generateCave(
   if (startSpaces.length === 0) {
       startSpaces = openSpaces.filter(s => s.y <= minY + 5);
   }
-  const startPos = startSpaces.length > 0 
+  let startPos = startSpaces.length > 0 
     ? startSpaces[Math.floor(Math.random() * startSpaces.length)] 
     : {x: Math.floor(width/2), y: 5};
     
@@ -479,7 +476,7 @@ export function generateCave(
     map[endPos.y - 1][endPos.x] = 0; // Space above gate must be open air
   }
   if (!map[endPos.y + 1] || map[endPos.y + 1][endPos.x] === 0 || map[endPos.y + 1][endPos.x] === 6 || map[endPos.y + 1][endPos.x] === 21) {
-    const solidBlock = biome === 'ice' ? 16 : (biome === 'volcanic' ? 20 : (biome === 'moss' ? 15 : 1));
+    const solidBlock = biome === 'ice' ? 16 : (biome === 'volcanic' ? 20 : 1);
     if (map[endPos.y + 1]) map[endPos.y + 1][endPos.x] = solidBlock; // Place solid floor underneath gate
   }
 
@@ -690,11 +687,8 @@ export function generateCave(
                       let floorSolid = true;
                       for (let x = mx; x <= endX; x++) {
                           if (!isSolidTerrain(x, testY + 1)) {
-                              if (testY + 1 < height - 1) {
-                                  map[testY + 1][x] = 1;
-                              } else {
-                                  floorSolid = false;
-                              }
+                              floorSolid = false;
+                              break;
                           }
                       }
                       if (!floorSolid) break;
@@ -747,24 +741,6 @@ export function generateCave(
   }
 
   // 11. Break up massive vertical drops with floating platforms
-  // Generate Moss Biomes early so platforms can use it
-  const numMossBiomes = 4 + Math.floor(Math.random() * 5); // Huge number of moss biomes
-  const mossBiomes = [];
-  for (let i = 0; i < numMossBiomes; i++) {
-      mossBiomes.push({
-          x: Math.floor(Math.random() * width),
-          y: Math.floor(Math.random() * height),
-          radius: 20 + Math.random() * 25 // larger moss radius
-      });
-  }
-
-  const inMossBiome = (x: number, y: number) => {
-      for (const b of mossBiomes) {
-          if (Math.pow(x - b.x, 2) + Math.pow(y - b.y, 2) < b.radius * b.radius) return true;
-      }
-      return false;
-  };
-
   for (let my = 5; my < height - 5; my++) {
       for (let mx = 5; mx < width - 5; mx++) {
           if (map[my][mx] === 0) {
@@ -783,56 +759,35 @@ export function generateCave(
               if (isEmpty && Math.random() < 0.25) {
                   // Add a small floating platform
                   let pWidth = 3 + Math.floor(Math.random() * 4);
-                  // 70% of platforms should fill in air as a generated cave part (solid dirt/stone)
-                  const isSolidCavePart = Math.random() < 0.70;
-                  const useBlock = isSolidCavePart ? (Math.random() < 0.5 ? 1 : 8) : 5;
-                  
-                  let pHeight = isSolidCavePart ? 2 + Math.floor(Math.random() * 3) : 1;
-                  
                   for (let w = 0; w < pWidth; w++) {
-                      let colHeight = pHeight;
-                      // Taper the edges for a more natural look
-                      if (isSolidCavePart && (w === 0 || w === pWidth - 1)) colHeight = Math.max(1, pHeight - 1);
-                      if (isSolidCavePart && Math.random() < 0.3) colHeight--;
-
-                      for (let h = 0; h < colHeight; h++) {
-                          if (mx+w < width - 2 && my+h < height - 2) {
-                              map[my+h][mx+w] = useBlock; 
-                          }
-                      }
-                      
-                      // Add moss/grass on top optionally
-                      if (isSolidCavePart && mx+w < width - 2 && Math.random() < 0.5) {
-                          if (inMossBiome(mx+w, my-1)) {
-                              map[my-1][mx+w] = 15; // Mossy grass on top
-                          }
+                      if (mx + w < width - 2) {
+                          map[my][mx + w] = 5; // Clean wooden platform
                       }
                   }
                   
                   // Maybe add a torch
                   if (Math.random() < 0.5) {
-                      map[my-2][mx + Math.floor(pWidth/2)] = 10;
+                      map[my - 2][mx + Math.floor(pWidth / 2)] = 10;
                   }
               }
           }
       }
   }
   
-  // 12. Add Moss randomly to caves (using Moss Biomes generated earlier)
+  // 12. Add dangling vines / foliage or icicles
   for (let my = 1; my < height - 1; my++) {
       for (let mx = 1; mx < width - 1; mx++) {
-          if (!inMossBiome(mx, my)) continue;
           if (biome === 'volcanic') continue; // vines never spawn in volcanic caves
           
           if (map[my][mx] === 0) {
-              // If there's dirt/stone/mossgrass above, have a chance to spawn dangling moss/vines
-              if ((map[my-1][mx] === 1 || map[my-1][mx] === 8 || map[my-1][mx] === 7 || map[my-1][mx] === 15) && Math.random() < 0.25) {
+              // If there's dirt/stone/grass above, have a chance to spawn dangling vines
+              if ((map[my-1][mx] === 1 || map[my-1][mx] === 8 || map[my-1][mx] === 7) && Math.random() < (biome === 'moss' ? 0.35 : 0.15)) {
                   let generate = true;
                   if (biome === 'ice') {
-                      const topL = map[my-1][mx-1] === 1 || map[my-1][mx-1] === 8 || map[my-1][mx-1] === 7 || map[my-1][mx-1] === 15;
-                      const topR = map[my-1][mx+1] === 1 || map[my-1][mx+1] === 8 || map[my-1][mx+1] === 7 || map[my-1][mx-1] === 15;
+                      const topL = map[my-1][mx-1] === 1 || map[my-1][mx-1] === 8 || map[my-1][mx-1] === 7;
+                      const topR = map[my-1][mx+1] === 1 || map[my-1][mx+1] === 8 || map[my-1][mx+1] === 7;
                       if (!topL || !topR) generate = false;
-                      // "icicles shouldn't spawn on eachother" - check left, right, top, bottom adjacency
+                      // icicles shouldn't spawn on each other
                       if (map[my][mx-1] === 13 || map[my][mx+1] === 13 || map[my-1][mx] === 13 || map[my+1][mx] === 13) {
                           generate = false;
                       }
@@ -841,10 +796,9 @@ export function generateCave(
                   if (generate) {
                       map[my][mx] = 13; // Moss/Vines / Icicle
                       if (biome !== 'ice') {
-                          // Grown moss/vines (tile 13)
-                          if (Math.random() < 0.6 && map[my+1][mx] === 0) {
+                          if (Math.random() < 0.5 && map[my+1][mx] === 0) {
                               map[my+1][mx] = 13;
-                              if (Math.random() < 0.4 && map[my+2][mx] === 0) {
+                              if (Math.random() < 0.3 && map[my+2][mx] === 0) {
                                   map[my+2][mx] = 13;
                               }
                           }
@@ -900,29 +854,14 @@ export function generateCave(
       }
   }
 
-  // Replace tiles if ice biome
+  // Replace tiles if ice or volcanic biome
   if (biome === 'ice') {
       for (let my = 0; my < height; my++) {
           for (let mx = 0; mx < width; mx++) {
               if (map[my][mx] === 1) map[my][mx] = 16; // Snow
               if (map[my][mx] === 8) map[my][mx] = 17; // Ice
-              if (map[my][mx] === 7 || map[my][mx] === 15) map[my][mx] = 16; // Grass -> Snow
+              if (map[my][mx] === 7) map[my][mx] = 16; // Grass -> Snow
               if (map[my][mx] === 6 && map[my-1] && map[my-1][mx] !== 6 && map[my-1][mx] !== 18 && map[my-1][mx] !== 6) map[my][mx] = 18; // Thin Ice
-          }
-      }
-  } else if (biome === 'moss') {
-      for (let my = 0; my < height; my++) {
-          for (let mx = 0; mx < width; mx++) {
-              if (map[my][mx] === 1) map[my][mx] = 15; // Dirt -> Mossy
-              if (map[my][mx] === 8) map[my][mx] = 15; // Stone -> Mossy
-              if (map[my][mx] === 7) map[my][mx] = 15; // Grass -> Mossy
-              if (map[my][mx] === 0 && map[my-1]) {
-                  if (map[my-1][mx] === 15 || map[my-1][mx] === 13) {
-                      if (Math.random() < 0.8) {
-                          map[my][mx] = 13; // Super high chance of hanging moss underneath, making cascading ivy
-                      }
-                  }
-              }
           }
       }
   } else if (biome === 'volcanic') {
@@ -930,7 +869,7 @@ export function generateCave(
           for (let mx = 0; mx < width; mx++) {
               if (map[my][mx] === 1) map[my][mx] = 19; // Basalt
               if (map[my][mx] === 8) map[my][mx] = 20; // Heated Magma Block
-              if (map[my][mx] === 7 || map[my][mx] === 15) map[my][mx] = 19; // Basalt
+              if (map[my][mx] === 7) map[my][mx] = 19; // Basalt
               if (map[my][mx] === 6) map[my][mx] = 21; // Lava Liquid!
           }
       }
@@ -1040,7 +979,7 @@ export function generateCave(
               let ntile = map[ny][nx];
               let key = `${nx},${ny}`;
               // Non-solid / traversable tiles
-              if (!reachableFromStart.has(key) && (ntile === 0 || ntile === 2 || ntile === 3 || ntile === 4 || ntile === 5 || ntile === 6 || ntile === 10 || ntile === 12 || ntile === 13 || ntile === 15 || ntile === 18 || ntile === 21)) {
+              if (!reachableFromStart.has(key) && (ntile === 0 || ntile === 2 || ntile === 3 || ntile === 4 || ntile === 5 || ntile === 6 || ntile === 10 || ntile === 12 || ntile === 13 || ntile === 18 || ntile === 21)) {
                   reachableFromStart.add(key);
                   startQueue.push({ x: nx, y: ny });
               }
@@ -1048,8 +987,77 @@ export function generateCave(
       }
   }
 
+  // Safety Fallback: If startPos somehow landed in a small disconnected pocket (< 5000 tiles),
+  // relocate startPos to the primary cavern rather than destroying the map.
+  if (reachableFromStart.size < 5000) {
+      const topSpots = openSpaces
+          .filter(s => s.y >= 2 && s.y <= 16 && map[s.y][s.x] === 0 && !reachableFromStart.has(`${s.x},${s.y}`))
+          .sort((a, b) => a.y - b.y);
+      for (const spot of topSpots) {
+          let testReachable = new Set<string>();
+          let testQueue = [{ x: spot.x, y: spot.y }];
+          testReachable.add(`${spot.x},${spot.y}`);
+          while (testQueue.length > 0 && testReachable.size < 6000) {
+              let curr = testQueue.shift()!;
+              for (let d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                  let nx = curr.x + d[0];
+                  let ny = curr.y + d[1];
+                  if (nx > 0 && nx < width - 1 && ny > 0 && ny < height - 1) {
+                      let ntile = map[ny][nx];
+                      let key = `${nx},${ny}`;
+                      if (!testReachable.has(key) && (ntile === 0 || ntile === 2 || ntile === 3 || ntile === 4 || ntile === 5 || ntile === 6 || ntile === 10 || ntile === 12 || ntile === 13 || ntile === 18 || ntile === 21)) {
+                          testReachable.add(key);
+                          testQueue.push({ x: nx, y: ny });
+                      }
+                  }
+              }
+          }
+          if (testReachable.size >= 5000) {
+              startPos = spot;
+              while (testQueue.length > 0) {
+                  let curr = testQueue.shift()!;
+                  for (let d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                      let nx = curr.x + d[0];
+                      let ny = curr.y + d[1];
+                      if (nx > 0 && nx < width - 1 && ny > 0 && ny < height - 1) {
+                          let ntile = map[ny][nx];
+                          let key = `${nx},${ny}`;
+                          if (!testReachable.has(key) && (ntile === 0 || ntile === 2 || ntile === 3 || ntile === 4 || ntile === 5 || ntile === 6 || ntile === 10 || ntile === 12 || ntile === 13 || ntile === 18 || ntile === 21)) {
+                              testReachable.add(key);
+                              testQueue.push({ x: nx, y: ny });
+                          }
+                      }
+                  }
+              }
+              reachableFromStart = testReachable;
+              if (map[startPos.y + 1]) {
+                  map[startPos.y + 1][startPos.x] = 5;
+                  if (startPos.x > 1) map[startPos.y + 1][startPos.x - 1] = 5;
+                  if (startPos.x < width - 2) map[startPos.y + 1][startPos.x + 1] = 5;
+              }
+              break;
+          }
+      }
+  }
+
+  // Ensure endPos is strictly reachable from startPos! If not, relocate to lowest reachable valid ground spot
+  if (!reachableFromStart.has(`${endPos.x},${endPos.y}`)) {
+      const reachableSpots = openSpaces.filter(s =>
+          reachableFromStart.has(`${s.x},${s.y}`) &&
+          s.y >= Math.floor(height * 0.50) &&
+          map[s.y][s.x] === 0 &&
+          map[s.y - 1] && map[s.y - 1][s.x] === 0 &&
+          solidGroundBelow(s.x, s.y) &&
+          map[s.y + 1] && map[s.y + 1][s.x] !== 21
+      );
+      if (reachableSpots.length > 0) {
+          reachableSpots.sort((a, b) => b.y - a.y);
+          endPos = reachableSpots[0];
+      }
+  }
+
   // Any non-solid tile not reachable from startPos becomes solid wall (use biome-appropriate solid AFTER biome conversion!)
-  const biomeSolid = biome === 'ice' ? 16 : (biome === 'moss' ? 15 : (biome === 'volcanic' ? 19 : 1));
+  const biomeSolid = biome === 'ice' ? 16 : (biome === 'volcanic' ? 19 : 1);
   for (let my = 1; my < height - 1; my++) {
       for (let mx = 1; mx < width - 1; mx++) {
           let tile = map[my][mx];
@@ -1064,8 +1072,8 @@ export function generateCave(
   map[endPos.y][endPos.x] = 2;     // Descend trapdoor gate
   if (map[endPos.y + 1]) {
       const tileBelow = map[endPos.y + 1][endPos.x];
-      if (tileBelow !== 1 && tileBelow !== 7 && tileBelow !== 8 && tileBelow !== 11 && tileBelow !== 15 && tileBelow !== 16 && tileBelow !== 17 && tileBelow !== 19 && tileBelow !== 20 && tileBelow !== 21) {
-          const groundBlock = biome === 'ice' ? 16 : (biome === 'volcanic' ? 19 : (biome === 'moss' ? 15 : 1));
+      if (tileBelow !== 1 && tileBelow !== 7 && tileBelow !== 8 && tileBelow !== 11 && tileBelow !== 16 && tileBelow !== 17 && tileBelow !== 19 && tileBelow !== 20 && tileBelow !== 21) {
+          const groundBlock = biome === 'ice' ? 16 : (biome === 'volcanic' ? 19 : 1);
           map[endPos.y + 1][endPos.x] = groundBlock; // Create solid natural ground block underneath gate
       }
   }

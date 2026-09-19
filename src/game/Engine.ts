@@ -4249,13 +4249,21 @@ export class GameEngine {
                   color = mossNoise > 0.55 ? "#24120a" : (mossNoise > 0.25 ? "#1a0d07" : "#120804");
                 }
               } else {
-                if (mossNoise > 0.2) {
-                  color = mossNoise > 0.55 ? "#231b14" : (mossNoise > 0.35 ? "#1a140e" : "#120d09");
+                if (mossNoise > 0.15) {
+                  color = mossNoise > 0.55 ? "#23401e" : (mossNoise > 0.35 ? "#1a3016" : "#142411");
                 }
               }
 
               ctx.fillStyle = color;
               ctx.fillRect(subPx, subPy, 9, 9); // seamless overlap to prevent any gaps
+
+              // Subtle natural cavern root tendrils from background ledges (secondary moss background)
+              const vineHash = Math.cos(subPx * 1.6 + subPy * 2.2);
+              if (mossNoise > 0.52 && j < 3 && vineHash > 0.65 && !isIceBg && !isVolcanicBg) {
+                ctx.fillStyle = "#142e12";
+                const vineLen = 3 + Math.abs(Math.sin(subPx + subPy)) * 5;
+                ctx.fillRect(subPx + 3, subPy + 7, 2, vineLen);
+              }
             }
           }
         }
